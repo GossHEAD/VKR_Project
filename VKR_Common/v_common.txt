@@ -1,0 +1,195 @@
+#Проект - VKR_Common
+
+##Файл - IDataStorage.cs
+```
+﻿using VKR_Common.Models;
+
+namespace VKR_Common.Interfaces;
+
+public interface IDataStorage
+{
+    Task SaveFileAsync(DataBlock dataBlock);
+    Task<DataBlock> LoadFileAsync(string id); 
+    Task DeleteFileAsync(string id); 
+    Task<List<string>> FindDataByKey(); 
+    Task<List<string>> ListFilesByNodeAsync(string nodeId); 
+    Task<List<string>> ListFilesAsync(); 
+}
+```
+
+##Файл - INetworkClient.cs
+```
+﻿using System.Threading.Tasks;
+
+namespace VKR_Common.Interfaces;
+
+public interface INetworkClient
+{
+    Task SendFileAsync(string nodeId, byte[] data); 
+    Task<byte[]> ReceiveFileAsync(string nodeId); 
+    Task DisconnectAsync(); 
+    Task ConnectAsync(); 
+    Task<bool> IsConnectedAsync(); 
+}
+```
+
+##Файл - INodeManager.cs
+```
+﻿using VKR_Common.Models;
+
+namespace VKR_Common.Interfaces;
+
+public interface INodeManager
+{
+    Task AddNodeAsync(Node node); 
+    Task RemoveNodeAsync(string nodeId); 
+    Task<List<Node>> GetActiveNodesAsync(); 
+    Task UpdateNodeAsync(Node node); 
+    Task<Node?> GetNodeByIdAsync(string nodeId);
+    Task<bool> NodeExistsAsync(string nodeId);
+    Task<List<Node>> GetAllNodesAsync(); 
+    
+    event Action<Node> NodeAdded; 
+    event Action<string> NodeRemoved; 
+    event Action<Node> NodeUpdated; 
+}
+```
+
+##Файл - ISuperNodeManager.cs
+```
+﻿using VKR_Common.Models;
+
+namespace VKR_Common.Interfaces;
+
+public interface ISuperNodeManager
+{
+    string? SuperNodeId { get; }
+    bool IsSuperNode { get; }
+    Task AssignNewSuperNodeAsync();
+    Task RegisterSuperNodeAsync(Node node);
+    Task<bool> IsSuperNodeAliveAsync();
+}
+
+```
+
+##Файл - DataBlock.cs
+```
+﻿using System.Text;
+
+namespace VKR_Common.Models;
+
+public class DataBlock
+{
+    public string Id { get; set; }
+    public string NodeId { get; set; } = string.Empty;
+    public string? ReplicaId { get; set; }
+    public byte[] Data { get; set; }
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public List<string> ReplicationNodes { get; set; } = new();
+
+    public DataBlock(string id, string nodeId, byte[] data)
+    {
+        Id = id;
+        NodeId = nodeId;
+        Data = data;
+    }
+    
+    public DataBlock(string id, string nodeId, byte[] data, DateTime timestamp)
+    {
+        Id = id;
+        NodeId = nodeId;
+        Data = data;
+        Timestamp = timestamp;
+    }
+
+    public DataBlock() { }
+    
+    public string ToCsv()
+    {
+        var replicationNodesCsv = string.Join(';', ReplicationNodes);
+        var dataBase64 = Convert.ToBase64String(Data);
+        return $"{Id},{NodeId},{ReplicaId},{dataBase64},{Timestamp:o},{replicationNodesCsv}";
+    }
+
+    public static DataBlock FromCsv(string csvLine)
+    {
+        var parts = csvLine.Split(',');
+        var replicationNodes = parts[5].Split(';').ToList();
+        return new DataBlock
+        {
+            Id = parts[0],
+            NodeId = parts[1],
+            ReplicaId = parts[2],
+            Data = Convert.FromBase64String(parts[3]),
+            Timestamp = DateTime.Parse(parts[4]),
+            ReplicationNodes = replicationNodes
+        };
+    }
+}
+```
+
+##Файл - Node.cs
+```
+﻿using System.Text;
+
+namespace VKR_Common.Models;
+
+public class Node
+{
+    public string Id { get; set; } = Environment.MachineName;
+    public string Address { get; set; } = "127.0.0.1";
+    public int Port { get; set; } = 5000;
+    public DateTime LastPingTime { get; private set; } = DateTime.UtcNow;
+    public double CpuLoad { get; private set; }
+    public double MemoryUsage { get; private set; }
+    public bool IsActive { get; private set; }
+    public string Version { get; set; } = "1.0.0";
+    public string OS { get; set; } = Environment.OSVersion.ToString();
+
+    public Node() { }
+
+    public Node(string id, string address, int port)
+    {
+        Id = id;
+        Address = address;
+        Port = port;
+    }
+
+    public void UpdateStatus(bool isActive, double cpuLoad, double memoryUsage)
+    {
+        if (cpuLoad < 0 || cpuLoad > 100)
+            throw new ArgumentOutOfRangeException(nameof(cpuLoad), "CPU Load must be between 0 and 100.");
+    
+        if (memoryUsage < 0)
+            throw new ArgumentOutOfRangeException(nameof(memoryUsage), "Memory usage cannot be negative.");
+    
+        IsActive = isActive;
+        CpuLoad = cpuLoad;
+        MemoryUsage = memoryUsage;
+        LastPingTime = DateTime.UtcNow;
+    }
+    
+    public string ToCsv()
+    {
+        return $"{Id},{Address},{Port},{LastPingTime:o},{CpuLoad},{MemoryUsage},{IsActive},{Version},{OS}";
+    }
+
+    public static Node FromCsv(string csvLine)
+    {
+        var parts = csvLine.Split(',');
+        return new Node
+        {
+            Id = parts[0],
+            Address = parts[1],
+            Port = int.Parse(parts[2]),
+            LastPingTime = DateTime.Parse(parts[3]),
+            CpuLoad = double.Parse(parts[4]),
+            MemoryUsage = double.Parse(parts[5]),
+            IsActive = bool.Parse(parts[6]),
+            Version = parts[7],
+            OS = parts[8]
+        };
+    }
+}
+```
+

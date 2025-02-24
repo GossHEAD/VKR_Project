@@ -1,0 +1,5 @@
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Core\obj\Release\net8.0\VKR_Core.csproj.AssemblyReference.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Core\obj\Release\net8.0\VKR_Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Core\obj\Release\net8.0\VKR_Core.AssemblyInfoInputs.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Core\obj\Release\net8.0\VKR_Core.AssemblyInfo.cs
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Core\obj\Release\net8.0\VKR_Core.csproj.CoreCompileInputs.cache

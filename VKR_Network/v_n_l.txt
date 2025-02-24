@@ -1,0 +1,563 @@
+#Проект - VKR_Network_lib
+
+##Файл - CHECK.cs
+```
+﻿namespace VKR_Network_lib.Protos;
+
+public class CHECK
+{
+    
+}
+```
+
+##Файл - node.proto
+```
+﻿syntax = "proto3";
+
+package Network;
+
+service NodeService {
+  rpc SendMessage (MessageRequest) returns (MessageResponse);
+  rpc GetNodeList (EmptyRequest) returns (NodeListResponse);
+  rpc RegisterNode (NodeInfo) returns (NodeListResponse);
+  rpc ReplicateData (NodeInfo) returns (MessageResponse);
+  rpc RemoveNode(RemoveNodeRequest) returns (MessageResponse);
+  rpc Ping (EmptyRequest) returns (PingResponse); 
+}
+
+message MessageRequest {
+  string senderId = 1;
+  bytes message = 2;
+}
+
+message MessageResponse {
+  string status = 1;
+}
+
+message EmptyRequest {}
+
+message NodeInfo {
+  string id = 1;
+  string address = 2;
+  int32 port = 3;
+}
+
+message NodeListResponse {
+  repeated NodeInfo nodes = 1;
+}
+
+message RemoveNodeRequest {
+  string nodeId = 1;
+}
+
+message PingResponse { 
+  string status = 1;
+}
+
+```
+
+##Файл - NetworkClient.cs
+```
+﻿using Google.Protobuf;
+using Grpc.Core;
+using Grpc.Net.Client;
+using Microsoft.Extensions.Logging;
+using Network;
+using VKR_Common.Interfaces;
+
+namespace VKR_Network_lib.Services;
+
+public class NetworkClient : INetworkClient
+{
+    private readonly string _address;
+    private GrpcChannel? _channel;
+    private NodeService.NodeServiceClient? _client;
+
+    public NetworkClient(string address)
+    {
+        _address = address ?? throw new ArgumentNullException(nameof(address));
+    }
+
+    public async Task ConnectAsync()
+    {
+        if (_channel != null)
+        {
+            throw new InvalidOperationException("Client is already connected.");
+        }
+
+        try
+        {
+            _channel = GrpcChannel.ForAddress(_address);
+            _client = new NodeService.NodeServiceClient(_channel);
+
+            // Проверка доступности сервера через gRPC Ping
+            Console.WriteLine("Attempting to ping the server...");
+            var response = await _client.PingAsync(new EmptyRequest());
+            if (response.Status != "OK")
+            {
+                throw new Exception($"Ping to node at {_address} failed with status: {response.Status}");
+            }
+
+            Console.WriteLine("Connected successfully!");
+        }
+        catch (RpcException rpcEx)
+        {
+            Console.WriteLine($"gRPC error during connection: {rpcEx.Status.Detail}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unexpected error during connection: {ex.Message}");
+            _channel = null;
+            _client = null;
+            throw;
+        }
+    }
+
+
+
+    public async Task DisconnectAsync()
+    {
+        if (_channel == null)
+        {
+            throw new InvalidOperationException("Client is not connected.");
+        }
+
+        await _channel.ShutdownAsync();
+        _channel = null;
+        _client = null;
+    }
+
+    public async Task<bool> IsConnectedAsync()
+    {
+        if (_channel == null || _client == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var response = await PingAsync();
+            return response.Status == "OK";
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task SendFileAsync(string nodeId, byte[] data)
+    {
+        if (_client == null)
+        {
+            throw new InvalidOperationException("Client is not connected.");
+        }
+
+        try
+        {
+            var request = new MessageRequest
+            {
+                SenderId = nodeId,
+                Message = ByteString.CopyFrom(data)
+            };
+            await _client.SendMessageAsync(request);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending file to node {nodeId}: {ex.Message}");
+            throw;
+        }
+    }
+
+    public async Task<byte[]> ReceiveFileAsync(string nodeId)
+    {
+        if (_client == null)
+        {
+            throw new InvalidOperationException("Client is not connected.");
+        }
+
+        try
+        {
+            var request = new MessageRequest { SenderId = nodeId };
+            var response = await _client.SendMessageAsync(request);
+
+            if (response.Status.Equals("TRUE", StringComparison.OrdinalIgnoreCase))
+            {
+                return response.ToByteArray();
+            }
+            else
+            {
+                Console.WriteLine($"Node {nodeId} returned an unsuccessful status.");
+                return Array.Empty<byte>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error receiving file from node {nodeId}: {ex.Message}");
+            throw;
+        }
+    }
+    
+    public async Task<NodeListResponse> RegisterNode(NodeInfo nodeInfo)
+    {
+        if (_client == null)
+        {
+            throw new InvalidOperationException("Client is not connected.");
+        }
+
+        try
+        {
+            var response = await _client.RegisterNodeAsync(nodeInfo);
+            foreach (var node in response.Nodes)
+            {
+                Console.WriteLine($"- {node.Id} at {node.Address}:{node.Port}");
+            }
+            return response;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error registering node {nodeInfo.Id}: {ex.Message}");
+            throw;
+        }
+    }
+
+
+    public async Task<NodeListResponse> GetNodeList()
+    {
+        if (_client == null)
+        {
+            throw new InvalidOperationException("Client is not connected.");
+        }
+
+        try
+        {
+            return await _client.GetNodeListAsync(new EmptyRequest());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting node list: {ex.Message}");
+            throw;
+        }
+    }
+    
+    public async Task<PingResponse> PingAsync()
+    {
+        if (_client == null)
+        {
+            throw new InvalidOperationException("Client is not connected.");
+        }
+
+        try
+        {
+            return await _client.PingAsync(new EmptyRequest());
+        }
+        catch (RpcException rpcEx)
+        {
+            Console.WriteLine($"gRPC error during ping: {rpcEx.Status.Detail}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unexpected error during ping: {ex.Message}");
+            throw;
+        }
+    }
+    
+    public async Task SendMessageAsync(MessageRequest request)
+    {
+        if (_client == null)
+        {
+            throw new InvalidOperationException("Client is not connected.");
+        }
+
+        try
+        {
+            var response = await _client.SendMessageAsync(request);
+            Console.WriteLine($"Message response: {response.Status}");
+        }
+        catch (RpcException rpcEx)
+        {
+            Console.WriteLine($"gRPC error during SendMessage: {rpcEx.Status.Detail}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unexpected error during SendMessage: {ex.Message}");
+            throw;
+        }
+    }
+    
+    public async Task NotifeNodeAsync(string superNodeId)
+    {
+        if (_client == null)
+        {
+            throw new InvalidOperationException("Client is not connected.");
+        }
+        
+        var message = new MessageRequest
+        {
+            SenderId = Environment.MachineName,
+            Message = ByteString.CopyFromUtf8($"NewSuperNode:{superNodeId}")
+        };
+        try
+        {
+            await SendMessageAsync(message);
+        }
+        catch (RpcException rpcEx)
+        {
+            Console.WriteLine($"gRPC error during ping: {rpcEx.Status.Detail}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unexpected error during ping: {ex.Message}");
+            throw;
+        }
+    }
+
+}
+
+```
+
+##Файл - NodeServiceImplementation.cs
+```
+﻿using Google.Protobuf;
+using Grpc.Core;
+using Microsoft.Extensions.Logging;
+using Network;
+using VKR_Common.Interfaces;
+using VKR_Common.Models;
+
+namespace VKR_Network_lib.Services;
+
+public class NodeServiceImplementation : NodeService.NodeServiceBase
+{
+    private readonly INodeManager _nodeManager;
+    private readonly ISuperNodeManager _superNodeManager;
+    /*
+     * TODO: Внедрить логику репликации
+     * TODO: Добавить тесты RemoveNode, SendMessage, Ping
+     */
+    private readonly HashSet<string> _processedNodes = new(); // Учет обработанных узлов
+    private readonly HashSet<Guid> _processedSyncRequests = new();
+    private const int MaxSyncDepth = 3;
+    //private readonly ILogger<NodeServiceImplementation> _logger;
+    public NodeServiceImplementation(INodeManager nodeManager)
+    {
+        _nodeManager = nodeManager ?? throw new ArgumentNullException(nameof(nodeManager));
+        _nodeManager.NodeAdded += async node => await SynchronizeNodesAsync(node);
+    }
+    
+    public NodeServiceImplementation(INodeManager nodeManager, ISuperNodeManager superNodeManager)
+    {
+        _nodeManager = nodeManager ?? throw new ArgumentNullException(nameof(nodeManager));
+        _superNodeManager = superNodeManager ?? throw new ArgumentNullException(nameof(superNodeManager));
+    
+        _ = MonitorSuperNodeAsync();
+    }
+
+    
+    public override Task<PingResponse> Ping(EmptyRequest request, ServerCallContext context)
+    {
+        //_logger.LogInformation("Ping request received.");
+        return Task.FromResult(new PingResponse { Status = "OK" });
+    }
+    
+    public override Task<MessageResponse> SendMessage(MessageRequest request, ServerCallContext context)
+    {
+        var message = request.Message.ToStringUtf8();
+        if (message.StartsWith("NewSuperNode:"))
+        {
+            var newSuperNodeId = message.Split(':')[1];
+            _superNodeManager.RegisterSuperNodeAsync(new Node
+            {
+                Id = newSuperNodeId,
+                Address = "127.0.0.1", // Замените на актуальный адрес
+                Port = 5001           // Замените на актуальный порт
+            }).Wait();
+
+            Console.WriteLine($"Updated supernode to: {newSuperNodeId}");
+        }
+
+        return Task.FromResult(new MessageResponse { Status = "OK" });
+    }
+
+    
+    public override async Task<NodeListResponse> GetNodeList(EmptyRequest request, ServerCallContext context)
+    {
+        try
+        {
+            Console.WriteLine("Fetching node list...");
+            var nodes = await _nodeManager.GetAllNodesAsync();
+            Console.WriteLine($"Total nodes found: {nodes.Count}");
+
+            var response = new NodeListResponse();
+            response.Nodes.AddRange(nodes.Select(n => new NodeInfo
+            {
+                Id = n.Id,
+                Address = n.Address,
+                Port = n.Port
+            }));
+
+            Console.WriteLine("Node list response built successfully.");
+            return response;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in GetNodeList: {ex.Message}\n{ex.StackTrace}");
+            throw new RpcException(new Status(StatusCode.Internal, "Error in GetNodeList"), ex.Message);
+        }
+    }
+    /*
+    public override async Task<NodeListResponse> RegisterNode(NodeInfo request, ServerCallContext context)
+    {
+        try
+        {
+            var node = new Node(request.Id, request.Address, request.Port);
+
+            if (!await _nodeManager.NodeExistsAsync(node.Id))
+            {
+                await _nodeManager.AddNodeAsync(node);
+                Console.WriteLine($"Node added: {node.Id}");
+            }
+            else
+            {
+                Console.WriteLine($"Node already exists: {node.Id}");
+            }
+
+            // Отправляем полный список узлов новому узлу
+            var nodes = await _nodeManager.GetAllNodesAsync();
+            var response = new NodeListResponse();
+            response.Nodes.AddRange(nodes.Select(n => new NodeInfo
+            {
+                Id = n.Id,
+                Address = n.Address,
+                Port = n.Port
+            }));
+
+            return response;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in RegisterNode: {ex.Message}\n{ex.StackTrace}");
+            throw new RpcException(new Status(StatusCode.Internal, "Internal server error"), ex.Message);
+        }
+    }
+*/
+    public override async Task<NodeListResponse> RegisterNode(NodeInfo request, ServerCallContext context)
+    {
+        var newNode = new Node(request.Id, request.Address, request.Port);
+
+        // Добавляем узел в локальный список
+        if (!await _nodeManager.NodeExistsAsync(newNode.Id))
+        {
+            await _nodeManager.AddNodeAsync(newNode);
+            Console.WriteLine($"Node registered: {newNode.Id}");
+        }
+
+        // Если текущий узел суперузел, обновляем список
+        if (_superNodeManager.IsSuperNode)
+        {
+            Console.WriteLine("Supernode updating its registry.");
+            // Логика обновления списка
+        }
+
+        // Возвращаем полный список узлов новому узлу
+        var allNodes = await _nodeManager.GetAllNodesAsync();
+        var response = new NodeListResponse();
+        response.Nodes.AddRange(allNodes.Select(n => new NodeInfo
+        {
+            Id = n.Id,
+            Address = n.Address,
+            Port = n.Port
+        }));
+        return response;
+    }
+
+    
+    public override async Task<MessageResponse> RemoveNode(RemoveNodeRequest request, ServerCallContext context)
+    {
+        await _nodeManager.RemoveNodeAsync(request.NodeId);
+        Console.WriteLine($"Node removed: {request.NodeId}");
+        return new MessageResponse { Status = "TRUE" };
+    }
+    
+    private async Task SynchronizeNodesAsync(Node newNode)
+    {
+        var nodes = await _nodeManager.GetAllNodesAsync();
+        foreach (var node in nodes.Where(n => n.Id != newNode.Id))
+        {
+            try
+            {
+                var client = new NetworkClient($"http://{node.Address}:{node.Port}");
+                await client.ConnectAsync();
+
+                await client.RegisterNode(new NodeInfo
+                {
+                    Id = newNode.Id,
+                    Address = newNode.Address,
+                    Port = newNode.Port
+                });
+
+                await client.DisconnectAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error notifying node {node.Id}: {ex.Message}");
+            }
+        }
+    }
+    
+
+    //TODO: Внедрить логику репликации
+    public override Task<MessageResponse> ReplicateData(NodeInfo request, ServerCallContext context)
+    {
+        Console.WriteLine($"Replicate data request received from Node {request.Id}");
+        return Task.FromResult(new MessageResponse { Status = "TRUE" });
+    }
+    
+    private async Task MonitorSuperNodeAsync()
+    {
+        while (true)
+        {
+            if (!await _superNodeManager.IsSuperNodeAliveAsync())
+            {
+                Console.WriteLine("Supernode is down. Assigning a new supernode...");
+                await _superNodeManager.AssignNewSuperNodeAsync();
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(30)); // Проверка каждые 30 секунд
+        }
+    }
+    
+    private async Task NotifySuperNodeChangeAsync(string newSuperNodeId)
+    {
+        var nodes = await _nodeManager.GetAllNodesAsync();
+        foreach (var node in nodes.Where(n => n.Id != Environment.MachineName))
+        {
+            try
+            {
+                var client = new NetworkClient($"http://{node.Address}:{node.Port}");
+                await client.ConnectAsync();
+
+                var message = new MessageRequest
+                {
+                    SenderId = Environment.MachineName,
+                    Message = ByteString.CopyFromUtf8($"NewSuperNode:{newSuperNodeId}")
+                };
+
+                await client.SendFileAsync(newSuperNodeId,message.ToByteArray());
+                await client.DisconnectAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error notifying node {node.Id} about supernode change: {ex.Message}");
+            }
+        }
+    }
+
+    
+
+}
+```
+

@@ -1,0 +1,11 @@
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Infrastructure\bin\Debug\net8.0\VKR_Infrastructure.deps.json
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Infrastructure\bin\Debug\net8.0\VKR_Infrastructure.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Infrastructure\bin\Debug\net8.0\VKR_Infrastructure.pdb
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Infrastructure\obj\Debug\net8.0\VKR_Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Infrastructure\obj\Debug\net8.0\VKR_Infrastructure.AssemblyInfoInputs.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Infrastructure\obj\Debug\net8.0\VKR_Infrastructure.AssemblyInfo.cs
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Infrastructure\obj\Debug\net8.0\VKR_Infrastructure.csproj.CoreCompileInputs.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Infrastructure\obj\Debug\net8.0\VKR_Infrastructure.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Infrastructure\obj\Debug\net8.0\refint\VKR_Infrastructure.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Infrastructure\obj\Debug\net8.0\VKR_Infrastructure.pdb
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Infrastructure\obj\Debug\net8.0\ref\VKR_Infrastructure.dll

@@ -1,0 +1,15 @@
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\obj\Debug\net8.0\VKR_Network_lib.csproj.AssemblyReference.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\obj\Debug\net8.0\VKR_Network_lib.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\obj\Debug\net8.0\VKR_Network_lib.AssemblyInfoInputs.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\obj\Debug\net8.0\VKR_Network_lib.AssemblyInfo.cs
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\obj\Debug\net8.0\VKR_Network_lib.csproj.CoreCompileInputs.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\bin\Debug\net8.0\VKR_Network_lib.deps.json
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\bin\Debug\net8.0\VKR_Network_lib.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\bin\Debug\net8.0\VKR_Network_lib.pdb
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\bin\Debug\net8.0\VKR_Common.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\bin\Debug\net8.0\VKR_Common.pdb
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\obj\Debug\net8.0\VKR_Netw.6D634D5A.Up2Date
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\obj\Debug\net8.0\VKR_Network_lib.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\obj\Debug\net8.0\refint\VKR_Network_lib.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\obj\Debug\net8.0\VKR_Network_lib.pdb
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Network_lib\obj\Debug\net8.0\ref\VKR_Network_lib.dll

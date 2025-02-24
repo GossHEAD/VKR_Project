@@ -1,0 +1,782 @@
+#Проект - VKR_Core
+
+##Файл - IDataDistributionService.cs
+```
+﻿using VKR_Common.Models;
+
+namespace VKR_Core.Interfaces;
+
+public interface IDataDistributionService
+{
+    // Узел для хранения данных
+    string GetNodeForData(string dataId); 
+    List<string> GetReplicationNodes(string dataId); 
+
+    Task DistributeFileAsync(string filePath, byte[] data); 
+    Task ReplicateFileAsync(string filePath, byte[] data, int replicaCount); 
+
+    Task RedistributeDataAsync(string overloadedNodeId); 
+    Task AutoReplicateDataAsync(); 
+    Task BalanceLoadAsync(); 
+}
+```
+
+##Файл - SerializationService.cs
+```
+﻿namespace VKR_Core.Interfaces;
+
+public interface ISerializationService
+{
+    byte[] SerializeToCsv<T>(T data); 
+    T DeserializeFromCsv<T>(byte[] data); 
+}
+
+```
+
+##Файл - Transaction.cs
+```
+﻿using VKR_Common.Models;
+
+namespace VKR_Core.Models;
+
+public class Transaction
+{
+    public string TransactionId { get; set; }
+    public string SenderId { get; set; }
+    
+    public List<DataBlock> DataBlocks { get; set; }
+    
+    public  DataBlock DataBlock{ get; set; }
+    public DateTime Timestamp { get; set; }
+    
+    public string TransactionStatus { get; set; }
+    
+    public Transaction(string id)
+    {
+        TransactionId = id;
+        TransactionStatus = "Pending"; // По умолчанию транзакция в состоянии ожидания
+    }
+
+    public Transaction(string transactionId, string senderId, DataBlock DataBlock)
+    {
+        TransactionId = transactionId;
+        SenderId = senderId;
+        DataBlock = DataBlock;
+        Timestamp = DateTime.UtcNow;
+    }
+    
+    public void MarkCompleted()
+    {
+        TransactionStatus = "Completed";
+    }
+
+    public void MarkFailed()
+    {
+        TransactionStatus = "Failed";
+    }
+}
+```
+
+##Файл - DataDistributionService.cs
+```
+﻿using System.Text;
+using System.Transactions;
+using DBreeze.Utils;
+using Microsoft.Extensions.Logging;
+using VKR_Common.Interfaces;
+using VKR_Common.Models;
+using VKR_Core.Interfaces;
+
+namespace VKR_Core.Services;
+
+public class DataDistributionService : IDataDistributionService
+{
+    private readonly INodeManager _nodeManager;
+    private readonly INetworkClient _networkClient;
+    private readonly ILogger<DataDistributionService> _logger;
+    private readonly IDataStorage _dataStorage;
+    private readonly ISerializationService _serializationService;
+
+    public DataDistributionService(
+        INodeManager nodeManager,
+        INetworkClient networkClient,
+        ILogger<DataDistributionService> logger,
+        IDataStorage dataStorage,
+        ISerializationService serializationService)
+    {
+        _nodeManager = nodeManager;
+        _networkClient = networkClient;
+        _logger = logger;
+        _dataStorage = dataStorage;
+        _serializationService = serializationService;
+    }
+    private async Task<List<Node>> GetBestNodesAsync(int count)
+    {
+        var activeNodes = await _nodeManager.GetActiveNodesAsync();
+        return activeNodes.OrderBy(n => n.CpuLoad).Take(count).ToList();
+    }
+
+
+    public string GetNodeForData(string dataId)
+    {
+        var hash = dataId.GetHashCode();
+        var activeNodes = _nodeManager.GetActiveNodesAsync().Result;
+        int nodeIndex = Math.Abs(hash) % activeNodes.Count;
+        return activeNodes[nodeIndex].Id;
+    }
+
+    public List<string> GetReplicationNodes(string dataId)
+    {
+        var mainNode = GetNodeForData(dataId);
+        var activeNodes = _nodeManager.GetActiveNodesAsync().Result
+            .Where(n => n.Id != mainNode)
+            .Take(2)
+            .Select(n => n.Id)
+            .ToList();
+
+        activeNodes.Add(mainNode);
+        return activeNodes;
+    }
+
+    public async Task DistributeFileAsync(string filePath, byte[] data)
+    {
+        var activeNodes = await _nodeManager.GetActiveNodesAsync();
+        if (activeNodes.Count == 0)
+        {
+            _logger.LogWarning("No active nodes available for distribution.");
+            return;
+        }
+
+        var bestNode = activeNodes.OrderBy(n => n.CpuLoad).First();
+        var dataBlock = new DataBlock(filePath, bestNode.Id, data);
+
+        using var transaction = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+
+        try
+        {
+            await _dataStorage.SaveFileAsync(dataBlock); 
+            await _networkClient.SendFileAsync(bestNode.Id, Encoding.UTF8.GetBytes(dataBlock.ToCsv())); // Отправляем файл на узел
+
+            transaction.Complete(); 
+            _logger.LogInformation($"File distributed to node: {bestNode.Id}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Error distributing file: {ex.Message}");
+            throw;
+        }
+    }
+    
+    public async Task ReplicateFileAsync(string filePath, byte[] data, int replicaCount)
+    {
+        var bestNodes = await GetBestNodesAsync(replicaCount);
+        var replicationNodes = new List<string>();
+
+        //using var transaction = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+
+        foreach (var node in bestNodes)
+        {
+            try
+            {
+                await _networkClient.SendFileAsync(node.Id, Encoding.UTF8.GetBytes(new DataBlock(filePath, node.Id, data).ToCsv()));
+                replicationNodes.Add(node.Id);
+                _logger.LogInformation($"File replicated to node: {node.Id}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning($"Failed to replicate file to node {node.Id}: {ex.Message}");
+            }
+        }
+
+        if (replicationNodes.Count > 0)
+        {
+            var dataBlock = new DataBlock(filePath, bestNodes.First().Id, data)
+            {
+                ReplicationNodes = replicationNodes
+            };
+            await _dataStorage.SaveFileAsync(dataBlock);
+        }
+        else
+        {
+            _logger.LogError("Replication failed for all nodes.");
+            throw new Exception("Replication failed for all nodes.");
+        }
+    }
+    
+    public async Task RedistributeDataAsync(string overloadedNodeId)
+    {
+        var activeNodes = await _nodeManager.GetActiveNodesAsync();
+        if (activeNodes.Count == 0)
+        {
+            _logger.LogWarning("No active nodes available for redistribution.");
+            return;
+        }
+
+        var overloadedNode = activeNodes.FirstOrDefault(n => n.Id == overloadedNodeId);
+        if (overloadedNode == null)
+        {
+            _logger.LogWarning($"Overloaded node not found: {overloadedNodeId}");
+            return;
+        }
+
+        var bestNode = activeNodes
+            .Where(n => n.Id != overloadedNodeId)
+            .OrderBy(n => n.CpuLoad)
+            .FirstOrDefault();
+
+        if (bestNode == null)
+        {
+            _logger.LogWarning("No suitable node found for redistribution.");
+            return;
+        }
+
+        var filesToMove = await _dataStorage.ListFilesByNodeAsync(overloadedNodeId);
+
+        using var transaction = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+        try
+        {
+            foreach (var file in filesToMove)
+            {
+                var dataBlock = await _dataStorage.LoadFileAsync(file);
+                await _networkClient.SendFileAsync(bestNode.Id, Encoding.UTF8.GetBytes(dataBlock.ToCsv()));
+                await _dataStorage.DeleteFileAsync(file); // Удаляем файл с перегруженного узла
+                _logger.LogInformation($"File {file} moved to node {bestNode.Id}");
+            }
+
+            transaction.Complete(); 
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Error redistributing data from node {overloadedNodeId}: {ex.Message}");
+            throw;
+        }
+    }
+    
+    public async Task AutoReplicateDataAsync()
+    {
+        var activeNodes = await _nodeManager.GetActiveNodesAsync();
+        if (activeNodes.Count < 2)
+        {
+            _logger.LogWarning("Not enough active nodes for replication.");
+            return;
+        }
+
+        var changedFiles = await _dataStorage.ListFilesAsync();
+        foreach (var file in changedFiles)
+        {
+            var data = await _dataStorage.LoadFileAsync(file);
+            await ReplicateFileAsync(file, data.ToBytes(), 2);
+        }
+    }
+
+    public async Task BalanceLoadAsync()
+    {
+        var activeNodes = await _nodeManager.GetActiveNodesAsync();
+        if (activeNodes.Count == 0)
+        {
+            _logger.LogWarning("No active nodes available for load balancing.");
+            return;
+        }
+
+        var averageLoad = activeNodes.Average(n => n.CpuLoad);
+        _logger.LogInformation($"Average CPU load: {averageLoad}%");
+
+        foreach (var node in activeNodes)
+        {
+            if (node.CpuLoad > averageLoad)
+            {
+                _logger.LogInformation($"Node {node.Id} is overloaded (CPU Load: {node.CpuLoad}%). Redistributing data...");
+            
+                using var transaction = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+                try
+                {
+                    await RedistributeDataAsync(node.Id);
+                    transaction.Complete(); 
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error balancing load for node {node.Id}: {ex.Message}");
+                    throw;
+                }
+            }
+        }
+    }
+
+}
+```
+
+##Файл - DataStorageService.cs
+```
+﻿using Microsoft.Data.Sqlite;
+using VKR_Common.Interfaces;
+using VKR_Common.Models;
+
+namespace VKR_Core.Services;
+
+public class DataStorageService : IDataStorage
+{
+    private readonly string _connectionString;
+
+    public DataStorageService(string connectionString)
+    {
+        _connectionString = connectionString;
+        InitializeDatabase();
+    }
+
+    private void InitializeDatabase()
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        var command = connection.CreateCommand();
+        command.CommandText = @"
+            CREATE TABLE IF NOT EXISTS DataBlocks (
+                Id TEXT PRIMARY KEY,
+                NodeId TEXT NOT NULL,
+                Data BLOB NOT NULL,
+                Timestamp DATETIME NOT NULL,
+                ReplicationNodes TEXT
+            )";
+        command.ExecuteNonQuery();
+    }
+
+    public async Task SaveFileAsync(DataBlock dataBlock)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = connection.BeginTransaction();
+
+        try
+        {
+            var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = @"
+                INSERT INTO DataBlocks (Id, NodeId, Data, Timestamp, ReplicationNodes)
+                VALUES (@Id, @NodeId, @Data, @Timestamp, @ReplicationNodes)";
+            command.Parameters.AddWithValue("@Id", dataBlock.Id);
+            command.Parameters.AddWithValue("@NodeId", dataBlock.NodeId);
+            command.Parameters.AddWithValue("@Data", dataBlock.Data);
+            command.Parameters.AddWithValue("@Timestamp", dataBlock.Timestamp);
+            command.Parameters.AddWithValue("@ReplicationNodes",
+                dataBlock.ReplicationNodes == null
+                    ? DBNull.Value
+                    : string.Join(';', dataBlock.ReplicationNodes));
+            await command.ExecuteNonQueryAsync();
+
+            await transaction.CommitAsync(); 
+        }
+        catch
+        {
+            await transaction.RollbackAsync(); 
+            throw;
+        }
+    }
+
+    public async Task<DataBlock> LoadFileAsync(string id)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM DataBlocks WHERE Id = @Id";
+        command.Parameters.AddWithValue("@Id", id);
+        using var reader = await command. ExecuteReaderAsync();
+        if (await reader.ReadAsync())
+        {
+            return new DataBlock(
+                reader.GetString(0),
+                reader.GetString(1),
+                (byte[])reader.GetValue(2),
+                reader.GetDateTime(3))
+            {
+                ReplicationNodes = reader.IsDBNull(4)
+                    ? new List<string>()
+                    : reader.GetString(4).Split(';').ToList()
+            };
+        }
+        return null;
+    }
+
+    public async Task DeleteFileAsync(string id)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = connection.BeginTransaction();
+
+        try
+        {
+            var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = "DELETE FROM DataBlocks WHERE Id = @Id";
+            command.Parameters.AddWithValue("@Id", id);
+            await command.ExecuteNonQueryAsync();
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<List<string>> FindDataByKey()
+    {
+        var keys = new List<string>();
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = "SELECT Id FROM DataBlocks";
+        using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            keys.Add(reader.GetString(0));
+        }
+        return keys;
+    }
+
+    public async Task<List<DataBlock>> GetDataBlocksAsync()
+    {
+        var dataBlocks = new List<DataBlock>();
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM DataBlocks";
+        using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            dataBlocks.Add(new DataBlock(
+                reader.GetString(0),
+                reader.GetString(1),
+                (byte[])reader.GetValue(2),
+                reader.GetDateTime(3))
+            {
+                ReplicationNodes = reader.IsDBNull(4)
+                    ? new List<string>()
+                    : reader.GetString(4).Split(';').ToList()
+            });
+        }
+        return dataBlocks;
+    }
+    public async Task<List<string>> ListFilesByNodeAsync(string nodeId)
+    {
+        var files = new List<string>();
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = "SELECT Id FROM DataBlocks WHERE NodeId = @NodeId";
+        command.Parameters.AddWithValue("@NodeId", nodeId);
+        using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            files.Add(reader.GetString(0));
+        }
+        return files;
+    }
+
+    public async Task<List<string>> ListFilesAsync()
+    {
+        var files = new List<string>();
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = "SELECT Id FROM DataBlocks";
+        using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            files.Add(reader.GetString(0));
+        }
+        return files;
+    }
+    private void ApplyMigrations()
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        // Пример миграции
+        var command = connection.CreateCommand();
+        command.CommandText = @"
+        ALTER TABLE DataBlocks ADD COLUMN NewColumn TEXT;
+    ";
+        try
+        {
+            command.ExecuteNonQuery();
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 1) // Код ошибки "столбец уже существует"
+        {
+            // Игнорируем
+        }
+    }
+    
+    public List<DataBlock> SplitData(byte[] data, int numberOfParts)
+    {
+        var partSize = data.Length / numberOfParts;
+        var parts = new List<DataBlock>();
+        for (int i = 0; i < numberOfParts; i++)
+        {
+            var partData = data.Skip(i * partSize).Take(partSize).ToArray();
+            parts.Add(new DataBlock($"Part-{i}", string.Empty, partData));
+        }
+        return parts;
+    }
+
+
+
+    
+}
+
+```
+
+##Файл - NodeManager.cs
+```
+﻿using VKR_Common.Interfaces;
+using VKR_Common.Models;
+using System.Collections.Concurrent;
+
+namespace VKR_Core.Services;
+
+public class NodeManager : INodeManager
+{
+    private readonly ConcurrentDictionary<string, Node> _nodes = new();
+
+    // События
+    public event Action<Node>? NodeAdded;
+    public event Action<string>? NodeRemoved;
+    public event Action<Node>? NodeUpdated;
+
+    public async Task AddNodeAsync(Node node)
+    {
+        if (_nodes.TryAdd(node.Id, node))
+        {
+            NodeAdded?.Invoke(node);
+        }
+        await Task.CompletedTask;
+    }
+
+
+    public async Task RemoveNodeAsync(string nodeId)
+    {
+        if (_nodes.TryRemove(nodeId, out _))
+        {
+            NodeRemoved?.Invoke(nodeId); 
+        }
+        await Task.CompletedTask;
+    }
+
+    public async Task<List<Node>> GetActiveNodesAsync()
+    {
+        return await Task.FromResult(_nodes.Values.Where(n => n.IsActive).ToList());
+    }
+
+    public async Task UpdateNodeAsync(Node node)
+    {
+        if (_nodes.ContainsKey(node.Id))
+        {
+            _nodes[node.Id] = node;
+            NodeUpdated?.Invoke(node);
+        }
+        else
+        {
+            await AddNodeAsync(node); // Если узел не существует, добавляем его
+        }
+        await Task.CompletedTask;
+    }
+
+
+    public async Task<Node?> GetNodeByIdAsync(string nodeId)
+    {
+        _nodes.TryGetValue(nodeId, out var node);
+        return await Task.FromResult(node);
+    }
+
+    public async Task<bool> NodeExistsAsync(string nodeId)
+    {
+        return await Task.FromResult(_nodes.ContainsKey(nodeId));
+    }
+
+    public async Task<List<Node>> GetAllNodesAsync()
+    {
+        return await Task.FromResult(_nodes.Values.ToList());
+    }
+    /*
+     * Пример вызова
+     * var nodeManager = new NodeManager();
+
+// Подписка на события
+nodeManager.NodeAdded += node => Console.WriteLine($"Node added: {node.Id}");
+nodeManager.NodeRemoved += nodeId => Console.WriteLine($"Node removed: {nodeId}");
+nodeManager.NodeUpdated += node => Console.WriteLine($"Node updated: {node.Id}");
+
+// Пример вызова
+await nodeManager.AddNodeAsync(new Node { Id = "1", Address = "127.0.0.1", IsActive = true });
+await nodeManager.RemoveNodeAsync("1");
+
+     */
+}
+```
+
+##Файл - SerializationService.cs
+```
+﻿using System.Text;
+using CsvHelper;
+using CsvHelper.Configuration;
+using System.Globalization;
+using VKR_Core.Interfaces;
+
+namespace VKR_Core.Services;
+
+public class SerializationService : ISerializationService
+{
+    public byte[] SerializeToCsv<T>(T data)
+    {
+        using var memoryStream = new MemoryStream();
+        using var streamWriter = new StreamWriter(memoryStream, Encoding.UTF8);
+        using var csvWriter = new CsvWriter(streamWriter, new CsvConfiguration(CultureInfo.InvariantCulture));
+
+        csvWriter.WriteRecord(data);
+        streamWriter.Flush();
+
+        return memoryStream.ToArray();
+    }
+
+    public T DeserializeFromCsv<T>(byte[] data)
+    {
+        using var memoryStream = new MemoryStream(data);
+        using var streamReader = new StreamReader(memoryStream, Encoding.UTF8);
+        using var csvReader = new CsvReader(streamReader, new CsvConfiguration(CultureInfo.InvariantCulture));
+
+        return csvReader.GetRecord<T>();
+    }
+}
+```
+
+##Файл - SuperNodeManager.cs
+```
+﻿using VKR_Common.Interfaces;
+using VKR_Common.Models;
+using VKR_Core.Interfaces;
+
+namespace VKR_Core.Services;
+
+public class SuperNodeManager : ISuperNodeManager
+{
+    private readonly INodeManager _nodeManager;
+    private string? _superNodeId;
+
+    public SuperNodeManager(INodeManager nodeManager)
+    {
+        _nodeManager = nodeManager ?? throw new ArgumentNullException(nameof(nodeManager));
+    }
+
+    public string? SuperNodeId => _superNodeId;
+
+    public bool IsSuperNode => _superNodeId == Environment.MachineName;
+
+    public async Task AssignNewSuperNodeAsync()
+    {
+        var nodes = await _nodeManager.GetAllNodesAsync();
+
+        // Если список узлов пуст, назначаем текущий узел суперузлом
+        if (nodes.Count == 0)
+        {
+            _superNodeId = Environment.MachineName;
+            Console.WriteLine($"This node is now the supernode.");
+            return;
+        }
+
+        // Ищем узел с минимальным ID
+        var newSuperNode = nodes.OrderBy(n => n.Id).FirstOrDefault();
+        if (newSuperNode != null)
+        {
+            _superNodeId = newSuperNode.Id;
+            Console.WriteLine($"New supernode assigned: {_superNodeId}");
+        }
+    }
+
+
+    public async Task RegisterSuperNodeAsync(Node node)
+    {
+        if (_superNodeId == null)
+        {
+            _superNodeId = node.Id;
+            Console.WriteLine($"Supernode initialized: {_superNodeId}");
+        }
+        else
+        {
+            Console.WriteLine($"Supernode already exists: {_superNodeId}");
+        }
+        await Task.CompletedTask;
+    }
+
+    public async Task<bool> IsSuperNodeAliveAsync()
+    {
+        if (_superNodeId == null)
+            return false;
+
+        var superNode = await _nodeManager.GetNodeByIdAsync(_superNodeId);
+        return superNode?.IsActive ?? false;
+    }
+    
+    
+}
+
+```
+
+##Файл - TransactionService.cs
+```
+﻿using VKR_Common.Models;
+using VKR_Core.Models;
+
+
+namespace VKR_Core.Services;
+
+public class TransactionService
+{
+    private readonly DataDistributionService _dataDistributionService;
+    private readonly List<Transaction> _transactions = new List<Transaction>();
+
+    public TransactionService(DataDistributionService dataDistributionService)
+    {
+        _dataDistributionService = dataDistributionService;
+    }
+
+    public void ProcessTransaction(Transaction transaction)
+    {
+        var primaryNode = _dataDistributionService.GetNodeForData(transaction.DataBlock.Id);
+        var replicantNodes = _dataDistributionService.GetReplicationNodes(transaction.DataBlock.Id);
+
+        SaveData(primaryNode, transaction.DataBlock);
+        
+    }
+    
+    private void SaveData(string nodeId, DataBlock dataBlock)
+    {
+        Console.WriteLine($"Сохранение данных на узле {nodeId}: {dataBlock.Data}");
+    }
+    
+    public async Task<Transaction> StartTransactionAsync()
+    {
+        var transaction = new Transaction(Guid.NewGuid().ToString());
+        _transactions.Add(transaction);
+        return transaction;
+    }
+
+    public async Task CommitTransactionAsync(string transactionId)
+    {
+        var transaction = _transactions.Find(t => t.TransactionId == transactionId);
+        if (transaction != null)
+        {
+            transaction.MarkCompleted();
+        }
+    }
+
+    public async Task RollbackTransactionAsync(string transactionId)
+    {
+        var transaction = _transactions.Find(t => t.TransactionId == transactionId);
+        if (transaction != null)
+        {
+            transaction.MarkFailed();
+        }
+    }
+}
+
+```
+

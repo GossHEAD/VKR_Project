@@ -1,0 +1,12 @@
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\bin\Debug\net8.0\VKR_Common.deps.json
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\bin\Debug\net8.0\VKR_Common.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\bin\Debug\net8.0\VKR_Common.pdb
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\obj\Debug\net8.0\VKR_Common.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\obj\Debug\net8.0\VKR_Common.AssemblyInfoInputs.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\obj\Debug\net8.0\VKR_Common.AssemblyInfo.cs
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\obj\Debug\net8.0\VKR_Common.csproj.CoreCompileInputs.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\obj\Debug\net8.0\VKR_Common.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\obj\Debug\net8.0\refint\VKR_Common.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\obj\Debug\net8.0\VKR_Common.pdb
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\obj\Debug\net8.0\ref\VKR_Common.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Common\obj\Debug\net8.0\VKR_Common.csproj.AssemblyReference.cache

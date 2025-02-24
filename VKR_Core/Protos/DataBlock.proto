@@ -1,0 +1,11 @@
+﻿syntax = "proto3";
+
+message DataBlock {
+  string id = 1;
+  string nodeId = 2;
+  bytes data = 3;
+  repeated string replicationNodes = 4;
+  int64 size = 5;
+  string hash = 6;
+  string createdAt = 7;
+}
