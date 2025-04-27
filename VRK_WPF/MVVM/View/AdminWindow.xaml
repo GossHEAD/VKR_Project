@@ -1,0 +1,103 @@
+﻿<Window x:Class="VRK_WPF.MVVM.View.AdminWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:VRK_WPF.MVVM.ViewModel"
+        Title="Администрирование системы распределенного хранения данных" Height="700" Width="1000">
+    <Grid>
+        <!-- Главное меню -->
+        <Menu VerticalAlignment="Top">
+            <MenuItem Header="Файл">
+                <MenuItem Header="Импортировать данные" Command="{Binding ImportDataCommand}" />
+                <MenuItem Header="Экспортировать данные" Command="{Binding ExportDataCommand}" />
+                <Separator />
+                <MenuItem Header="Выход" Command="{Binding ExitCommand}" />
+            </MenuItem>
+            <MenuItem Header="Настройки">
+                <MenuItem Header="Общие настройки" Command="{Binding GeneralSettingsCommand}" />
+                <MenuItem Header="Настройки узлов" Command="{Binding ConfigureNodesCommand}" />
+            </MenuItem>
+            <MenuItem Header="Справка">
+                <MenuItem Header="Документация" Command="{Binding OpenDocumentationCommand}" />
+                <MenuItem Header="О программе" Command="{Binding OpenAboutCommand}" /> 
+            </MenuItem>
+        </Menu>
+
+        <!-- Основные вкладки -->
+        <TabControl Margin="0,30,0,0">
+            <!-- Вкладка управления узлами -->
+            <TabItem Header="Управление узлами">
+                <Grid>
+                    <GroupBox Header="Список узлов" Margin="10">
+                        <StackPanel>
+                            <DataGrid Name="NodeGridAdmin" AutoGenerateColumns="False" IsReadOnly="True" ItemsSource="{Binding NodeList}">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="ID Узла" Binding="{Binding Id}" />
+                                    <DataGridTextColumn Header="Статус" Binding="{Binding Status}" />
+                                    <DataGridTextColumn Header="Загрузка ЦП" Binding="{Binding CpuLoad}" />
+                                    <DataGridTextColumn Header="Используемая RAM" Binding="{Binding MemoryUsage}" />
+                                    <DataGridTextColumn Header="Свободное место" Binding="{Binding FreeSpace}" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
+                                <Button Content="Добавить узел" Command="{Binding AddNodeCommand}" />
+                                <Button Content="Удалить узел" Command="{Binding RemoveNodeCommand}" Margin="10,0,0,0" />
+                                <Button Content="Редактировать узел" Command="{Binding EditNodeCommand}" />
+                                <Button Content="Диагностика узла" Command="{Binding DiagnoseNodeCommand}" Margin="10,0,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <!-- Вкладка настроек распределения -->
+            <TabItem Header="Настройки распределения">
+                <StackPanel Margin="10">
+                    <TextBlock Text="Количество реплик:" />
+                    <TextBox Text="{Binding ReplicaCount}" Width="100" />
+                    <TextBlock Text="Критерий распределения:" />
+                    <ComboBox SelectedItem="{Binding DistributionCriterion}">
+                        <ComboBoxItem Content="По нагрузке" />
+                        <ComboBoxItem Content="По географии" />
+                        <ComboBoxItem Content="По надежности узла" />
+                    </ComboBox>
+                    <Button Content="Сохранить настройки" Command="{Binding SaveDistributionSettingsCommand}" />
+                </StackPanel>
+            </TabItem>
+
+            <!-- Вкладка мониторинга -->
+            <TabItem Header="Мониторинг">
+                <StackPanel>
+                    <GroupBox Header="Состояние узлов" Margin="10">
+                        <DataGrid Name="MonitoringGridAdmin" AutoGenerateColumns="False" IsReadOnly="True" ItemsSource="{Binding MonitoringData}" />
+                    </GroupBox>
+                    <GroupBox Header="Активные транзакции" Margin="10">
+                        <DataGrid Name="TransactionGridAdmin" AutoGenerateColumns="False" IsReadOnly="True" ItemsSource="{Binding ActiveTransactions}" />
+                    </GroupBox>
+                    <GroupBox Header="Сетевые соединения" Margin="10">
+                        <DataGrid Name="NetworkConnectionsGrid" AutoGenerateColumns="False" IsReadOnly="True" ItemsSource="{Binding NetworkConnections}" />
+                    </GroupBox>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Вкладка журнала событий -->
+            <TabItem Header="Журнал событий">
+                <StackPanel Margin="10">
+                    <TextBlock Text="Фильтр по дате:" />
+                    <DatePicker SelectedDate="{Binding LogFilterDate}" />
+                    <Button Content="Применить фильтр" Command="{Binding ApplyLogFilterCommand}" />
+                    <ListBox Name="EventLogAdmin" ItemsSource="{Binding EventLogEntries}" />
+                    <Button Content="Экспортировать журнал" Command="{Binding ExportLogCommand}" />
+                </StackPanel>
+            </TabItem>
+
+            <!-- Вкладка работы с БД -->
+            <TabItem Header="База данных">
+                <StackPanel Margin="10">
+                    <DataGrid Name="DatabaseGridAdmin" AutoGenerateColumns="True" IsReadOnly="True" ItemsSource="{Binding StoredData}" />
+                    <Button Content="Очистить базу данных" Command="{Binding ClearDatabaseCommand}" />
+                    <Button Content="Резервное копирование" Command="{Binding BackupDatabaseCommand}" Margin="10,0,0,0" />
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>

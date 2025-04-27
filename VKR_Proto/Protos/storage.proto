@@ -1,0 +1,339 @@
+﻿// Define the protocol buffers syntax version.
+syntax = "proto3";
+
+// Import necessary standard protobuf types.
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// Option to generate C# code with a specific namespace.
+option csharp_namespace = "VKR.Protos";
+
+// Package declaration (optional but good practice).
+package storage;
+
+// Service definition for client-facing operations (e.g., from WPF UI).
+service StorageService {
+  // RPC for uploading a file. Uses client streaming for the file content.
+  rpc UploadFile (stream UploadFileRequest) returns (UploadFileReply);
+  // RPC for downloading a file. Uses server streaming for the file content.
+  rpc DownloadFile (DownloadFileRequest) returns (stream DownloadFileReply);
+  // RPC for deleting a file across the network.
+  rpc DeleteFile (DeleteFileRequest) returns (DeleteFileReply);
+  // RPC to list files stored in the system (metadata only).
+  rpc ListFiles (ListFilesRequest) returns (ListFilesReply);
+  // RPC to get the status of a specific file (placeholder).
+  rpc GetFileStatus (GetFileStatusRequest) returns (GetFileStatusReply);
+  // RPC to get the status of nodes in the network.
+  rpc GetNodeStatuses (GetNodeStatusesRequest) returns (GetNodeStatusesReply);
+
+  rpc GetNodeConfiguration (GetNodeConfigurationRequest) returns (GetNodeConfigurationReply);
+}
+
+// Service definition for internal node-to-node communication.
+service NodeInternalService {
+  // RPC for replicating a chunk to another node.
+  rpc ReplicateChunk (ReplicateChunkRequest) returns (ReplicateChunkReply);
+  // RPC for requesting a chunk from another node (placeholder).
+  rpc RequestChunk (RequestChunkRequest) returns (stream RequestChunkReply);
+  // RPC for deleting a specific chunk replica on a node.
+  rpc DeleteChunk (DeleteChunkRequest) returns (DeleteChunkReply);
+  // RPC for checking if a node is alive.
+  rpc Ping (PingRequest) returns (PingReply); // Added Ping RPC
+
+  rpc GetNodeFileList (GetNodeFileListRequest) returns (GetNodeFileListReply);
+
+  rpc AcknowledgeReplica (AcknowledgeReplicaRequest) returns (google.protobuf.Empty); // Or a simple AckReply {}
+  
+  // RPCs related to DHT (Distributed Hash Table) management (placeholders).
+  rpc FindSuccessor (FindSuccessorRequest) returns (FindSuccessorReply);
+  rpc GetPredecessor (GetPredecessorRequest) returns (GetPredecessorReply);
+  rpc Notify (NotifyRequest) returns (NotifyReply);
+}
+
+// Service definition for administrative tasks (placeholder).
+service AdminService {
+  // RPC to get system statistics (placeholder).
+  rpc GetSystemStats (GetSystemStatsRequest) returns (GetSystemStatsReply);
+  // RPC to trigger maintenance tasks (placeholder).
+  rpc TriggerMaintenance (TriggerMaintenanceRequest) returns (TriggerMaintenanceReply);
+}
+
+// === Message Definitions for StorageService ===
+
+message AcknowledgeReplicaRequest {
+  string file_id = 1;
+  string chunk_id = 2;
+  string replica_node_id = 3; // The ID of the node that successfully stored the replica
+  string original_sender_node_id = 4; // Optional: ID of the node that sent the original ReplicateChunk request
+}
+
+// Request message for UploadFile RPC. Can contain metadata or chunk data.
+message UploadFileRequest {
+  oneof payload {
+    FileMetadata metadata = 1; // File metadata (sent first)
+    FileChunk chunk = 2;       // File chunk data
+  }
+}
+
+// Reply message for UploadFile RPC. Indicates success or failure.
+message UploadFileReply {
+  bool success = 1;
+  string message = 2;
+  string file_id = 3; // ID assigned to the uploaded file
+}
+
+// Request message for DownloadFile RPC. Specifies the file ID to download.
+message DownloadFileRequest {
+  string file_id = 1;
+}
+
+// Reply message for DownloadFile RPC. Can contain metadata or chunk data.
+message DownloadFileReply {
+  oneof payload {
+    FileMetadata metadata = 1; // File metadata (sent first)
+    FileChunk chunk = 2;       // File chunk data
+  }
+}
+
+// Request message for DeleteFile RPC. Specifies the file ID to delete.
+message DeleteFileRequest {
+  string file_id = 1;
+}
+
+// Reply message for DeleteFile RPC. Indicates success or failure.
+message DeleteFileReply {
+  bool success = 1;
+  string message = 2;
+}
+
+// Request message for ListFiles RPC (currently empty, might add filters later).
+message ListFilesRequest {
+  // Potential future fields: filter_by_name, sort_order, etc.
+}
+
+// Reply message for ListFiles RPC. Contains a list of file metadata.
+message ListFilesReply {
+  repeated FileMetadata files = 1;
+}
+
+// Request message for GetFileStatus RPC (placeholder).
+message GetFileStatusRequest {
+  string file_id = 1;
+}
+
+// Reply message for GetFileStatus RPC (placeholder).
+message GetFileStatusReply {
+  string file_id = 1;
+  FileState status = 2;
+  int32 replication_factor = 3;
+  repeated ChunkStatusInfo chunk_statuses = 4;
+}
+
+// Request message for GetNodeStatuses RPC (currently empty).
+message GetNodeStatusesRequest {
+}
+
+// Reply message for GetNodeStatuses RPC. Contains a list of node statuses.
+message GetNodeStatusesReply {
+  repeated NodeStatusInfo nodes = 1;
+}
+
+// === Message Definitions for NodeInternalService ===
+
+// Request message for ReplicateChunk RPC. Contains chunk data and metadata.
+message ReplicateChunkRequest {
+  string file_id = 1;         // ID of the parent file
+  string chunk_id = 2;        // ID of the chunk
+  int32 chunk_index = 3;      // Order/index of the chunk within the file
+  bytes data = 4;             // The actual chunk data
+  string original_node_id = 5; // ID of the node initiating replication
+  FileMetadata parent_file_metadata = 6;
+}
+
+// Reply message for ReplicateChunk RPC. Indicates success or failure.
+message ReplicateChunkReply {
+  bool success = 1;
+  string message = 2;
+}
+
+// Request message for RequestChunk RPC (placeholder).
+message RequestChunkRequest {
+  string file_id = 1;
+  string chunk_id = 2;
+}
+
+// Reply message for RequestChunk RPC (placeholder).
+message RequestChunkReply {
+  string chunk_id = 1;
+  bytes data = 2;
+  bool found = 3;
+}
+
+// Request message for DeleteChunk RPC. Specifies the chunk ID to delete.
+message DeleteChunkRequest {
+  string file_id = 1;  // Include file_id to help locate/verify chunk metadata
+  string chunk_id = 2;
+}
+
+// Reply message for DeleteChunk RPC. Indicates success or failure.
+message DeleteChunkReply {
+  bool success = 1;
+  string message = 2;
+}
+
+// Request message for Ping RPC. Can be empty or include sender info.
+message PingRequest {
+  string sender_node_id = 1; // Optional: ID of the node sending the ping
+}
+
+// Reply message for Ping RPC. Acknowledges the ping, can include receiver info.
+message PingReply {
+  string responder_node_id = 1; // ID of the node responding to the ping
+  bool success = 2;            // Indicates successful ping processing
+}
+
+// Request message for FindSuccessor RPC (placeholder for DHT).
+message FindSuccessorRequest {
+  string key = 1; // The key (e.g., hashed file ID or chunk ID) to find the successor for.
+}
+
+// Reply message for FindSuccessor RPC (placeholder for DHT).
+message FindSuccessorReply {
+  NodeInfo successor_node = 1; // Information about the successor node.
+}
+
+// Request message for GetPredecessor RPC (placeholder for DHT).
+message GetPredecessorRequest {
+  // Empty request is usually sufficient.
+}
+
+// Reply message for GetPredecessor RPC (placeholder for DHT).
+message GetPredecessorReply {
+  NodeInfo predecessor_node = 1; // Information about the predecessor node. Can be null if no predecessor.
+}
+
+// Request message for Notify RPC (placeholder for DHT). Used when a node thinks it might be the predecessor of another.
+message NotifyRequest {
+  NodeInfo potential_predecessor = 1; // Information about the notifying node.
+}
+
+// Reply message for Notify RPC (placeholder for DHT).
+message NotifyReply {
+  // Usually empty, indicates the notification was received.
+}
+
+// === Message Definitions for AdminService (Placeholders) ===
+
+message GetSystemStatsRequest {}
+message GetSystemStatsReply {
+  int64 total_storage_used = 1;
+  int32 number_of_files = 2;
+  int32 number_of_chunks = 3;
+  int32 number_of_nodes_online = 4;
+  // Add more stats as needed
+}
+
+message TriggerMaintenanceRequest {
+  string task_name = 1; // e.g., "consistency_check", "cleanup_orphans"
+}
+message TriggerMaintenanceReply {
+  bool success = 1;
+  string message = 2;
+}
+
+// === Common/Shared Message Definitions ===
+
+// Represents metadata for a file.
+message FileMetadata {
+  string file_id = 1;        // Unique identifier for the file (e.g., hash of content or UUID)
+  string file_name = 2;      // Original name of the file
+  int64 file_size = 3;       // Total size of the file in bytes
+  google.protobuf.Timestamp creation_time = 4; // Timestamp when the file was added
+  google.protobuf.Timestamp modification_time = 5; // Timestamp of last modification
+  string content_type = 6;   // MIME type of the file
+  int32 chunk_size = 7;      // Size of each chunk in bytes
+  int32 total_chunks = 8;    // Total number of chunks for this file
+  FileState state = 9;       // Current state of the file (e.g., Available, Deleting)
+  int64 expected_file_size = 10;
+  // Add other relevant metadata like owner, permissions, checksum, etc.
+}
+
+// Represents a chunk of a file.
+message FileChunk {
+  string file_id = 1;    // ID of the parent file
+  string chunk_id = 2;   // Unique ID for this chunk (e.g., hash of chunk content)
+  int32 chunk_index = 3; // Order/index of the chunk within the file
+  bytes data = 4;        // The actual chunk data
+  int32 size = 5;        // Size of this specific chunk (might differ for the last chunk)
+}
+
+// Represents information about a node in the network.
+message NodeInfo {
+  string node_id = 1;      // Unique identifier for the node
+  string address = 2;    // Network address (e.g., "hostname:port" or "ip:port")
+  NodeState state = 3;     // Current state of the node (e.g., Online, Offline, Joining)
+  int64 last_seen = 4;     // Timestamp of the last successful contact (e.g., Unix epoch seconds)
+  // Add other info like storage capacity, load, etc.
+}
+
+// Represents the status of a specific chunk (placeholder).
+message ChunkStatusInfo {
+  string chunk_id = 1;
+  int32 current_replication = 2;
+  repeated NodeInfo locations = 3; // Nodes currently storing this chunk
+}
+
+// Represents the status of a node for the GetNodeStatuses RPC.
+message NodeStatusInfo {
+  string node_id = 1;
+  string address = 2;
+  NodeState status = 3; // Simplified status for this specific RPC
+  string details = 4;   // e.g., "Online", "Ping failed: Timeout", "Unreachable"
+}
+
+message GetNodeConfigurationRequest {
+
+}
+
+message GetNodeConfigurationReply {
+  string node_id = 1;
+  string listen_address = 2;
+  string storage_base_path = 3;
+  int32 replication_factor = 4;
+  int32 default_chunk_size = 5;
+  bool success = 6;         // To indicate success/failure
+  string error_message = 7; // Optional error details
+  // Add other settings here as needed
+}
+
+message GetNodeFileListRequest {
+  // Could add filtering options later if needed
+}
+
+// Assuming VKR.Protos.FileMetadata is defined elsewhere and suitable
+message GetNodeFileListReply {
+  repeated FileMetadata files = 1;
+}
+
+// === Enumerations ===
+
+// Enum defining possible states for a file.
+enum FileState {
+  FILE_STATE_UNKNOWN = 0;
+  FILE_STATE_UPLOADING = 1;
+  FILE_STATE_AVAILABLE = 2;
+  FILE_STATE_DELETING = 3;
+  FILE_STATE_DELETED = 4;
+  FILE_STATE_ERROR = 5;
+  FILE_STATE_RECOVERING = 6; // Added for potential future recovery state
+}
+
+// Enum defining possible states for a node.
+enum NodeState {
+  NODE_STATE_UNKNOWN = 0;
+  NODE_STATE_OFFLINE = 1;
+  NODE_STATE_JOINING = 2;
+  NODE_STATE_ONLINE = 3;
+  NODE_STATE_LEAVING = 4;
+  NODE_STATE_ERROR = 5;
+}

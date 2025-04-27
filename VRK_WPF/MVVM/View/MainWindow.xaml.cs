@@ -21,17 +21,32 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = new MainWindowViewModel();
-    }
-    private void ViewTransactionHistory_Click(object sender, RoutedEventArgs e)
-    {
-        var transactionWindow = new TransactionHistoryWindow();
-        transactionWindow.Show();
+        System.Diagnostics.Debug.WriteLine($"DataContext set to: {DataContext?.GetType().Name}"); // Add this line
+    
     }
     
-    
-    private void OpenNodeSettings_Click(object sender, RoutedEventArgs e)
+    private void OpenDocumentation_Click(object sender, RoutedEventArgs e)
     {
-        var transactionWindow = new NodeSettingsView();
-        transactionWindow.Show();
+        DocumentationPage documentationPage = new DocumentationPage();
+        ShowPage(documentationPage);
+    }
+
+    private void OpenAboutProgram_Click(object sender, RoutedEventArgs e)
+    {
+        AboutPage aboutProgramPage = new AboutPage();
+        ShowPage(aboutProgramPage);
+    }
+    
+    private void ShowPage(Page page)
+    {
+        Window window = new Window
+        {
+            Title = page.Title,
+            Content = page,
+            Width = 600,
+            Height = 400,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen
+        };
+        window.ShowDialog();
     }
 }
