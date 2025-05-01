@@ -5,23 +5,94 @@ using Microsoft.Extensions.Logging;
 using VKR_Core.Models;
 using VKR_Core.Services;
 using VKR.Protos;
-using System.Threading; // Add CancellationToken namespace
-using System.Threading.Tasks; // Add Task namespace
 
 namespace VKR_Node.Services
 {
-    // Ensure it implements IDisposable if the interface requires it
+    /// <summary>
+    /// Client implementation for making gRPC calls to other nodes in the network.
+    /// Provides methods to send requests, manage channels, and handle responses.
+    /// </summary>
     public class GrpcNodeClient : INodeClient
     {
         private readonly ILogger<GrpcNodeClient> _logger;
-        private readonly ConcurrentDictionary<string, GrpcChannel> _channels = new ();
+        private readonly ConcurrentDictionary<string, GrpcChannel> _channels = new();
+        private readonly ConcurrentDictionary<string, DateTime> _channelLastUsed = new();
         private readonly string _callingNodeId;
+        private readonly TimeSpan _channelIdleTimeout = TimeSpan.FromMinutes(30);
+        private readonly TimeSpan _cleanupInterval = TimeSpan.FromMinutes(10);
+        private bool _disposed = false;
+        private readonly Task _cleanupTask;
+        private readonly CancellationTokenSource _cleanupCts = new();
 
+        /// <summary>
+        /// Initializes a new instance of the GrpcNodeClient.
+        /// </summary>
         public GrpcNodeClient(ILogger<GrpcNodeClient> logger, Microsoft.Extensions.Options.IOptions<Configuration.NodeOptions> nodeOptions)
         {
             _logger = logger;
-            // Ensure NodeId is standardized in options
-            _callingNodeId = nodeOptions.Value?.NodeId ?? throw new InvalidOperationException("NodeId is not configured.");
+            _callingNodeId = nodeOptions.Value?.NodeId ?? throw new InvalidOperationException("NodeId is not configured");
+
+            // Start cleanup task for idle channels
+            _cleanupTask = Task.Run(async () => {
+                try
+                {
+                    while (!_cleanupCts.Token.IsCancellationRequested)
+                    {
+                        await Task.Delay(_cleanupInterval, _cleanupCts.Token);
+                        CleanupIdleChannels();
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected during shutdown
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error in channel cleanup background task");
+                }
+            });
+
+            _logger.LogInformation("GrpcNodeClient initialized for node {NodeId}", _callingNodeId);
+        }
+
+        /// <summary>
+        /// Cleans up idle channels that haven't been used for the specified timeout.
+        /// </summary>
+        private void CleanupIdleChannels()
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+                var keysToRemove = _channelLastUsed
+                    .Where(kvp => (now - kvp.Value) > _channelIdleTimeout)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+
+                foreach (var key in keysToRemove)
+                {
+                    if (_channelLastUsed.TryRemove(key, out _) && 
+                        _channels.TryRemove(key, out var channel))
+                    {
+                        try
+                        {
+                            // Use ShutdownAsync for graceful shutdown
+                            channel.ShutdownAsync().Wait(TimeSpan.FromSeconds(2));
+                            _logger.LogDebug("Closed idle channel to {Address}", key);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Error closing idle channel to {Address}", key);
+                        }
+                    }
+                }
+                
+                _logger.LogTrace("Channel cleanup complete. Removed {Count} idle channels. Current channel count: {ChannelCount}", 
+                    keysToRemove.Count, _channels.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during channel cleanup");
+            }
         }
 
         /// <summary>
@@ -29,172 +100,225 @@ namespace VKR_Node.Services
         /// </summary>
         private GrpcChannel GetOrCreateChannel(string targetNodeAddress)
         {
-            // Normalize address (ensure scheme)
-            string formattedAddress = targetNodeAddress.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || targetNodeAddress.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-                ? targetNodeAddress
-                : $"http://{targetNodeAddress}"; // Default to http if no scheme
+            // Normalize address
+            string formattedAddress = NormalizeAddress(targetNodeAddress);
 
-            return _channels.GetOrAdd(formattedAddress, addr => // Use formattedAddress as key
-            {
+            var channel = _channels.GetOrAdd(formattedAddress, addr => {
                 _logger.LogDebug("Creating gRPC channel for address: {Address}", addr);
-                // *** SECURITY WARNING: Replace this in production! ***
-                // var httpHandler = new HttpClientHandler
-                // {
-                //     ServerCertificateCustomValidationCallback =
-                //         HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-                // };
-                // return GrpcChannel.ForAddress(addr, new GrpcChannelOptions { HttpHandler = httpHandler });
-                return GrpcChannel.ForAddress(addr); // Use default handler (requires proper certs or config)
+                return GrpcChannel.ForAddress(addr);
             });
+
+            // Record channel usage time
+            _channelLastUsed[formattedAddress] = DateTime.UtcNow;
+
+            return channel;
         }
 
         /// <summary>
-        /// Sends a ReplicateChunk request to the target node.
+        /// Normalizes an address to ensure consistent format.
         /// </summary>
-        public async Task<ReplicateChunkReply> ReplicateChunkToNodeAsync(string targetNodeAddress, ReplicateChunkRequest request, CancellationToken cancellationToken = default)
+        private string NormalizeAddress(string targetNodeAddress)
         {
-            _logger.LogInformation("Sending ReplicateChunk request for Chunk {ChunkId} to Node {TargetAddress}", request.ChunkId, targetNodeAddress);
+            if (string.IsNullOrWhiteSpace(targetNodeAddress))
+                throw new ArgumentException("Target node address cannot be null or empty", nameof(targetNodeAddress));
+
+            return targetNodeAddress.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
+                   targetNodeAddress.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                ? targetNodeAddress
+                : $"http://{targetNodeAddress}";
+        }
+
+        /// <summary>
+        /// Helper method to execute gRPC operations with consistent error handling.
+        /// </summary>
+        private async Task<T?> ExecuteWithErrorHandlingAsync<T>(
+            string methodName,
+            string targetAddress,
+            Func<Task<T>> operation,
+            CancellationToken cancellationToken) where T : class
+        {
             try
             {
-                var channel = GetOrCreateChannel(targetNodeAddress);
-                var client = new NodeInternalService.NodeInternalServiceClient(channel);
-                // Pass cancellation token to CallOptions
-                var options = new CallOptions(deadline: DateTime.UtcNow.AddSeconds(30), cancellationToken: cancellationToken); // Increased deadline?
-                return await client.ReplicateChunkAsync(request, options);
+                return await operation();
             }
-            catch (RpcException ex)
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable || 
+                                        ex.StatusCode == StatusCode.DeadlineExceeded)
             {
-                _logger.LogError(ex, "gRPC Error sending ReplicateChunk to {TargetAddress}: {StatusCode}", targetNodeAddress, ex.StatusCode);
-                return new ReplicateChunkReply { Success = false, Message = $"gRPC Error: {ex.Status.Detail} (Code: {ex.StatusCode})" };
+                _logger.LogWarning("gRPC {Method} to {Target} failed with status {StatusCode}", 
+                    methodName, targetAddress, ex.StatusCode);
+                return null;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                 _logger.LogWarning("ReplicateChunk request to {TargetAddress} cancelled.", targetNodeAddress);
-                 throw; // Re-throw cancellation
+                _logger.LogWarning("gRPC {Method} to {Target} was cancelled", methodName, targetAddress);
+                throw; // Re-throw cancellation
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sending ReplicateChunk request to {TargetAddress}", targetNodeAddress);
-                return new ReplicateChunkReply { Success = false, Message = $"Failed to send replicate request: {ex.Message}" };
+                _logger.LogError(ex, "Error during gRPC {Method} to {Target}", methodName, targetAddress);
+                return null;
             }
         }
 
         /// <summary>
-        /// Sends a DeleteChunk request to the target node.
+        /// Sends a request to replicate a chunk to a specified target node.
         /// </summary>
-        public async Task<DeleteChunkReply> DeleteChunkOnNodeAsync(string targetNodeAddress, DeleteChunkRequest request, CancellationToken cancellationToken = default)
+        public async Task<ReplicateChunkReply> ReplicateChunkToNodeAsync(
+            string targetNodeAddress, 
+            ReplicateChunkRequest request, 
+            CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Sending DeleteChunk request for Chunk {ChunkId} (File {FileId}) to Node {TargetAddress}", request.ChunkId, request.FileId, targetNodeAddress);
-            try
-            {
-                var channel = GetOrCreateChannel(targetNodeAddress);
-                var client = new NodeInternalService.NodeInternalServiceClient(channel);
-                var options = new CallOptions(deadline: DateTime.UtcNow.AddSeconds(10), cancellationToken: cancellationToken);
-                return await client.DeleteChunkAsync(request, options);
-            }
-            catch (RpcException ex)
-            {
-                _logger.LogError(ex, "gRPC Error sending DeleteChunk to {TargetAddress}: {StatusCode}", targetNodeAddress, ex.StatusCode);
-                return new DeleteChunkReply { Success = false, Message = $"gRPC Error: {ex.Status.Detail} (Code: {ex.StatusCode})" };
-            }
-             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                 _logger.LogWarning("DeleteChunk request to {TargetAddress} cancelled.", targetNodeAddress);
-                 throw; // Re-throw cancellation
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error sending DeleteChunk request to {TargetAddress}", targetNodeAddress);
-                return new DeleteChunkReply { Success = false, Message = $"Failed to send delete request: {ex.Message}" };
-            }
+            _logger.LogInformation("Sending ReplicateChunk request for Chunk {ChunkId} to Node {TargetAddress}", 
+                request.ChunkId, targetNodeAddress);
+
+            return await ExecuteWithErrorHandlingAsync(
+                "ReplicateChunk",
+                targetNodeAddress,
+                async () => {
+                    var channel = GetOrCreateChannel(targetNodeAddress);
+                    var client = new NodeInternalService.NodeInternalServiceClient(channel);
+                    var options = new CallOptions(
+                        deadline: DateTime.UtcNow.AddSeconds(30), 
+                        cancellationToken: cancellationToken);
+                    
+                    return await client.ReplicateChunkAsync(request, options);
+                },
+                cancellationToken) ?? new ReplicateChunkReply { 
+                    Success = false, 
+                    Message = "Connection to target node failed" 
+                };
         }
 
         /// <summary>
-        /// Sends a Ping request to the target node.
+        /// Sends a request to delete a chunk replica on a specified target node.
         /// </summary>
-        public async Task<PingReply> PingNodeAsync(string targetNodeAddress, PingRequest request, CancellationToken cancellationToken = default) // MODIFIED: Added token parameter
+        public async Task<DeleteChunkReply> DeleteChunkOnNodeAsync(
+            string targetNodeAddress, 
+            DeleteChunkRequest request, 
+            CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Sending Ping request from Node {CallingNodeId} to Node {TargetAddress}", _callingNodeId, targetNodeAddress);
+            _logger.LogInformation("Sending DeleteChunk request for Chunk {ChunkId} (File {FileId}) to Node {TargetAddress}", 
+                request.ChunkId, request.FileId, targetNodeAddress);
+
+            return await ExecuteWithErrorHandlingAsync(
+                "DeleteChunk",
+                targetNodeAddress,
+                async () => {
+                    var channel = GetOrCreateChannel(targetNodeAddress);
+                    var client = new NodeInternalService.NodeInternalServiceClient(channel);
+                    var options = new CallOptions(
+                        deadline: DateTime.UtcNow.AddSeconds(10), 
+                        cancellationToken: cancellationToken);
+                    
+                    return await client.DeleteChunkAsync(request, options);
+                },
+                cancellationToken) ?? new DeleteChunkReply { 
+                    Success = false, 
+                    Message = "Connection to target node failed" 
+                };
+        }
+
+        /// <summary>
+        /// Sends a Ping request to a specified target node to check its availability.
+        /// </summary>
+        public async Task<PingReply> PingNodeAsync(
+            string targetNodeAddress, 
+            PingRequest request, 
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Sending Ping request from Node {CallingNodeId} to Node {TargetAddress}", 
+                _callingNodeId, targetNodeAddress);
+            
             request.SenderNodeId ??= _callingNodeId;
 
-            try
-            {
-                var channel = GetOrCreateChannel(targetNodeAddress);
-                var client = new NodeInternalService.NodeInternalServiceClient(channel);
-                // MODIFIED: Pass CancellationToken to CallOptions
-                var options = new CallOptions(deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: cancellationToken); // Shorter timeout for ping
-                var reply = await client.PingAsync(request, options);
-                _logger.LogDebug("Received Ping reply from {ResponderNodeId} at {TargetAddress}. Success: {Success}", reply?.ResponderNodeId ?? "N/A", targetNodeAddress, reply?.Success ?? false);
-                return reply ?? new PingReply { Success = false, ResponderNodeId = "Error: Null reply" };
-            }
-            catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable || ex.StatusCode == StatusCode.DeadlineExceeded)
-            {
-                _logger.LogWarning("Ping to {TargetAddress} failed with status {StatusCode}. Marking as likely offline.", targetNodeAddress, ex.StatusCode);
-                return new PingReply { Success = false, ResponderNodeId = $"Error: {ex.StatusCode}" };
-            }
-            catch (RpcException ex)
-            {
-                _logger.LogError(ex, "gRPC Error sending Ping to {TargetAddress}: {StatusCode}", targetNodeAddress, ex.StatusCode);
-                 return new PingReply { Success = false, ResponderNodeId = $"Error: {ex.StatusCode} - {ex.Status.Detail}" };
-            }
-             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                 // If the cancellation was external, log and re-throw
-                 _logger.LogWarning("Ping request to {TargetAddress} cancelled.", targetNodeAddress);
-                 // Don't return normally, let caller know it was cancelled
-                 throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error sending Ping request to {TargetAddress}", targetNodeAddress);
-                return new PingReply { Success = false, ResponderNodeId = $"Error: {ex.Message}" };
-            }
+            return await ExecuteWithErrorHandlingAsync(
+                "Ping",
+                targetNodeAddress,
+                async () => {
+                    var channel = GetOrCreateChannel(targetNodeAddress);
+                    var client = new NodeInternalService.NodeInternalServiceClient(channel);
+                    var options = new CallOptions(
+                        deadline: DateTime.UtcNow.AddSeconds(5), 
+                        cancellationToken: cancellationToken);
+                    
+                    return await client.PingAsync(request, options);
+                },
+                cancellationToken) ?? new PingReply { 
+                    Success = false, 
+                    ResponderNodeId = "Error: Connection failed" 
+                };
         }
 
-        // --- DHT Methods (Still not implemented) ---
-        public Task<NodeInfoCore?> FindSuccessorOnNodeAsync(NodeInfoCore targetNode, string keyId, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Finds the successor node for a given key.
+        /// </summary>
+        public Task<NodeInfoCore?> FindSuccessorOnNodeAsync(
+            NodeInfoCore targetNode, 
+            string keyId, 
+            CancellationToken cancellationToken = default)
         {
-            _logger.LogWarning("FindSuccessorOnNodeAsync is not implemented.");
-            throw new NotImplementedException();
+            _logger.LogWarning("FindSuccessorOnNodeAsync is not implemented");
+            // TODO: Implement when DHT functionality is required
+            return Task.FromResult<NodeInfoCore?>(null);
         }
 
-        public Task<NodeInfoCore?> GetPredecessorFromNodeAsync(NodeInfoCore targetNode, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Gets the predecessor node from a target node.
+        /// </summary>
+        public Task<NodeInfoCore?> GetPredecessorFromNodeAsync(
+            NodeInfoCore targetNode, 
+            CancellationToken cancellationToken = default)
         {
-             _logger.LogWarning("GetPredecessorFromNodeAsync is not implemented.");
-            throw new NotImplementedException();
+            _logger.LogWarning("GetPredecessorFromNodeAsync is not implemented");
+            // TODO: Implement when DHT functionality is required
+            return Task.FromResult<NodeInfoCore?>(null);
         }
 
-        public Task<bool> NotifyNodeAsync(NodeInfoCore targetNode, NodeInfoCore selfInfo, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Notifies a target node about a potential predecessor.
+        /// </summary>
+        public Task<bool> NotifyNodeAsync(
+            NodeInfoCore targetNode, 
+            NodeInfoCore selfInfo, 
+            CancellationToken cancellationToken = default)
         {
-             _logger.LogWarning("NotifyNodeAsync is not implemented.");
-            throw new NotImplementedException();
+            _logger.LogWarning("NotifyNodeAsync is not implemented");
+            // TODO: Implement when DHT functionality is required
+            return Task.FromResult(false);
         }
-        // --- End DHT Methods ---
 
-
-        public async Task<AsyncServerStreamingCall<RequestChunkReply>?> RequestChunkFromNodeAsync(string targetNodeAddress, RequestChunkRequest request, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Requests chunk data from a target node via streaming.
+        /// </summary>
+        public async Task<AsyncServerStreamingCall<RequestChunkReply>?> RequestChunkFromNodeAsync(
+            string targetNodeAddress, 
+            RequestChunkRequest request, 
+            CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Sending RequestChunk for Chunk {ChunkId} (File {FileId}) to Node {TargetAddress}", request.ChunkId, request.FileId, targetNodeAddress);
+            _logger.LogDebug("Sending RequestChunk for Chunk {ChunkId} (File {FileId}) to Node {TargetAddress}", 
+                request.ChunkId, request.FileId, targetNodeAddress);
+
             try
             {
                 var channel = GetOrCreateChannel(targetNodeAddress);
                 var client = new NodeInternalService.NodeInternalServiceClient(channel);
                 var options = new CallOptions(
-                    deadline: DateTime.UtcNow.AddSeconds(60), // Example: 60 second timeout
+                    deadline: DateTime.UtcNow.AddSeconds(60), 
                     cancellationToken: cancellationToken);
-                var call = client.RequestChunk(request, options);
-                return call;
+                
+                // Creating the streaming call
+                return client.RequestChunk(request, options);
             }
-            // Catch specific exceptions that indicate failure to initiate the call
             catch (RpcException ex) when (ex.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
             {
-                _logger.LogWarning("gRPC Error ({StatusCode}) initiating RequestChunk to {TargetAddress}", ex.StatusCode, targetNodeAddress);
+                _logger.LogWarning("gRPC Error ({StatusCode}) initiating RequestChunk to {TargetAddress}", 
+                    ex.StatusCode, targetNodeAddress);
                 return null;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                 _logger.LogWarning("RequestChunk initiation to {TargetAddress} cancelled.", targetNodeAddress);
-                 return null; // Can't return the call object if cancelled before it starts
+                _logger.LogWarning("RequestChunk initiation to {TargetAddress} cancelled", targetNodeAddress);
+                throw; // Re-throw cancellation
             }
             catch (Exception ex)
             {
@@ -203,88 +327,101 @@ namespace VKR_Node.Services
             }
         }
 
-        public async Task<GetNodeFileListReply?> GetNodeFileListAsync(string targetNodeAddress, GetNodeFileListRequest request, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Gets the list of known files from a target node.
+        /// </summary>
+        public async Task<GetNodeFileListReply?> GetNodeFileListAsync(
+            string targetNodeAddress, 
+            GetNodeFileListRequest request, 
+            CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Sending GetNodeFileList request to Node {TargetAddress}", targetNodeAddress);
-            try
-            {
-                var channel = GetOrCreateChannel(targetNodeAddress);
-                var client = new NodeInternalService.NodeInternalServiceClient(channel);
-                var options = new CallOptions(
-                    deadline: DateTime.UtcNow.AddSeconds(15),
-                    cancellationToken: cancellationToken);
-                var reply = await client.GetNodeFileListAsync(request, options);
-                return reply;
-            }
-            catch (RpcException ex) when (ex.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
-            {
-                _logger.LogWarning("gRPC Error ({StatusCode}) sending GetNodeFileList to {TargetAddress}", ex.StatusCode, targetNodeAddress);
-                return null;
-            }
-             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                 _logger.LogWarning("GetNodeFileList request to {TargetAddress} cancelled.", targetNodeAddress);
-                 throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error sending GetNodeFileList request to {TargetAddress}", targetNodeAddress);
-                return null;
-            }
+
+            return await ExecuteWithErrorHandlingAsync(
+                "GetNodeFileList",
+                targetNodeAddress,
+                async () => {
+                    var channel = GetOrCreateChannel(targetNodeAddress);
+                    var client = new NodeInternalService.NodeInternalServiceClient(channel);
+                    var options = new CallOptions(
+                        deadline: DateTime.UtcNow.AddSeconds(15), 
+                        cancellationToken: cancellationToken);
+                    
+                    return await client.GetNodeFileListAsync(request, options);
+                },
+                cancellationToken);
         }
 
-        public async Task AcknowledgeReplicaAsync(string targetNodeAddress, AcknowledgeReplicaRequest request, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Sends an acknowledgement that a replica has been stored.
+        /// </summary>
+        public async Task AcknowledgeReplicaAsync(
+            string targetNodeAddress, 
+            AcknowledgeReplicaRequest request, 
+            CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Sending AcknowledgeReplica request for Chunk {ChunkId} (File {FileId}) stored by {ReplicaNodeId} to Node {TargetAddress}",
                 request.ChunkId, request.FileId, request.ReplicaNodeId, targetNodeAddress);
+
             try
             {
                 var channel = GetOrCreateChannel(targetNodeAddress);
                 var client = new NodeInternalService.NodeInternalServiceClient(channel);
                 var options = new CallOptions(
-                    deadline: DateTime.UtcNow.AddSeconds(10),
+                    deadline: DateTime.UtcNow.AddSeconds(10), 
                     cancellationToken: cancellationToken);
-                // google.protobuf.Empty reply doesn't need to be awaited if not checking success explicitly here
+                
                 await client.AcknowledgeReplicaAsync(request, options);
-                _logger.LogDebug("Successfully sent AcknowledgeReplica request for Chunk {ChunkId} to Node {TargetAddress}", request.ChunkId, targetNodeAddress);
+                _logger.LogDebug("Successfully sent AcknowledgeReplica request for Chunk {ChunkId} to Node {TargetAddress}", 
+                    request.ChunkId, targetNodeAddress);
             }
             catch (RpcException ex) when (ex.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
             {
-                _logger.LogWarning("gRPC Error ({StatusCode}) sending AcknowledgeReplica to {TargetAddress}. Acknowledgement likely not received.", ex.StatusCode, targetNodeAddress);
-                // Don't re-throw, allow caller to continue (fire-and-forget nature)
+                _logger.LogWarning("gRPC Error ({StatusCode}) sending AcknowledgeReplica to {TargetAddress}. Acknowledgement likely not received.", 
+                    ex.StatusCode, targetNodeAddress);
             }
-             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                 _logger.LogWarning("AcknowledgeReplica request to {TargetAddress} cancelled.", targetNodeAddress);
-                 // Don't re-throw
+                _logger.LogWarning("AcknowledgeReplica request to {TargetAddress} cancelled", targetNodeAddress);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error sending AcknowledgeReplica request to {TargetAddress}", targetNodeAddress);
-                 // Don't re-throw
             }
         }
 
+        /// <summary>
+        /// Disposes of resources.
+        /// </summary>
         public void Dispose()
         {
-            _logger.LogInformation("Disposing GrpcNodeClient and closing cached channels.");
-            // Dispose channels correctly
-            var channelsToDispose = _channels.Values.ToList(); // Copy values to avoid modification during iteration issues
-            _channels.Clear(); // Clear the dictionary
+            if (_disposed) return;
+            
+            _logger.LogInformation("Disposing GrpcNodeClient and closing cached channels");
+            _disposed = true;
+            
+            // Stop the cleanup task
+            _cleanupCts.Cancel();
+            try { _cleanupTask.Wait(TimeSpan.FromSeconds(1)); } catch { /* Ignore */ }
+            _cleanupCts.Dispose();
+            
+            // Dispose channels
+            var channelsToDispose = _channels.Values.ToList();
+            _channels.Clear();
+            _channelLastUsed.Clear();
 
             foreach (var channel in channelsToDispose)
             {
                 try
                 {
-                    // Allow ongoing calls to complete gracefully? ShutdownAsync might be better.
-                    // channel.ShutdownAsync().Wait(); // Or use await if method is async
-                    channel.Dispose();
+                    channel.ShutdownAsync().Wait(TimeSpan.FromSeconds(2));
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error disposing gRPC channel to {Target}", channel.Target);
                 }
             }
+            
             GC.SuppressFinalize(this);
         }
     }

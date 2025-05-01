@@ -10,25 +10,31 @@ using System.Threading.Tasks;
 using VKR_Core.Models;
 using VKR_Core.Services;
 using VKR_Node.Configuration;
-using VKR.Protos; // For ReplicateChunkRequest
+using VKR_Node.Services.Utilities;
+using VKR.Protos;
 using Google.Protobuf;
-using Google.Protobuf.WellKnownTypes;
-using Grpc.Core;
-using VKR_Core.Enums;
-using VKR.Node.Persistance.Entities; // For ByteString
 
 namespace VKR_Node.Services
 {
+    /// <summary>
+    /// Manages the replication of data chunks across network nodes to ensure data redundancy and availability
+    /// </summary>
     public class BackgroundReplicationManager : IReplicationManager
     {
         private readonly ILogger<BackgroundReplicationManager> _logger;
         private readonly IMetadataManager _metadataManager;
         private readonly IDataManager _dataManager;
         private readonly INodeClient _nodeClient;
-        private readonly NodeOptions _nodeOptions;
+        private readonly string _localNodeId;
         private readonly DhtOptions _dhtOptions;
+        private readonly List<ChunkStorageNode> _knownNodes;
 
-        // Constructor injection
+        // Cache of node status to reduce repeated pings
+        private readonly ConcurrentDictionary<string, (bool IsOnline, DateTime LastChecked)> _nodeStatusCache = 
+            new ConcurrentDictionary<string, (bool IsOnline, DateTime LastChecked)>();
+
+        private readonly TimeSpan _nodeStatusCacheTtl = TimeSpan.FromSeconds(30);
+
         public BackgroundReplicationManager(
             ILogger<BackgroundReplicationManager> logger,
             IMetadataManager metadataManager,
@@ -41,192 +47,488 @@ namespace VKR_Node.Services
             _metadataManager = metadataManager;
             _dataManager = dataManager;
             _nodeClient = nodeClient;
-            _nodeOptions = nodeOptions.Value;
+            _localNodeId = nodeOptions.Value.NodeId ?? throw new ArgumentNullException(nameof(nodeOptions), "NodeId is not configured");
             _dhtOptions = dhtOptions.Value;
+            _knownNodes = nodeOptions.Value.KnownNodes ?? new List<ChunkStorageNode>();
         }
 
-        // --- Core Method to Check and Heal a Single Chunk ---
+        /// <summary>
+        /// Checks and repairs replication level for a specific chunk
+        /// </summary>
         public async Task EnsureChunkReplicationAsync(string fileId, string chunkId, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Ensuring replication level for Chunk {ChunkId} (File {FileId})", chunkId, fileId);
-            int desiredReplicas = _dhtOptions.ReplicationFactor > 0 ? _dhtOptions.ReplicationFactor : 3;
+            int desiredReplicas = GetDesiredReplicaCount();
+            
             try
             {
-                var storedOnNodeIds = (await _metadataManager.GetChunkStorageNodesAsync(fileId, chunkId, cancellationToken)).ToList();
-                if (!storedOnNodeIds.Any())
+                // Step 1: Find out where the chunk is currently stored
+                var storedNodeIds = await GetChunkStorageNodesAsync(fileId, chunkId, cancellationToken);
+                if (!storedNodeIds.Any())
                 {
-                    _logger.LogWarning("Cannot ensure replication for Chunk {ChunkId}: No storage locations found in metadata.", chunkId);
-                    return; // Should not happen if called by health service checking local chunks, but safety check.
+                    _logger.LogWarning("Cannot ensure replication for Chunk {ChunkId}: No storage locations found", chunkId);
+                    return;
                 }
 
-                // Ping nodes listed in metadata to get current online status
-                var onlineNodesHoldingChunk = new ConcurrentBag<string>();
-                var checkTasks = storedOnNodeIds.Select(nodeId => Task.Run(async () => {
-                    if (nodeId == _nodeOptions.NodeId) {
-                         onlineNodesHoldingChunk.Add(nodeId);
-                         return;
-                    }
-                    var nodeInfo = _nodeOptions.KnownNodes?.FirstOrDefault(n => n.NodeId == nodeId);
-                    if (nodeInfo != null && !string.IsNullOrEmpty(nodeInfo.Address)) {
-                         try {
-                             var pingRequest = new PingRequest { SenderNodeId = _nodeOptions.NodeId };
-                             var options = new CallOptions(deadline: DateTime.UtcNow.AddSeconds(5));
-                             // Assumes PingNodeAsync exists and respects cancellation/deadline
-                             var reply = await _nodeClient.PingNodeAsync(nodeInfo.Address, pingRequest);
-                             if (reply.Success) onlineNodesHoldingChunk.Add(nodeId);
-                         } catch (Exception ex) {
-                             _logger.LogWarning(ex, "Ping failed for node {NodeId} ({Address}) while checking current replicas.", nodeId, nodeInfo.Address);
-                             // Treat as offline if ping fails
-                         }
-                    }
-                })).ToList();
-                await Task.WhenAll(checkTasks);
-                var onlineNodeIdList = onlineNodesHoldingChunk.Distinct().ToList(); // Use Distinct just in case
-
-                int currentOnlineReplicas = onlineNodeIdList.Count;
-                _logger.LogDebug("Chunk {ChunkId}: Desired={Desired}, FoundInMeta={FoundTotal}, Online={OnlineCount}",
-                                 chunkId, desiredReplicas, storedOnNodeIds.Count, currentOnlineReplicas);
+                // Step 2: Find which nodes are currently online
+                var onlineNodeIds = await FindOnlineNodesAsync(storedNodeIds, cancellationToken);
+                
+                // Step 3: Check if we need more replicas
+                int currentOnlineReplicas = onlineNodeIds.Count;
+                _logger.LogDebug("Chunk {ChunkId}: Desired={Desired}, Found={FoundTotal}, Online={OnlineCount}",
+                                chunkId, desiredReplicas, storedNodeIds.Count, currentOnlineReplicas);
 
                 if (currentOnlineReplicas >= desiredReplicas)
                 {
-                     _logger.LogTrace("Chunk {ChunkId} has sufficient online replicas ({OnlineCount}/{Desired}).", chunkId, currentOnlineReplicas, desiredReplicas);
-                    return; // Enough replicas online
-                }
-
-                // --- Need to Re-replicate ---
-                int replicasToAdd = desiredReplicas - currentOnlineReplicas;
-                _logger.LogInformation("Chunk {ChunkId} is under-replicated ({OnlineCount}/{Desired}). Need to add {ReplicasToAdd} replica(s).", chunkId, currentOnlineReplicas, desiredReplicas, replicasToAdd);
-
-                // Check if WE (the current node) have the chunk data locally and are online
-                if (!onlineNodeIdList.Contains(_nodeOptions.NodeId))
-                {
-                    _logger.LogWarning("Cannot initiate re-replication for Chunk {ChunkId}: Local copy not found or this node is offline.", chunkId);
-                    return; // Cannot source the data from this node
-                }
-
-                var chunkInfoForRetrieval = await _metadataManager.GetChunkMetadataAsync(fileId, chunkId, cancellationToken);
-                if (chunkInfoForRetrieval == null)
-                {
-                    _logger.LogError("Cannot re-replicate Chunk {ChunkId}: Failed to retrieve its metadata.", chunkId);
-                    return;
-                }
-                chunkInfoForRetrieval.StoredNodeId = _nodeOptions.NodeId; // We are retrieving it locally
-
-                // Retrieve local data
-                byte[]? chunkData = await GetLocalChunkDataAsync(chunkInfoForRetrieval, cancellationToken); // Use existing helper
-                if (chunkData == null)
-                {
-                    _logger.LogError("Failed to get local data for Chunk {ChunkId}. Cannot re-replicate.", chunkId);
+                    _logger.LogTrace("Chunk {ChunkId} has sufficient online replicas ({OnlineCount}/{Desired})", 
+                        chunkId, currentOnlineReplicas, desiredReplicas);
                     return;
                 }
 
-                // Fetch Parent Metadata to send with replica
-                FileMetadataCore? fileMetadataCore = null;
-                try {
-                    fileMetadataCore = await _metadataManager.GetFileMetadataAsync(fileId, cancellationToken);
-                    if (fileMetadataCore == null) {
-                         _logger.LogWarning("Cannot find FileMetadata for {FileId} during re-replication of Chunk {ChunkId}. Metadata will not be sent.", fileId, chunkId);
-                    }
-                } catch (Exception ex) {
-                    _logger.LogError(ex, "Failed to retrieve FileMetadata for {FileId} during re-replication. Cannot send metadata.", fileId);
-                }
-
-                // Find potential target nodes (KnownNodes excluding self and those already storing the chunk)
-                var potentialTargetNodeInfo = (_nodeOptions.KnownNodes ?? new List<ChunkStorageNode>())
-                    .Where(n => n.NodeId != _nodeOptions.NodeId &&
-                                !storedOnNodeIds.Contains(n.NodeId) && // Don't already have it
-                                !string.IsNullOrEmpty(n.Address))
-                    .ToList();
-                _logger.LogDebug("Chunk {ChunkId}: Found {Count} potential peer nodes for re-replication.", chunkId, potentialTargetNodeInfo.Count);
-
-                // Check which potential targets are online via Ping
-                var onlineTargets = new ConcurrentBag<ChunkStorageNode>();
-                var checkOnlineTasks = potentialTargetNodeInfo.Select(peer => Task.Run(async () => {
-                    try {
-                        var pingRequest = new PingRequest { SenderNodeId = _nodeOptions.NodeId };
-                        var options = new CallOptions(deadline: DateTime.UtcNow.AddSeconds(5));
-                        var reply = await _nodeClient.PingNodeAsync(peer.Address, pingRequest);
-                        if (reply.Success) onlineTargets.Add(peer);
-                    } catch (Exception ex) { _logger.LogWarning(ex, "Error pinging potential re-replication target {NodeId} ({Address}).", peer.NodeId, peer.Address); }
-                })).ToList();
-                await Task.WhenAll(checkOnlineTasks);
-                var suitableTargets = onlineTargets.ToList();
-
-                // Optional: Add load balancing filtering here later if needed, using GetNodeStatesAsync and filtering suitableTargets further
-
-                _logger.LogDebug("Chunk {ChunkId}: Found {SuitableCount} suitable (online) targets for re-replication.", chunkId, suitableTargets.Count);
-
-                // --- Trigger Re-replication Tasks ---
-                var replicationTasks = new List<Task>();
-                int addedReplicas = 0;
-
-                // Select targets (e.g., use helper or just take N)
-                var targetsToReplicate = SelectReplicaTargetsFromInfo(suitableTargets, chunkId, replicasToAdd); // Use helper if defined
-
-                foreach (var targetNode in targetsToReplicate)
-                {
-                    if (cancellationToken.IsCancellationRequested) break;
-                    string? targetAddress = targetNode.Address; // Get address from targetNode
-                    if (string.IsNullOrEmpty(targetAddress)) continue;
-
-                    _logger.LogInformation("Attempting to re-replicate Chunk {ChunkId} to target Node {TargetNodeId} ({TargetNodeAddress})", chunkId, targetNode.NodeId, targetAddress);
-                    addedReplicas++;
-
-                    // Create ReplicateChunkRequest INCLUDING parent metadata
-                    var replicateRequest = new ReplicateChunkRequest
-                    {
-                        FileId = fileId,
-                        ChunkId = chunkId,
-                        ChunkIndex = chunkInfoForRetrieval.ChunkIndex,
-                        Data = ByteString.CopyFrom(chunkData),
-                        OriginalNodeId = _nodeOptions.NodeId, // Indicate origin node
-                        // Populate Parent File Metadata (ASSUMES PROTO UPDATED)
-                        ParentFileMetadata = MapCoreToProtoMetadataPartial(fileMetadataCore) // Use mapping helper
-                    };
-
-                    replicationTasks.Add(ReplicateToNodeTask(targetAddress, replicateRequest, cancellationToken)); // Use existing helper
-                }
-
-                await Task.WhenAll(replicationTasks);
-
-                if (addedReplicas < replicasToAdd)
-                {
-                    _logger.LogWarning("Could not find enough suitable online targets for Chunk {ChunkId}. Added {AddedCount}/{NeededCount}", chunkId, addedReplicas, replicasToAdd);
-                } else {
-                     _logger.LogInformation("Successfully initiated {AddedCount} re-replications for Chunk {ChunkId}.", addedReplicas, chunkId);
-                }
+                // Step 4: Create more replicas if needed
+                await CreateAdditionalReplicasAsync(
+                    fileId, 
+                    chunkId, 
+                    onlineNodeIds, 
+                    desiredReplicas - currentOnlineReplicas, 
+                    cancellationToken);
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("EnsureChunkReplicationAsync cancelled for Chunk {ChunkId}.", chunkId);
+                _logger.LogInformation("EnsureChunkReplicationAsync cancelled for Chunk {ChunkId}", chunkId);
+                throw;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error ensuring replication level for Chunk {ChunkId}", chunkId);
+                throw;
             }
         }
-        
-        // Helper to get local chunk data
-        private async Task<byte[]?> GetLocalChunkDataAsync(ChunkInfoCore chunkInfo, CancellationToken cancellationToken)
+
+        /// <summary>
+        /// Replicates a chunk to the number of nodes specified by the replication factor
+        /// </summary>
+        public async Task ReplicateChunkAsync(
+            ChunkInfoCore chunkInfo, 
+            Func<Task<Stream>> sourceDataStreamFactory, 
+            int replicationFactor, 
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Initiating replication for Chunk {ChunkId} (File {FileId})", 
+                chunkInfo.ChunkId, chunkInfo.FileId);
+            
+            int effectiveReplicationFactor = replicationFactor > 0 ? 
+                replicationFactor : GetDesiredReplicaCount();
+            
+            try
+            {
+                // Step 1: Check existing replicas
+                var existingNodeIds = await GetChunkStorageNodesAsync(
+                    chunkInfo.FileId, chunkInfo.ChunkId, cancellationToken);
+                
+                if (existingNodeIds.Count >= effectiveReplicationFactor)
+                {
+                    _logger.LogInformation("Chunk {ChunkId} already has sufficient replicas ({ExistingCount}/{Required})",
+                        chunkInfo.ChunkId, existingNodeIds.Count, effectiveReplicationFactor);
+                    return;
+                }
+                
+                // Step 2: Find online nodes that don't already have the chunk
+                var allOnlineNodes = await FindAllOnlineNodesAsync(cancellationToken);
+                var availableNodes = allOnlineNodes
+                    .Where(n => !existingNodeIds.Contains(n.NodeId))
+                    .ToList();
+                
+                if (!availableNodes.Any())
+                {
+                    _logger.LogWarning("No additional nodes available for replication of Chunk {ChunkId}", chunkInfo.ChunkId);
+                    return;
+                }
+                
+                // Step 3: Determine how many new replicas we need
+                int replicasToAdd = Math.Min(
+                    effectiveReplicationFactor - existingNodeIds.Count,
+                    availableNodes.Count);
+                
+                if (replicasToAdd <= 0) return;
+                
+                // Step 4: Get the chunk data
+                Stream? dataStream = null;
+                byte[] chunkData;
+                
+                try
+                {
+                    dataStream = await sourceDataStreamFactory();
+                    using var ms = new MemoryStream();
+                    await dataStream.CopyToAsync(ms, cancellationToken);
+                    chunkData = ms.ToArray();
+                }
+                finally
+                {
+                    if (dataStream != null) await dataStream.DisposeAsync();
+                }
+                
+                // Step 5: Get parent file metadata to send with replicas
+                var fileMetadata = await _metadataManager.GetFileMetadataAsync(
+                    chunkInfo.FileId, cancellationToken);
+                
+                // Step 6: Select target nodes and replicate
+                var targetNodes = ReplicationUtility.SelectReplicaTargets(
+                    availableNodes, chunkInfo.ChunkId, replicasToAdd);
+                
+                _logger.LogInformation("Replicating Chunk {ChunkId} to {Count} additional node(s): {Nodes}",
+                    chunkInfo.ChunkId, targetNodes.Count, string.Join(", ", targetNodes.Select(n => n.NodeId)));
+                
+                var replicationTasks = targetNodes.Select(node => 
+                    ReplicateToNodeAsync(
+                        node, 
+                        chunkInfo, 
+                        chunkData, 
+                        fileMetadata, 
+                        cancellationToken)).ToList();
+                
+                await Task.WhenAll(replicationTasks);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error replicating Chunk {ChunkId}", chunkInfo.ChunkId);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Ensures all chunks of a file maintain the desired replication level
+        /// </summary>
+        public async Task EnsureReplicationLevelAsync(string fileId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Checking replication level for all chunks of File {FileId}", fileId);
+            
+            try
+            {
+                // Get all chunks for this file
+                var chunks = await _metadataManager.GetChunksMetadataForFileAsync(fileId, cancellationToken);
+                if (chunks == null || !chunks.Any())
+                {
+                    _logger.LogWarning("No chunks found for File {FileId}", fileId);
+                    return;
+                }
+                
+                _logger.LogDebug("Found {Count} chunks for File {FileId}", chunks.Count(), fileId);
+                
+                // Process chunks sequentially to avoid overwhelming the system
+                foreach (var chunk in chunks)
+                {
+                    if (cancellationToken.IsCancellationRequested) break;
+                    
+                    await EnsureChunkReplicationAsync(
+                        fileId, 
+                        chunk.ChunkId, 
+                        cancellationToken);
+                }
+                
+                _logger.LogInformation("Completed replication check for all chunks of File {FileId}", fileId);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("EnsureReplicationLevelAsync cancelled for File {FileId}", fileId);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error ensuring replication level for File {FileId}", fileId);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Handles incoming request to store a replica chunk on the current node
+        /// </summary>
+        public async Task HandleIncomingReplicaAsync(
+            ChunkInfoCore chunkInfo, 
+            Stream dataStream, 
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Handling incoming replica for Chunk {ChunkId} (File {FileId})", 
+                chunkInfo.ChunkId, chunkInfo.FileId);
+            
+            try
+            {
+                // Set the local node ID to ensure proper storage
+                chunkInfo.StoredNodeId = _localNodeId;
+                
+                // Step 1: Store the chunk data locally
+                await _dataManager.StoreChunkAsync(
+                    chunkInfo, 
+                    dataStream, 
+                    cancellationToken);
+                
+                // Step 2: Update metadata to reflect we now have this chunk
+                await _metadataManager.SaveChunkMetadataAsync(
+                    chunkInfo, 
+                    new[] { _localNodeId }, 
+                    cancellationToken);
+                
+                _logger.LogInformation("Successfully processed incoming replica for Chunk {ChunkId}", chunkInfo.ChunkId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling incoming replica for Chunk {ChunkId}", chunkInfo.ChunkId);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Handles notification that a chunk should be deleted (usually from another node)
+        /// </summary>
+        public async Task HandleDeleteNotificationAsync(string chunkId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Processing delete notification for Chunk {ChunkId}", chunkId);
+            
+            try
+            {
+                // Find chunks with this ID that are stored locally
+                var chunks = await _metadataManager.GetChunksStoredLocallyAsync(cancellationToken);
+                var localChunk = chunks?.FirstOrDefault(c => c.ChunkId == chunkId);
+                
+                if (localChunk == null)
+                {
+                    _logger.LogInformation("Chunk {ChunkId} not found locally, nothing to delete", chunkId);
+                    return;
+                }
+                
+                // Set the local node ID for deletion
+                localChunk.StoredNodeId = _localNodeId;
+                
+                // Step 1: Delete the local chunk data
+                await _dataManager.DeleteChunkAsync(localChunk, cancellationToken);
+                
+                // Step 2: Update metadata to reflect removal
+                await _metadataManager.RemoveChunkStorageNodeAsync(
+                    localChunk.FileId, 
+                    localChunk.ChunkId, 
+                    _localNodeId, 
+                    cancellationToken);
+                
+                _logger.LogInformation("Successfully deleted local copy of Chunk {ChunkId}", chunkId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling delete notification for Chunk {ChunkId}", chunkId);
+                throw;
+            }
+        }
+
+        #region Private Helper Methods
+
+        /// <summary>
+        /// Gets the desired replica count from configuration or uses a default value
+        /// </summary>
+        private int GetDesiredReplicaCount()
+        {
+            return _dhtOptions.ReplicationFactor > 0 ? _dhtOptions.ReplicationFactor : 3;
+        }
+
+        /// <summary>
+        /// Gets the list of nodes currently storing a specific chunk
+        /// </summary>
+        private async Task<List<string>> GetChunkStorageNodesAsync(
+            string fileId, 
+            string chunkId, 
+            CancellationToken cancellationToken)
+        {
+            var nodes = await _metadataManager.GetChunkStorageNodesAsync(
+                fileId, 
+                chunkId, 
+                cancellationToken);
+            
+            return nodes?.ToList() ?? new List<string>();
+        }
+
+        /// <summary>
+        /// Finds which of the specified nodes are currently online
+        /// </summary>
+        private async Task<List<string>> FindOnlineNodesAsync(
+            List<string> nodeIds, 
+            CancellationToken cancellationToken)
+        {
+            var onlineNodes = new ConcurrentBag<string>();
+            
+            await Task.WhenAll(nodeIds.Select(async nodeId => {
+                // Local node is always considered online
+                if (nodeId == _localNodeId)
+                {
+                    onlineNodes.Add(nodeId);
+                    return;
+                }
+                
+                // Check if node is online
+                if (await IsNodeOnlineAsync(nodeId, cancellationToken))
+                {
+                    onlineNodes.Add(nodeId);
+                }
+            }));
+            
+            return onlineNodes.ToList();
+        }
+
+        /// <summary>
+        /// Checks if a node is online, using cache if available
+        /// </summary>
+        private async Task<bool> IsNodeOnlineAsync(string nodeId, CancellationToken cancellationToken)
+        {
+            // Local node is always considered online
+            if (nodeId == _localNodeId) return true;
+            
+            // Check cache first
+            if (_nodeStatusCache.TryGetValue(nodeId, out var status) && 
+                (DateTime.UtcNow - status.LastChecked) < _nodeStatusCacheTtl)
+            {
+                return status.IsOnline;
+            }
+            
+            // Get node info
+            var nodeInfo = _knownNodes.FirstOrDefault(n => n.NodeId == nodeId);
+            if (nodeInfo == null || string.IsNullOrEmpty(nodeInfo.Address))
+            {
+                _logger.LogWarning("Cannot check status for Node {NodeId}: Not found in known nodes", nodeId);
+                return false;
+            }
+            
+            // Ping node
+            bool isOnline = await ReplicationUtility.IsNodeOnlineAsync(
+                nodeId, 
+                nodeInfo.Address, 
+                _localNodeId,
+                _nodeClient,
+                _logger,
+                cancellationToken);
+            
+            // Update cache
+            _nodeStatusCache[nodeId] = (isOnline, DateTime.UtcNow);
+            
+            return isOnline;
+        }
+
+        /// <summary>
+        /// Finds all known nodes that are currently online
+        /// </summary>
+        private async Task<List<ChunkStorageNode>> FindAllOnlineNodesAsync(CancellationToken cancellationToken)
+        {
+            var onlineNodes = new ConcurrentBag<ChunkStorageNode>();
+            
+            // Add all nodes that respond to ping
+            await Task.WhenAll(_knownNodes.Select(async node => {
+                if (await IsNodeOnlineAsync(node.NodeId, cancellationToken))
+                {
+                    onlineNodes.Add(node);
+                }
+            }));
+            
+            return onlineNodes.ToList();
+        }
+
+        /// <summary>
+        /// Creates additional replicas for a chunk to meet the desired replication factor
+        /// </summary>
+        private async Task CreateAdditionalReplicasAsync(
+            string fileId, 
+            string chunkId, 
+            List<string> onlineNodeIds, 
+            int replicasToAdd, 
+            CancellationToken cancellationToken)
+        {
+            // Check if we have the local data to replicate
+            bool hasLocalData = onlineNodeIds.Contains(_localNodeId);
+            if (!hasLocalData)
+            {
+                _logger.LogWarning("Cannot initiate re-replication for Chunk {ChunkId}: Local copy not available", chunkId);
+                return;
+            }
+            
+            // Get chunk info for local data retrieval
+            var chunkInfo = await _metadataManager.GetChunkMetadataAsync(fileId, chunkId, cancellationToken);
+            if (chunkInfo == null)
+            {
+                _logger.LogError("Cannot re-replicate Chunk {ChunkId}: Failed to retrieve its metadata", chunkId);
+                return;
+            }
+            
+            // Set node ID for local retrieval
+            chunkInfo.StoredNodeId = _localNodeId;
+            
+            // Get the chunk data
+            byte[]? chunkData = await GetLocalChunkDataAsync(chunkInfo, cancellationToken);
+            if (chunkData == null)
+            {
+                _logger.LogError("Failed to get local data for Chunk {ChunkId}. Cannot re-replicate", chunkId);
+                return;
+            }
+            
+            // Get parent file metadata
+            var fileMetadata = await _metadataManager.GetFileMetadataAsync(fileId, cancellationToken);
+            
+            // Find potential target nodes
+            var potentialTargets = _knownNodes
+                .Where(n => n.NodeId != _localNodeId && !onlineNodeIds.Contains(n.NodeId))
+                .ToList();
+            
+            // Find which potential targets are online
+            var onlineTargets = new List<ChunkStorageNode>();
+            foreach (var target in potentialTargets)
+            {
+                if (await IsNodeOnlineAsync(target.NodeId, cancellationToken))
+                {
+                    onlineTargets.Add(target);
+                    if (onlineTargets.Count >= replicasToAdd) break;
+                }
+            }
+            
+            // Select target nodes
+            var selectedTargets = ReplicationUtility.SelectReplicaTargets(
+                onlineTargets, chunkId, replicasToAdd);
+            
+            if (selectedTargets.Count == 0)
+            {
+                _logger.LogWarning("No suitable targets found for re-replication of Chunk {ChunkId}", chunkId);
+                return;
+            }
+            
+            _logger.LogInformation("Re-replicating Chunk {ChunkId} to {Count} nodes: {Nodes}", 
+                chunkId, selectedTargets.Count, string.Join(", ", selectedTargets.Select(n => n.NodeId)));
+            
+            // Replicate to selected targets
+            var replicationTasks = selectedTargets.Select(node => 
+                ReplicateToNodeAsync(
+                    node, 
+                    chunkInfo, 
+                    chunkData, 
+                    fileMetadata, 
+                    cancellationToken))
+                .ToList();
+            
+            await Task.WhenAll(replicationTasks);
+        }
+
+        /// <summary>
+        /// Gets the data for a locally stored chunk
+        /// </summary>
+        private async Task<byte[]?> GetLocalChunkDataAsync(
+            ChunkInfoCore chunkInfo, 
+            CancellationToken cancellationToken)
         {
             Stream? localDataStream = null;
             try
             {
                 localDataStream = await _dataManager.RetrieveChunkAsync(chunkInfo, cancellationToken);
-                if (localDataStream == null)
-                {
-                    _logger.LogError("Cannot get local data for Chunk {ChunkId}: RetrieveChunkAsync returned null (Node {NodeId}).", chunkInfo.ChunkId, _nodeOptions.NodeId);
-                    return null;
-                }
-                using (var ms = new MemoryStream())
-                {
-                    await localDataStream.CopyToAsync(ms, cancellationToken);
-                    return ms.ToArray();
-                }
+                if (localDataStream == null) return null;
+                
+                using var ms = new MemoryStream();
+                await localDataStream.CopyToAsync(ms, cancellationToken);
+                return ms.ToArray();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to read local data stream for Chunk {ChunkId}.", chunkInfo.ChunkId);
+                _logger.LogError(ex, "Failed to read local data for Chunk {ChunkId}", chunkInfo.ChunkId);
                 return null;
             }
             finally
@@ -235,147 +537,57 @@ namespace VKR_Node.Services
             }
         }
 
-        // Helper task for sending replication request
-        private async Task ReplicateToNodeTask(string targetAddress, ReplicateChunkRequest request,
+        /// <summary>
+        /// Replicates a chunk to a specific target node
+        /// </summary>
+        private async Task<bool> ReplicateToNodeAsync(
+            ChunkStorageNode targetNode, 
+            ChunkInfoCore chunkInfo, 
+            byte[] chunkData, 
+            FileMetadataCore? fileMetadata, 
             CancellationToken cancellationToken)
         {
+            _logger.LogInformation("Replicating Chunk {ChunkId} to Node {NodeId} ({Address})", 
+                chunkInfo.ChunkId, targetNode.NodeId, targetNode.Address);
+            
             try
             {
-                // Note: Cancellation token might not be easily passed down through INodeClient depending on its implementation
-                var reply = await _nodeClient.ReplicateChunkToNodeAsync(targetAddress, request);
+                // Create replication request
+                var replicateRequest = new ReplicateChunkRequest
+                {
+                    FileId = chunkInfo.FileId,
+                    ChunkId = chunkInfo.ChunkId,
+                    ChunkIndex = chunkInfo.ChunkIndex,
+                    Data = ByteString.CopyFrom(chunkData),
+                    OriginalNodeId = _localNodeId,
+                    ParentFileMetadata = ReplicationUtility.MapCoreToProtoMetadata(fileMetadata)
+                };
+                
+                // Send to target node
+                var reply = await _nodeClient.ReplicateChunkToNodeAsync(
+                    targetNode.Address, 
+                    replicateRequest, 
+                    cancellationToken);
+                
                 if (!reply.Success)
-                    _logger.LogWarning("Re-replication of chunk {ChunkId} to {TargetNodeAddress} failed: {Message}",
-                        request.ChunkId, targetAddress, reply.Message);
-                else
-                    _logger.LogInformation("Re-replication call for chunk {ChunkId} to {TargetNodeAddress} completed.",
-                        request.ChunkId, targetAddress);
+                {
+                    _logger.LogWarning("Failed to replicate Chunk {ChunkId} to Node {NodeId}: {Message}", 
+                        chunkInfo.ChunkId, targetNode.NodeId, reply.Message);
+                    return false;
+                }
+                
+                _logger.LogInformation("Successfully replicated Chunk {ChunkId} to Node {NodeId}", 
+                    chunkInfo.ChunkId, targetNode.NodeId);
+                return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "Exception during background re-replication task for chunk {ChunkId} to {TargetNodeAddress}.",
-                    request.ChunkId, targetAddress);
-            }
-        }
-
-        
-        private List<ChunkStorageNode> SelectReplicaTargetsFromInfo(List<ChunkStorageNode> onlinePeers, string chunkId, int replicasNeeded)
-        {
-            if (onlinePeers == null || !onlinePeers.Any() || replicasNeeded <= 0)
-            {
-                return new List<ChunkStorageNode>();
-            }
-            if (onlinePeers.Count <= replicasNeeded)
-            {
-                return onlinePeers; // Not enough suitable peers, return all
-            }
-            int hashCode = Math.Abs(chunkId.GetHashCode());
-            int startIndex = hashCode % onlinePeers.Count;
-            var selectedTargets = new List<ChunkStorageNode>();
-            for (int i = 0; i < replicasNeeded; i++)
-            {
-                selectedTargets.Add(onlinePeers[(startIndex + i) % onlinePeers.Count]);
-            }
-            return selectedTargets;
-        }
-
-        // Mapping helper method (Ensure correct namespaces for Proto types)
-        private static VKR.Protos.FileMetadata? MapCoreToProtoMetadataPartial(FileMetadataCore? core)
-        {
-            if (core == null) return null;
-
-            return new VKR.Protos.FileMetadata // Use generated Proto type
-            {
-                FileName = core.FileName ?? string.Empty,
-                FileSize = core.FileSize,
-                CreationTime = Timestamp.FromDateTime(core.CreationTime.ToUniversalTime()), // Ensure UTC
-                ModificationTime = Timestamp.FromDateTime(core.ModificationTime.ToUniversalTime()), // Ensure UTC
-                ContentType = core.ContentType ?? string.Empty,
-                ChunkSize = core.ChunkSize,
-                TotalChunks = core.TotalChunks,
-                State = (VKR.Protos.FileState)core.State // Cast Core enum to Proto enum
-            };
-        }
-
-        // Helper to check node status (can use cache for efficiency within one cycle)
-        private async Task<bool> IsNodeOnlineAsync(string nodeId, CancellationToken cancellationToken,
-            ConcurrentDictionary<string, bool> statusCache)
-        {
-            if (nodeId == _nodeOptions.NodeId) return true; 
-
-            // Check cache first
-            if (statusCache.TryGetValue(nodeId, out bool cachedStatus))
-            {
-                _logger.LogTrace("Using cached status for Node {NodeId}: Online={Status}", nodeId, cachedStatus);
-                return cachedStatus;
-            }
-
-            var nodeInfo = _nodeOptions.KnownNodes?.FirstOrDefault(n => n.NodeId == nodeId);
-            if (nodeInfo == null || string.IsNullOrEmpty(nodeInfo.Address))
-            {
-                _logger.LogTrace("Cannot check status for Node {NodeId}: Not found in KnownNodes or address missing.",
-                    nodeId);
-                statusCache[nodeId] = false; 
+                _logger.LogError(ex, "Error replicating Chunk {ChunkId} to Node {NodeId}", 
+                    chunkInfo.ChunkId, targetNode.NodeId);
                 return false;
             }
-
-            bool isOnline = false;
-            try
-            {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                cts.CancelAfter(TimeSpan.FromSeconds(5)); 
-
-                var pingRequest = new PingRequest { SenderNodeId = _nodeOptions.NodeId };
-                // Assuming PingNodeAsync exists and handles cancellation internally or via options
-                var reply = await _nodeClient.PingNodeAsync(nodeInfo.Address, pingRequest);
-                isOnline = reply?.Success ?? false;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Ping failed for node {NodeId} ({NodeAddress}) during online check.", nodeId,
-                    nodeInfo.Address);
-                isOnline = false;
-            }
-
-            statusCache[nodeId] = isOnline; // Cache result
-            _logger.LogTrace("Ping result for Node {NodeId}: Online={Status}", nodeId, isOnline);
-            return isOnline;
         }
 
-
-        // --- Other IReplicationManager Methods (Implement further as needed) ---
-        // These might remain simple if all logic is driven by the health check for now
-
-        public Task ReplicateChunkAsync(ChunkInfoCore chunkInfo, Func<Task<Stream>> sourceDataStreamFactory,
-            int replicationFactor, CancellationToken cancellationToken = default)
-        {
-            _logger.LogWarning(
-                "IReplicationManager.ReplicateChunkAsync not fully implemented. Replication triggered elsewhere (Upload/Health Check).");
-            return Task.CompletedTask;
-        }
-
-        public Task EnsureReplicationLevelAsync(string fileId, CancellationToken cancellationToken = default)
-        {
-            // This could iterate through all chunks of a file and call EnsureChunkReplicationAsync
-            _logger.LogWarning(
-                "IReplicationManager.EnsureReplicationLevelAsync not fully implemented. Checks done per chunk by health service.");
-            return Task.CompletedTask;
-        }
-
-        public Task HandleIncomingReplicaAsync(ChunkInfoCore chunkInfo, Stream dataStream,
-            CancellationToken cancellationToken = default)
-        {
-            _logger.LogWarning(
-                "IReplicationManager.HandleIncomingReplicaAsync not fully implemented. Handled by gRPC service.");
-            return Task.CompletedTask;
-        }
-
-        public Task HandleDeleteNotificationAsync(string chunkId, CancellationToken cancellationToken = default)
-        {
-            // Might need implementation if delete process needs central coordination via this manager
-            _logger.LogWarning(
-                "IReplicationManager.HandleDeleteNotificationAsync not fully implemented. Handled by gRPC service.");
-            return Task.CompletedTask;
-        }
+        #endregion
     }
 }

@@ -47,6 +47,4 @@ public interface IMetadataManager : IAsyncInitializable
     /// Retrieves the state information for all known nodes (excluding potentially self based on implementation).
     /// </summary>
     Task<IEnumerable<NodeStateCoreInfo >> GetAllNodeStatesAsync(CancellationToken cancellationToken = default); // Useful alternative
-    
-    
 }

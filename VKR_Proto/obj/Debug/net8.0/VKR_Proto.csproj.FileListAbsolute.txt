@@ -1,0 +1,13 @@
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\bin\Debug\net8.0\VKR_Proto.deps.json
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\bin\Debug\net8.0\VKR_Proto.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\bin\Debug\net8.0\VKR_Proto.pdb
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\obj\Debug\net8.0\VKR_Proto.csproj.AssemblyReference.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\obj\Debug\net8.0\VKR_Proto.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\obj\Debug\net8.0\VKR_Proto.AssemblyInfoInputs.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\obj\Debug\net8.0\VKR_Proto.AssemblyInfo.cs
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\obj\Debug\net8.0\VKR_Proto.csproj.CoreCompileInputs.cache
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\obj\Debug\net8.0\VKR_Proto.sourcelink.json
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\obj\Debug\net8.0\VKR_Proto.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\obj\Debug\net8.0\refint\VKR_Proto.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\obj\Debug\net8.0\VKR_Proto.pdb
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Proto\obj\Debug\net8.0\ref\VKR_Proto.dll
