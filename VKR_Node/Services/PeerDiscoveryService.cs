@@ -20,7 +20,8 @@ namespace VKR_Node.Services
     {
         private readonly ILogger<PeerDiscoveryService> _logger;
         private readonly INodeClient _nodeClient;
-        private readonly NodeOptions _nodeOptions;
+        private readonly NodeIdentityOptions _nodeOptions;
+        private readonly NetworkOptions _networkOptions;
         private readonly IServiceProvider _serviceProvider;
         private readonly TimeSpan _pingInterval;
         private readonly TimeSpan _pingTimeout;
@@ -36,14 +37,16 @@ namespace VKR_Node.Services
         public PeerDiscoveryService(
             ILogger<PeerDiscoveryService> logger,
             INodeClient nodeClient,
-            IOptions<NodeOptions> nodeOptions,
+            IOptions<NodeIdentityOptions> nodeOptions,
             IOptions<DhtOptions> dhtOptions,
-            IServiceProvider serviceProvider)
+            IServiceProvider serviceProvider,
+            IOptions<NetworkOptions> networkOptions)
         {
             _logger = logger;
             _nodeClient = nodeClient;
             _nodeOptions = nodeOptions.Value;
             _serviceProvider = serviceProvider;
+            _networkOptions = networkOptions.Value;
 
             // Get configuration or use defaults
             int pingIntervalSeconds = dhtOptions.Value?.StabilizationIntervalSeconds > 0 
@@ -116,7 +119,7 @@ namespace VKR_Node.Services
         private async Task ExecuteDiscoveryCycleAsync(CancellationToken cancellationToken)
         {
             _logger.LogDebug("Starting peer discovery cycle");
-            var knownNodes = _nodeOptions.KnownNodes?.ToImmutableList() ?? ImmutableList<ChunkStorageNode>.Empty;
+            var knownNodes = _networkOptions.KnownNodes?.ToImmutableList() ?? ImmutableList<KnownNodeOptions>.Empty;
 
             if (knownNodes.IsEmpty)
             {
@@ -184,7 +187,7 @@ namespace VKR_Node.Services
         /// <summary>
         /// Processes a single node by pinging it and updating its status.
         /// </summary>
-        private async Task ProcessNodeAsync(ChunkStorageNode node, CancellationToken cancellationToken)
+        private async Task ProcessNodeAsync(KnownNodeOptions node, CancellationToken cancellationToken)
         {
             try
             {
@@ -211,7 +214,7 @@ namespace VKR_Node.Services
         /// <summary>
         /// Pings a node to check if it's online.
         /// </summary>
-        private async Task<(bool Success, string? ResponderId)> PingNodeAsync(ChunkStorageNode node, CancellationToken ct)
+        private async Task<(bool Success, string? ResponderId)> PingNodeAsync(KnownNodeOptions node, CancellationToken ct)
         {
             _logger.LogTrace("Pinging node {NodeId} at {Address}", node.NodeId, node.Address);
             
@@ -245,7 +248,7 @@ namespace VKR_Node.Services
         /// Updates a node's status in the metadata system.
         /// </summary>
         private async Task UpdateNodeStatusAsync(
-            ChunkStorageNode node, 
+            KnownNodeOptions node, 
             bool success, 
             string? responderId,
             CancellationToken ct)
@@ -273,10 +276,10 @@ namespace VKR_Node.Services
                 using var scope = _serviceProvider.CreateScope();
                 var metadataManager = scope.ServiceProvider.GetRequiredService<IMetadataManager>();
 
-                var statusInfo = new NodeStateCoreInfo
+                var statusInfo = new NodeModel
                 {
-                    NodeId = node.NodeId,
-                    Address = node.Address,
+                    Id = node.NodeId,
+                    Address  = node.Address,
                     State = newState,
                     LastSeen = DateTime.UtcNow,
                     LastSuccessfulPingTimestamp = success ? DateTime.UtcNow : null
@@ -305,13 +308,13 @@ namespace VKR_Node.Services
                 return true;
             
             // Address check is secondary
-            if (string.IsNullOrEmpty(targetAddress) || string.IsNullOrEmpty(_nodeOptions.Address))
+            if (string.IsNullOrEmpty(targetAddress) || string.IsNullOrEmpty(_networkOptions.ListenAddress))
                 return false;
 
             try
             {
                 // Normalize addresses for comparison
-                string selfAddrNorm = NormalizeAddress(_nodeOptions.Address);
+                string selfAddrNorm = NormalizeAddress(_networkOptions.ListenAddress);
                 string targetAddrNorm = NormalizeAddress(targetAddress);
                 
                 return string.Equals(selfAddrNorm, targetAddrNorm, StringComparison.OrdinalIgnoreCase);
@@ -319,7 +322,7 @@ namespace VKR_Node.Services
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error comparing addresses: {Self} vs {Target}", 
-                    _nodeOptions.Address, targetAddress);
+                    _networkOptions.ListenAddress, targetAddress);
                 return false;
             }
         }
@@ -348,20 +351,20 @@ namespace VKR_Node.Services
         /// </summary>
         private void LogKnownNodesStatus()
         {
-            if (_nodeOptions.KnownNodes == null || !_nodeOptions.KnownNodes.Any())
+            if (_networkOptions.KnownNodes == null || !_networkOptions.KnownNodes.Any())
             {
                 _logger.LogWarning("No known nodes configured");
                 return;
             }
 
             // Count self-references for information
-            int selfCount = _nodeOptions.KnownNodes.Count(n => IsSelf(n.NodeId, n.Address));
+            int selfCount = _networkOptions.KnownNodes.Count(n => IsSelf(n.NodeId, n.Address));
             
             _logger.LogInformation("Configured with {TotalNodes} known nodes ({SelfNodes} self-references)",
-                _nodeOptions.KnownNodes.Count, selfCount);
+                _networkOptions.KnownNodes.Count, selfCount);
             
             // Log each node for debugging
-            foreach (var node in _nodeOptions.KnownNodes)
+            foreach (var node in _networkOptions.KnownNodes)
             {
                 bool isSelf = IsSelf(node.NodeId, node.Address);
                 _logger.LogDebug("Known node: {NodeId} at {Address} {SelfMarker}", 

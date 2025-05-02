@@ -19,14 +19,14 @@ namespace VKR_Node.Services.Utilities
         /// <summary>
         /// Selects appropriate nodes to replicate data to based on chunk ID and available nodes
         /// </summary>
-        public static List<ChunkStorageNode> SelectReplicaTargets(
-            List<ChunkStorageNode> onlinePeers, 
+        public static List<KnownNodeOptions> SelectReplicaTargets(
+            List<KnownNodeOptions> onlinePeers, 
             string chunkId, 
             int replicasNeeded)
         {
             if (onlinePeers == null || !onlinePeers.Any() || replicasNeeded <= 0)
             {
-                return new List<ChunkStorageNode>();
+                return new List<KnownNodeOptions>();
             }
             
             // If we don't have enough peers, return all we have
@@ -38,7 +38,7 @@ namespace VKR_Node.Services.Utilities
             // Use consistent hashing to distribute chunks evenly
             int hashCode = Math.Abs(chunkId.GetHashCode());
             int startIndex = hashCode % onlinePeers.Count;
-            var selectedTargets = new List<ChunkStorageNode>();
+            var selectedTargets = new List<KnownNodeOptions>();
             
             for (int i = 0; i < replicasNeeded; i++)
             {
@@ -51,7 +51,7 @@ namespace VKR_Node.Services.Utilities
         /// <summary>
         /// Maps a core metadata object to a protocol buffer metadata object
         /// </summary>
-        public static FileMetadata? MapCoreToProtoMetadata(FileMetadataCore? core)
+        public static FileMetadata? MapCoreToProtoMetadata(FileModel? core)
         {
             if (core == null) return null;
 

@@ -78,6 +78,22 @@ namespace VKR.Protos {
     static readonly grpc::Marshaller<global::VKR.Protos.GetNodeConfigurationRequest> __Marshaller_storage_GetNodeConfigurationRequest = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.GetNodeConfigurationRequest.Parser));
     [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
     static readonly grpc::Marshaller<global::VKR.Protos.GetNodeConfigurationReply> __Marshaller_storage_GetNodeConfigurationReply = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.GetNodeConfigurationReply.Parser));
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Marshaller<global::VKR.Protos.SimulateNodeFailureRequest> __Marshaller_storage_SimulateNodeFailureRequest = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.SimulateNodeFailureRequest.Parser));
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Marshaller<global::VKR.Protos.SimulateNodeFailureReply> __Marshaller_storage_SimulateNodeFailureReply = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.SimulateNodeFailureReply.Parser));
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Marshaller<global::VKR.Protos.RestoreAllNodesRequest> __Marshaller_storage_RestoreAllNodesRequest = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.RestoreAllNodesRequest.Parser));
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Marshaller<global::VKR.Protos.RestoreAllNodesReply> __Marshaller_storage_RestoreAllNodesReply = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.RestoreAllNodesReply.Parser));
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Marshaller<global::VKR.Protos.GetFileStatusesRequest> __Marshaller_storage_GetFileStatusesRequest = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.GetFileStatusesRequest.Parser));
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Marshaller<global::VKR.Protos.GetFileStatusesReply> __Marshaller_storage_GetFileStatusesReply = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.GetFileStatusesReply.Parser));
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Marshaller<global::VKR.Protos.GetChunkDistributionRequest> __Marshaller_storage_GetChunkDistributionRequest = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.GetChunkDistributionRequest.Parser));
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Marshaller<global::VKR.Protos.GetChunkDistributionReply> __Marshaller_storage_GetChunkDistributionReply = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.GetChunkDistributionReply.Parser));
 
     [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
     static readonly grpc::Method<global::VKR.Protos.UploadFileRequest, global::VKR.Protos.UploadFileReply> __Method_UploadFile = new grpc::Method<global::VKR.Protos.UploadFileRequest, global::VKR.Protos.UploadFileReply>(
@@ -134,6 +150,38 @@ namespace VKR.Protos {
         "GetNodeConfiguration",
         __Marshaller_storage_GetNodeConfigurationRequest,
         __Marshaller_storage_GetNodeConfigurationReply);
+
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Method<global::VKR.Protos.SimulateNodeFailureRequest, global::VKR.Protos.SimulateNodeFailureReply> __Method_SimulateNodeFailure = new grpc::Method<global::VKR.Protos.SimulateNodeFailureRequest, global::VKR.Protos.SimulateNodeFailureReply>(
+        grpc::MethodType.Unary,
+        __ServiceName,
+        "SimulateNodeFailure",
+        __Marshaller_storage_SimulateNodeFailureRequest,
+        __Marshaller_storage_SimulateNodeFailureReply);
+
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Method<global::VKR.Protos.RestoreAllNodesRequest, global::VKR.Protos.RestoreAllNodesReply> __Method_RestoreAllNodes = new grpc::Method<global::VKR.Protos.RestoreAllNodesRequest, global::VKR.Protos.RestoreAllNodesReply>(
+        grpc::MethodType.Unary,
+        __ServiceName,
+        "RestoreAllNodes",
+        __Marshaller_storage_RestoreAllNodesRequest,
+        __Marshaller_storage_RestoreAllNodesReply);
+
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Method<global::VKR.Protos.GetFileStatusesRequest, global::VKR.Protos.GetFileStatusesReply> __Method_GetFileStatuses = new grpc::Method<global::VKR.Protos.GetFileStatusesRequest, global::VKR.Protos.GetFileStatusesReply>(
+        grpc::MethodType.Unary,
+        __ServiceName,
+        "GetFileStatuses",
+        __Marshaller_storage_GetFileStatusesRequest,
+        __Marshaller_storage_GetFileStatusesReply);
+
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Method<global::VKR.Protos.GetChunkDistributionRequest, global::VKR.Protos.GetChunkDistributionReply> __Method_GetChunkDistribution = new grpc::Method<global::VKR.Protos.GetChunkDistributionRequest, global::VKR.Protos.GetChunkDistributionReply>(
+        grpc::MethodType.Unary,
+        __ServiceName,
+        "GetChunkDistribution",
+        __Marshaller_storage_GetChunkDistributionRequest,
+        __Marshaller_storage_GetChunkDistributionReply);
 
     /// <summary>Service descriptor</summary>
     public static global::Google.Protobuf.Reflection.ServiceDescriptor Descriptor
@@ -220,6 +268,30 @@ namespace VKR.Protos {
 
       [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
       public virtual global::System.Threading.Tasks.Task<global::VKR.Protos.GetNodeConfigurationReply> GetNodeConfiguration(global::VKR.Protos.GetNodeConfigurationRequest request, grpc::ServerCallContext context)
+      {
+        throw new grpc::RpcException(new grpc::Status(grpc::StatusCode.Unimplemented, ""));
+      }
+
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::System.Threading.Tasks.Task<global::VKR.Protos.SimulateNodeFailureReply> SimulateNodeFailure(global::VKR.Protos.SimulateNodeFailureRequest request, grpc::ServerCallContext context)
+      {
+        throw new grpc::RpcException(new grpc::Status(grpc::StatusCode.Unimplemented, ""));
+      }
+
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::System.Threading.Tasks.Task<global::VKR.Protos.RestoreAllNodesReply> RestoreAllNodes(global::VKR.Protos.RestoreAllNodesRequest request, grpc::ServerCallContext context)
+      {
+        throw new grpc::RpcException(new grpc::Status(grpc::StatusCode.Unimplemented, ""));
+      }
+
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::System.Threading.Tasks.Task<global::VKR.Protos.GetFileStatusesReply> GetFileStatuses(global::VKR.Protos.GetFileStatusesRequest request, grpc::ServerCallContext context)
+      {
+        throw new grpc::RpcException(new grpc::Status(grpc::StatusCode.Unimplemented, ""));
+      }
+
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::System.Threading.Tasks.Task<global::VKR.Protos.GetChunkDistributionReply> GetChunkDistribution(global::VKR.Protos.GetChunkDistributionRequest request, grpc::ServerCallContext context)
       {
         throw new grpc::RpcException(new grpc::Status(grpc::StatusCode.Unimplemented, ""));
       }
@@ -511,6 +583,86 @@ namespace VKR.Protos {
       {
         return CallInvoker.AsyncUnaryCall(__Method_GetNodeConfiguration, null, options, request);
       }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::VKR.Protos.SimulateNodeFailureReply SimulateNodeFailure(global::VKR.Protos.SimulateNodeFailureRequest request, grpc::Metadata headers = null, global::System.DateTime? deadline = null, global::System.Threading.CancellationToken cancellationToken = default(global::System.Threading.CancellationToken))
+      {
+        return SimulateNodeFailure(request, new grpc::CallOptions(headers, deadline, cancellationToken));
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::VKR.Protos.SimulateNodeFailureReply SimulateNodeFailure(global::VKR.Protos.SimulateNodeFailureRequest request, grpc::CallOptions options)
+      {
+        return CallInvoker.BlockingUnaryCall(__Method_SimulateNodeFailure, null, options, request);
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual grpc::AsyncUnaryCall<global::VKR.Protos.SimulateNodeFailureReply> SimulateNodeFailureAsync(global::VKR.Protos.SimulateNodeFailureRequest request, grpc::Metadata headers = null, global::System.DateTime? deadline = null, global::System.Threading.CancellationToken cancellationToken = default(global::System.Threading.CancellationToken))
+      {
+        return SimulateNodeFailureAsync(request, new grpc::CallOptions(headers, deadline, cancellationToken));
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual grpc::AsyncUnaryCall<global::VKR.Protos.SimulateNodeFailureReply> SimulateNodeFailureAsync(global::VKR.Protos.SimulateNodeFailureRequest request, grpc::CallOptions options)
+      {
+        return CallInvoker.AsyncUnaryCall(__Method_SimulateNodeFailure, null, options, request);
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::VKR.Protos.RestoreAllNodesReply RestoreAllNodes(global::VKR.Protos.RestoreAllNodesRequest request, grpc::Metadata headers = null, global::System.DateTime? deadline = null, global::System.Threading.CancellationToken cancellationToken = default(global::System.Threading.CancellationToken))
+      {
+        return RestoreAllNodes(request, new grpc::CallOptions(headers, deadline, cancellationToken));
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::VKR.Protos.RestoreAllNodesReply RestoreAllNodes(global::VKR.Protos.RestoreAllNodesRequest request, grpc::CallOptions options)
+      {
+        return CallInvoker.BlockingUnaryCall(__Method_RestoreAllNodes, null, options, request);
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual grpc::AsyncUnaryCall<global::VKR.Protos.RestoreAllNodesReply> RestoreAllNodesAsync(global::VKR.Protos.RestoreAllNodesRequest request, grpc::Metadata headers = null, global::System.DateTime? deadline = null, global::System.Threading.CancellationToken cancellationToken = default(global::System.Threading.CancellationToken))
+      {
+        return RestoreAllNodesAsync(request, new grpc::CallOptions(headers, deadline, cancellationToken));
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual grpc::AsyncUnaryCall<global::VKR.Protos.RestoreAllNodesReply> RestoreAllNodesAsync(global::VKR.Protos.RestoreAllNodesRequest request, grpc::CallOptions options)
+      {
+        return CallInvoker.AsyncUnaryCall(__Method_RestoreAllNodes, null, options, request);
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::VKR.Protos.GetFileStatusesReply GetFileStatuses(global::VKR.Protos.GetFileStatusesRequest request, grpc::Metadata headers = null, global::System.DateTime? deadline = null, global::System.Threading.CancellationToken cancellationToken = default(global::System.Threading.CancellationToken))
+      {
+        return GetFileStatuses(request, new grpc::CallOptions(headers, deadline, cancellationToken));
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::VKR.Protos.GetFileStatusesReply GetFileStatuses(global::VKR.Protos.GetFileStatusesRequest request, grpc::CallOptions options)
+      {
+        return CallInvoker.BlockingUnaryCall(__Method_GetFileStatuses, null, options, request);
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual grpc::AsyncUnaryCall<global::VKR.Protos.GetFileStatusesReply> GetFileStatusesAsync(global::VKR.Protos.GetFileStatusesRequest request, grpc::Metadata headers = null, global::System.DateTime? deadline = null, global::System.Threading.CancellationToken cancellationToken = default(global::System.Threading.CancellationToken))
+      {
+        return GetFileStatusesAsync(request, new grpc::CallOptions(headers, deadline, cancellationToken));
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual grpc::AsyncUnaryCall<global::VKR.Protos.GetFileStatusesReply> GetFileStatusesAsync(global::VKR.Protos.GetFileStatusesRequest request, grpc::CallOptions options)
+      {
+        return CallInvoker.AsyncUnaryCall(__Method_GetFileStatuses, null, options, request);
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::VKR.Protos.GetChunkDistributionReply GetChunkDistribution(global::VKR.Protos.GetChunkDistributionRequest request, grpc::Metadata headers = null, global::System.DateTime? deadline = null, global::System.Threading.CancellationToken cancellationToken = default(global::System.Threading.CancellationToken))
+      {
+        return GetChunkDistribution(request, new grpc::CallOptions(headers, deadline, cancellationToken));
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::VKR.Protos.GetChunkDistributionReply GetChunkDistribution(global::VKR.Protos.GetChunkDistributionRequest request, grpc::CallOptions options)
+      {
+        return CallInvoker.BlockingUnaryCall(__Method_GetChunkDistribution, null, options, request);
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual grpc::AsyncUnaryCall<global::VKR.Protos.GetChunkDistributionReply> GetChunkDistributionAsync(global::VKR.Protos.GetChunkDistributionRequest request, grpc::Metadata headers = null, global::System.DateTime? deadline = null, global::System.Threading.CancellationToken cancellationToken = default(global::System.Threading.CancellationToken))
+      {
+        return GetChunkDistributionAsync(request, new grpc::CallOptions(headers, deadline, cancellationToken));
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual grpc::AsyncUnaryCall<global::VKR.Protos.GetChunkDistributionReply> GetChunkDistributionAsync(global::VKR.Protos.GetChunkDistributionRequest request, grpc::CallOptions options)
+      {
+        return CallInvoker.AsyncUnaryCall(__Method_GetChunkDistribution, null, options, request);
+      }
       /// <summary>Creates a new instance of client from given <c>ClientBaseConfiguration</c>.</summary>
       [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
       protected override StorageServiceClient NewInstance(ClientBaseConfiguration configuration)
@@ -531,7 +683,11 @@ namespace VKR.Protos {
           .AddMethod(__Method_ListFiles, serviceImpl.ListFiles)
           .AddMethod(__Method_GetFileStatus, serviceImpl.GetFileStatus)
           .AddMethod(__Method_GetNodeStatuses, serviceImpl.GetNodeStatuses)
-          .AddMethod(__Method_GetNodeConfiguration, serviceImpl.GetNodeConfiguration).Build();
+          .AddMethod(__Method_GetNodeConfiguration, serviceImpl.GetNodeConfiguration)
+          .AddMethod(__Method_SimulateNodeFailure, serviceImpl.SimulateNodeFailure)
+          .AddMethod(__Method_RestoreAllNodes, serviceImpl.RestoreAllNodes)
+          .AddMethod(__Method_GetFileStatuses, serviceImpl.GetFileStatuses)
+          .AddMethod(__Method_GetChunkDistribution, serviceImpl.GetChunkDistribution).Build();
     }
 
     /// <summary>Register service method with a service binder with or without implementation. Useful when customizing the service binding logic.
@@ -548,6 +704,10 @@ namespace VKR.Protos {
       serviceBinder.AddMethod(__Method_GetFileStatus, serviceImpl == null ? null : new grpc::UnaryServerMethod<global::VKR.Protos.GetFileStatusRequest, global::VKR.Protos.GetFileStatusReply>(serviceImpl.GetFileStatus));
       serviceBinder.AddMethod(__Method_GetNodeStatuses, serviceImpl == null ? null : new grpc::UnaryServerMethod<global::VKR.Protos.GetNodeStatusesRequest, global::VKR.Protos.GetNodeStatusesReply>(serviceImpl.GetNodeStatuses));
       serviceBinder.AddMethod(__Method_GetNodeConfiguration, serviceImpl == null ? null : new grpc::UnaryServerMethod<global::VKR.Protos.GetNodeConfigurationRequest, global::VKR.Protos.GetNodeConfigurationReply>(serviceImpl.GetNodeConfiguration));
+      serviceBinder.AddMethod(__Method_SimulateNodeFailure, serviceImpl == null ? null : new grpc::UnaryServerMethod<global::VKR.Protos.SimulateNodeFailureRequest, global::VKR.Protos.SimulateNodeFailureReply>(serviceImpl.SimulateNodeFailure));
+      serviceBinder.AddMethod(__Method_RestoreAllNodes, serviceImpl == null ? null : new grpc::UnaryServerMethod<global::VKR.Protos.RestoreAllNodesRequest, global::VKR.Protos.RestoreAllNodesReply>(serviceImpl.RestoreAllNodes));
+      serviceBinder.AddMethod(__Method_GetFileStatuses, serviceImpl == null ? null : new grpc::UnaryServerMethod<global::VKR.Protos.GetFileStatusesRequest, global::VKR.Protos.GetFileStatusesReply>(serviceImpl.GetFileStatuses));
+      serviceBinder.AddMethod(__Method_GetChunkDistribution, serviceImpl == null ? null : new grpc::UnaryServerMethod<global::VKR.Protos.GetChunkDistributionRequest, global::VKR.Protos.GetChunkDistributionReply>(serviceImpl.GetChunkDistribution));
     }
 
   }

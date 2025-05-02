@@ -19,14 +19,14 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
     private readonly IMetadataManager _metadataManager;
     private readonly IDataManager _dataManager;
     private readonly INodeClient _nodeClient;
-    private readonly NodeOptions _nodeOptions;
+    private readonly NodeIdentityOptions _nodeOptions;
 
     public NodeInternalServiceImpl(
         ILogger<NodeInternalServiceImpl> logger,
         IMetadataManager metadataManager,
         IDataManager dataManager,
         INodeClient nodeClient,
-        IOptions<NodeOptions> nodeOptions)
+        IOptions<NodeIdentityOptions> nodeOptions)
     {
         _logger = logger;
         _metadataManager = metadataManager;
@@ -52,8 +52,8 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
 
         string localNodeId = _nodeOptions.NodeId ?? "Unknown";
 
-        // Prepare ChunkInfoCore from the request
-        var chunkInfo = new ChunkInfoCore
+        // Prepare ChunkModel from the request
+        var chunkInfo = new ChunkModel
         {
             FileId = request.FileId,
             ChunkId = request.ChunkId,
@@ -95,7 +95,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         }
     }
 
-    private async Task<bool> StoreChunkAndMetadataAsync(ChunkInfoCore chunkInfo, ByteString data,
+    private async Task<bool> StoreChunkAndMetadataAsync(ChunkModel chunkInfo, ByteString data,
         CancellationToken cancellationToken)
     {
         bool storageSuccess = false;
@@ -154,7 +154,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
 
             if (shouldSaveMetadata)
             {
-                var coreMetadata = MapProtoToFileMetadataCore(fileId, protoMetadata);
+                var coreMetadata = MapProtoToFileModel(fileId, protoMetadata);
                 await _metadataManager.SaveFileMetadataAsync(coreMetadata, cancellationToken);
                 _logger.LogDebug("Saved/updated FileMetadata for {FileId} based on replica request", fileId);
             }
@@ -215,7 +215,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         }
     }
 
-    private bool ShouldUpdateFileMetadata(FileMetadataCore? existingMetadata, FileMetadata protoMetadata)
+    private bool ShouldUpdateFileMetadata(FileModel? existingMetadata, FileMetadata protoMetadata)
     {
         // Always save if no existing metadata
         if (existingMetadata == null)
@@ -242,9 +242,9 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         return false;
     }
 
-    private FileMetadataCore MapProtoToFileMetadataCore(string fileId, FileMetadata proto)
+    private FileModel MapProtoToFileModel(string fileId, FileMetadata proto)
     {
-        return new FileMetadataCore
+        return new FileModel
         {
             FileId = fileId,
             FileName = proto.FileName,
@@ -291,7 +291,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
     private async Task<(bool Success, string Message)> DeleteLocalChunkAsync(
         string fileId, string chunkId, CancellationToken cancellationToken)
     {
-        var chunkInfo = new ChunkInfoCore
+        var chunkInfo = new ChunkModel
         {
             FileId = fileId,
             ChunkId = chunkId,
@@ -435,7 +435,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
     {
         try
         {
-            var chunkInfo = new ChunkInfoCore
+            var chunkInfo = new ChunkModel
             {
                 FileId = fileId,
                 ChunkId = chunkId,
@@ -509,7 +509,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
                     if (fileCore.State == FileStateCore.Deleting || fileCore.State == FileStateCore.Deleted)
                         continue;
                 
-                    var fileProto = MapFileMetadataCoreToProto(fileCore);
+                    var fileProto = MapFileModelToProto(fileCore);
                     reply.Files.Add(fileProto);
                 }
             }
@@ -527,7 +527,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         return reply;
     }
 
-    private FileMetadata MapFileMetadataCoreToProto(FileMetadataCore fileCore)
+    private FileMetadata MapFileModelToProto(FileModel fileCore)
     {
         return new FileMetadata
         {
@@ -591,5 +591,4 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
 
         return new Empty();
     }
-
 }

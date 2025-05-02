@@ -5,17 +5,17 @@ namespace VKR_Node.Services.Utilities;
 
 public static class NodeSelectionHelper
 {
-    public static List<ChunkStorageNode> SelectReplicaTargets(
-        List<ChunkStorageNode> onlinePeers,
+    public static List<KnownNodeOptions> SelectReplicaTargets(
+        List<KnownNodeOptions> onlinePeers,
         string chunkId,
         int replicasNeeded,
         ILogger logger)
     {
-        if (onlinePeers == null || !onlinePeers.Any() || replicasNeeded <= 0) return new List<ChunkStorageNode>();
+        if (onlinePeers == null || !onlinePeers.Any() || replicasNeeded <= 0) return new List<KnownNodeOptions>();
         var orderedPeers = onlinePeers.OrderBy(p => p.NodeId).ToList();
         if (orderedPeers.Count <= replicasNeeded) return orderedPeers;
         int hashCode = Math.Abs(chunkId.GetHashCode()); int startIndex = hashCode % orderedPeers.Count;
-        var selectedTargets = new List<ChunkStorageNode>();
+        var selectedTargets = new List<KnownNodeOptions>();
         for (int i = 0; i < replicasNeeded; i++) { selectedTargets.Add(orderedPeers[(startIndex + i) % orderedPeers.Count]); }
         logger.LogDebug("Selected {Count} replica targets for Chunk {Id}: {Targets}", selectedTargets.Count, chunkId, string.Join(", ", selectedTargets.Select(n => n.NodeId)));
         return selectedTargets;

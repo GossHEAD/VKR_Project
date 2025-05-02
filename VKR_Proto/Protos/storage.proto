@@ -27,6 +27,57 @@ service StorageService {
   rpc GetNodeStatuses (GetNodeStatusesRequest) returns (GetNodeStatusesReply);
 
   rpc GetNodeConfiguration (GetNodeConfigurationRequest) returns (GetNodeConfigurationReply);
+
+  rpc SimulateNodeFailure (SimulateNodeFailureRequest) returns (SimulateNodeFailureReply);
+  rpc RestoreAllNodes (RestoreAllNodesRequest) returns (RestoreAllNodesReply);
+  rpc GetFileStatuses (GetFileStatusesRequest) returns (GetFileStatusesReply);
+  rpc GetChunkDistribution (GetChunkDistributionRequest) returns (GetChunkDistributionReply);
+}
+
+message SimulateNodeFailureRequest {
+  string node_id = 1;
+}
+
+message SimulateNodeFailureReply {
+  bool success = 1;
+  string message = 2;
+}
+
+message RestoreAllNodesRequest {
+}
+
+message RestoreAllNodesReply {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetFileStatusesRequest {
+}
+
+message FileStatusInfo {
+  string file_id = 1;
+  string file_name = 2;
+  bool is_available = 3;
+  int32 current_replication_factor = 4;
+  int32 desired_replication_factor = 5;
+}
+
+message GetFileStatusesReply {
+  repeated FileStatusInfo file_statuses = 1;
+}
+
+message GetChunkDistributionRequest {
+}
+
+message ChunkDistributionInfo {
+  string chunk_id = 1;
+  string file_id = 2;
+  string file_name = 3;
+  repeated string node_ids = 4;
+}
+
+message GetChunkDistributionReply {
+  repeated ChunkDistributionInfo chunk_distributions = 1;
 }
 
 // Service definition for internal node-to-node communication.

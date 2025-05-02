@@ -17,7 +17,8 @@ namespace VKR_Node.Services
     {
         private readonly ILogger<NodeStatusUpdaterService> _logger;
         private readonly IServiceProvider _serviceProvider;
-        private readonly NodeOptions _nodeOptions;
+        private readonly NodeIdentityOptions _nodeOptions;
+        private readonly NetworkOptions _nodeNetworkOptionsOptions;
         private readonly TimeSpan _updateInterval;
         private readonly TimeSpan _initialDelay;
         private int _consecutiveFailures;
@@ -33,12 +34,14 @@ namespace VKR_Node.Services
         public NodeStatusUpdaterService(
             ILogger<NodeStatusUpdaterService> logger,
             IServiceProvider serviceProvider,
-            IOptions<NodeOptions> nodeOptions,
-            IOptions<DhtOptions> dhtOptions)
+            IOptions<NodeIdentityOptions> nodeOptions,
+            IOptions<DhtOptions> dhtOptions,
+            IOptions<NetworkOptions> networkOptions)
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
             _nodeOptions = nodeOptions.Value;
+            _nodeNetworkOptionsOptions = networkOptions.Value;
             
             // Get interval from configuration or use default
             int intervalSeconds = dhtOptions.Value?.StabilizationIntervalSeconds > 0 
@@ -130,7 +133,7 @@ namespace VKR_Node.Services
         private async Task UpdateNodeStatusAsync(CancellationToken cancellationToken)
         {
             string? localNodeId = _nodeOptions.NodeId;
-            string? localAddress = _nodeOptions.Address;
+            string? localAddress = _nodeNetworkOptionsOptions.ListenAddress;
 
             if (string.IsNullOrEmpty(localNodeId) || string.IsNullOrEmpty(localAddress))
             {
@@ -148,9 +151,9 @@ namespace VKR_Node.Services
             var metrics = await CollectNodeMetricsAsync(dataManager, metadataManager, cancellationToken);
 
             // Create status info object
-            var statusInfo = new NodeStateCoreInfo
+            var statusInfo = new NodeModel
             {
-                NodeId = localNodeId,
+                Id = localNodeId,
                 Address = localAddress,
                 State = NodeStateCore.Online, // Assume online since this code is running
                 LastSeen = DateTime.UtcNow,

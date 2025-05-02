@@ -11,6 +11,7 @@ using System.Net; // Required for IPAddress
 using Microsoft.AspNetCore.Http;
 using VKR_Core.Services;
 using VKR_Node.Configuration;
+using VKR_Node.Mapping;
 using VKR_Node.Persistance;
 using VKR_Node.Services;
 using VKR_Node.Services.FileService;
@@ -34,16 +35,17 @@ namespace VKR.Node
             using (var scope = host.Services.CreateScope())
             {
                  var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-                 var nodeOpts = scope.ServiceProvider.GetRequiredService<IOptions<NodeOptions>>().Value;
+                 var nodeOpts = scope.ServiceProvider.GetRequiredService<IOptions<NodeIdentityOptions>>().Value;
+                 var networkOpts = scope.ServiceProvider.GetRequiredService<IOptions<NetworkOptions>>().Value;
                  logger.LogInformation("--- Verifying Loaded Configuration ---");
                  try
                  {
                      //var nodeOpts = scope.ServiceProvider.GetRequiredService<IOptions<NodeOptions>>().Value;
 
-                     if (nodeOpts?.KnownNodes != null)
+                     if (networkOpts?.KnownNodes != null)
                      {
                          logger.LogInformation("--- Checking KnownNodes Addresses After Binding ---");
-                         foreach (var knownNode in nodeOpts.KnownNodes)
+                         foreach (var knownNode in networkOpts.KnownNodes)
                          {
                              // SET BREAKPOINT HERE
                              logger.LogInformation(
@@ -66,11 +68,11 @@ namespace VKR.Node
 
                      // Use System.Text.Json for safe serialization (handles nulls)
                      logger.LogInformation("[Config Check] Node.Id: {Value}", nodeOpts?.NodeId ?? "NULL");
-                     logger.LogInformation("[Config Check] Node.IpAddress: {Value}", nodeOpts?.Address ?? "NULL");
+                     logger.LogInformation("[Config Check] Node.IpAddress: {Value}", networkOpts?.ListenAddress ?? "NULL");
                      logger.LogInformation("[Config Check] Database.DatabasePath: {Value}", dbOpts?.DatabasePath ?? "NULL");
                      logger.LogInformation("[Config Check] Storage.BasePath: {Value}", storageOpts?.BasePath ?? "NULL");
                      
-                     logger.LogInformation("[Config Check] Node.KnownNodes Count: {Value}", nodeOpts?.KnownNodes?.Count ?? 0);
+                     logger.LogInformation("[Config Check] Node.KnownNodes Count: {Value}", networkOpts?.KnownNodes?.Count ?? 0);
 
                  }
                  catch (Exception ex)
@@ -203,14 +205,34 @@ namespace VKR.Node
                  })
                 .ConfigureServices((hostContext, services) =>
                 {
+                    services.AddAutoMapper(typeof(MappingProfile));
+                    
                     // Configuration Options Binding
-                    services.Configure<NodeOptions>(hostContext.Configuration.GetSection("Node"));
-                    services.Configure<StorageOptions>(hostContext.Configuration.GetSection("Storage"));
-                    services.Configure<DatabaseOptions>(hostContext.Configuration.GetSection("Database"));
-                    services.Configure<DhtOptions>(hostContext.Configuration.GetSection("Dht"));
+                    //services.Configure<NodeOptions>(hostContext.Configuration.GetSection("Node"));
+                    //services.Configure<StorageOptions>(hostContext.Configuration.GetSection("Storage"));
+                    //services.Configure<DatabaseOptions>(hostContext.Configuration.GetSection("Database"));
+                    //services.Configure<DhtOptions>(hostContext.Configuration.GetSection("Dht"));
+                    
+                    services.Configure<DistributedStorageConfiguration>(
+                        hostContext.Configuration.GetSection("DistributedStorage"));
+            
+                    // Register individual sections for convenience
+                    services.Configure<NodeIdentityOptions>(
+                        hostContext.Configuration.GetSection("DistributedStorage:Identity"));
+                    services.Configure<NetworkOptions>(
+                        hostContext.Configuration.GetSection("DistributedStorage:Network"));
+                    services.Configure<StorageOptions>(
+                        hostContext.Configuration.GetSection("DistributedStorage:Storage"));
+                    services.Configure<DatabaseOptions>(
+                        hostContext.Configuration.GetSection("DistributedStorage:Database"));
+                    services.Configure<DhtOptions>(
+                        hostContext.Configuration.GetSection("DistributedStorage:Dht"));
+        
+                    // Register configuration validator
+                    services.AddTransient<IConfigurationValidator, ConfigurationValidator>();
+                    
                     services.AddHostedService<PeerDiscoveryService>();
                     services.AddHostedService<NodeStatusUpdaterService>(); 
-
                     // Database Context Factory
                     services.AddDbContextFactory<NodeDbContext>();
 
@@ -239,12 +261,13 @@ namespace VKR.Node
                     webBuilder.ConfigureKestrel((context, options) =>
                     {
                         // Resolve options *here* to ensure they are bound correctly
-                        var nodeOptions = context.Configuration.GetSection("Node").Get<NodeOptions>();
+                        var nodeOptions = context.Configuration.GetSection("Node").Get<NodeIdentityOptions>();
+                        var networkOptionsOptions = context.Configuration.GetSection("Node").Get<NetworkOptions>();
                         var logger = options.ApplicationServices.GetRequiredService<ILogger<Program>>(); // Get logger for Kestrel config
 
-                        logger.LogInformation("[Kestrel] Configuring endpoint. Raw ListenAddress from config: '{ListenAddress}'", nodeOptions?.Address);
+                        logger.LogInformation("[Kestrel] Configuring endpoint. Raw ListenAddress from config: '{ListenAddress}'", networkOptionsOptions?.ListenAddress);
 
-                        if (nodeOptions == null || string.IsNullOrEmpty(nodeOptions.Address))
+                        if (nodeOptions == null || string.IsNullOrEmpty(networkOptionsOptions.ListenAddress))
                         {
                              logger.LogWarning("[Kestrel] Node:ListenAddress not configured or empty. Using default Kestrel endpoints.");
                              options.ListenLocalhost(5000, o => o.Protocols = HttpProtocols.Http2);
@@ -252,8 +275,8 @@ namespace VKR.Node
                         }
                         try
                         {
-                            var parts = nodeOptions.Address.Split(':');
-                            if (parts.Length != 2 || !int.TryParse(parts[1], out int port) || port <= 0 || port > 65535) throw new FormatException($"Invalid ListenAddress format or port: '{nodeOptions.Address}'. Expected 'host:port' with valid port.");
+                            var parts = networkOptionsOptions.ListenAddress.Split(':');
+                            if (parts.Length != 2 || !int.TryParse(parts[1], out int port) || port <= 0 || port > 65535) throw new FormatException($"Invalid ListenAddress format or port: '{networkOptionsOptions.ListenAddress}'. Expected 'host:port' with valid port.");
                             var host = parts[0];
                             IPAddress ipAddress;
                             if (host == "0.0.0.0" || host == "*") ipAddress = IPAddress.Any;
@@ -267,7 +290,7 @@ namespace VKR.Node
                             options.Listen(ipAddress, port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http2; });
                         }
                         catch (Exception ex) {
-                             logger.LogError(ex, "[Kestrel] Error configuring Kestrel endpoint from ListenAddress '{ListenAddress}'. Using Kestrel defaults.", nodeOptions.Address);
+                             logger.LogError(ex, "[Kestrel] Error configuring Kestrel endpoint from ListenAddress '{ListenAddress}'. Using Kestrel defaults.", networkOptionsOptions.ListenAddress);
                              options.ListenLocalhost(5000, o => o.Protocols = HttpProtocols.Http2);
                         }
                     });
@@ -277,7 +300,7 @@ namespace VKR.Node
                             endpoints.MapGrpcService<StorageServiceImpl>();
                             endpoints.MapGrpcService<NodeInternalServiceImpl>();
                             endpoints.MapGet("/", async context => {
-                                var nodeOpts = context.RequestServices.GetRequiredService<IOptions<NodeOptions>>().Value;
+                                var nodeOpts = context.RequestServices.GetRequiredService<IOptions<NodeIdentityOptions>>().Value;
                                 await context.Response.WriteAsync($"VKR Node '{nodeOpts?.NodeId ?? "Unknown"}' running. Status: OK");
                             });
                         });

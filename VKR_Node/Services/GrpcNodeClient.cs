@@ -20,14 +20,14 @@ namespace VKR_Node.Services
         private readonly string _callingNodeId;
         private readonly TimeSpan _channelIdleTimeout = TimeSpan.FromMinutes(30);
         private readonly TimeSpan _cleanupInterval = TimeSpan.FromMinutes(10);
-        private bool _disposed = false;
+        private bool _disposed;
         private readonly Task _cleanupTask;
         private readonly CancellationTokenSource _cleanupCts = new();
 
         /// <summary>
         /// Initializes a new instance of the GrpcNodeClient.
         /// </summary>
-        public GrpcNodeClient(ILogger<GrpcNodeClient> logger, Microsoft.Extensions.Options.IOptions<Configuration.NodeOptions> nodeOptions)
+        public GrpcNodeClient(ILogger<GrpcNodeClient> logger, Microsoft.Extensions.Options.IOptions<Configuration.NodeIdentityOptions> nodeOptions)
         {
             _logger = logger;
             _callingNodeId = nodeOptions.Value?.NodeId ?? throw new InvalidOperationException("NodeId is not configured");
@@ -252,34 +252,34 @@ namespace VKR_Node.Services
         /// <summary>
         /// Finds the successor node for a given key.
         /// </summary>
-        public Task<NodeInfoCore?> FindSuccessorOnNodeAsync(
-            NodeInfoCore targetNode, 
+        public Task<NodeModel?> FindSuccessorOnNodeAsync(
+            NodeModel targetNode, 
             string keyId, 
             CancellationToken cancellationToken = default)
         {
             _logger.LogWarning("FindSuccessorOnNodeAsync is not implemented");
             // TODO: Implement when DHT functionality is required
-            return Task.FromResult<NodeInfoCore?>(null);
+            return Task.FromResult<NodeModel?>(null);
         }
 
         /// <summary>
         /// Gets the predecessor node from a target node.
         /// </summary>
-        public Task<NodeInfoCore?> GetPredecessorFromNodeAsync(
-            NodeInfoCore targetNode, 
+        public Task<NodeModel?> GetPredecessorFromNodeAsync(
+            NodeModel targetNode, 
             CancellationToken cancellationToken = default)
         {
             _logger.LogWarning("GetPredecessorFromNodeAsync is not implemented");
             // TODO: Implement when DHT functionality is required
-            return Task.FromResult<NodeInfoCore?>(null);
+            return Task.FromResult<NodeModel?>(null);
         }
 
         /// <summary>
         /// Notifies a target node about a potential predecessor.
         /// </summary>
         public Task<bool> NotifyNodeAsync(
-            NodeInfoCore targetNode, 
-            NodeInfoCore selfInfo, 
+            NodeModel targetNode, 
+            NodeModel selfInfo, 
             CancellationToken cancellationToken = default)
         {
             _logger.LogWarning("NotifyNodeAsync is not implemented");

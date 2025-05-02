@@ -1,12 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using VKR_Core.Models;
 using VKR_Core.Services;
 using VKR_Node.Configuration;
@@ -27,12 +21,12 @@ namespace VKR_Node.Services
         private readonly INodeClient _nodeClient;
         private readonly string _localNodeId;
         private readonly DhtOptions _dhtOptions;
-        private readonly List<ChunkStorageNode> _knownNodes;
+        private readonly NodeIdentityOptions _nodeIdentityOptions;
+        private readonly NetworkOptions _networkOptions;
+        private readonly List<KnownNodeOptions> _knownNodes;
 
         // Cache of node status to reduce repeated pings
-        private readonly ConcurrentDictionary<string, (bool IsOnline, DateTime LastChecked)> _nodeStatusCache = 
-            new ConcurrentDictionary<string, (bool IsOnline, DateTime LastChecked)>();
-
+        private readonly ConcurrentDictionary<string, (bool IsOnline, DateTime LastChecked)> _nodeStatusCache = new();
         private readonly TimeSpan _nodeStatusCacheTtl = TimeSpan.FromSeconds(30);
 
         public BackgroundReplicationManager(
@@ -40,16 +34,17 @@ namespace VKR_Node.Services
             IMetadataManager metadataManager,
             IDataManager dataManager,
             INodeClient nodeClient,
-            IOptions<NodeOptions> nodeOptions,
+            IOptions<NodeIdentityOptions> nodeIdentityOptions,
+            IOptions<NetworkOptions> networkOptions,
             IOptions<DhtOptions> dhtOptions)
         {
             _logger = logger;
             _metadataManager = metadataManager;
             _dataManager = dataManager;
             _nodeClient = nodeClient;
-            _localNodeId = nodeOptions.Value.NodeId ?? throw new ArgumentNullException(nameof(nodeOptions), "NodeId is not configured");
+            _localNodeId = nodeIdentityOptions.Value.NodeId ?? throw new ArgumentNullException(nameof(nodeIdentityOptions), "NodeId is not configured");
             _dhtOptions = dhtOptions.Value;
-            _knownNodes = nodeOptions.Value.KnownNodes ?? new List<ChunkStorageNode>();
+            _knownNodes = networkOptions.Value.KnownNodes.ToList();
         }
 
         /// <summary>
@@ -63,7 +58,7 @@ namespace VKR_Node.Services
             try
             {
                 // Step 1: Find out where the chunk is currently stored
-                var storedNodeIds = await GetChunkStorageNodesAsync(fileId, chunkId, cancellationToken);
+                var storedNodeIds = await GetKnownNodeOptionssAsync(fileId, chunkId, cancellationToken);
                 if (!storedNodeIds.Any())
                 {
                     _logger.LogWarning("Cannot ensure replication for Chunk {ChunkId}: No storage locations found", chunkId);
@@ -109,7 +104,7 @@ namespace VKR_Node.Services
         /// Replicates a chunk to the number of nodes specified by the replication factor
         /// </summary>
         public async Task ReplicateChunkAsync(
-            ChunkInfoCore chunkInfo, 
+            ChunkModel chunkInfo, 
             Func<Task<Stream>> sourceDataStreamFactory, 
             int replicationFactor, 
             CancellationToken cancellationToken = default)
@@ -123,7 +118,7 @@ namespace VKR_Node.Services
             try
             {
                 // Step 1: Check existing replicas
-                var existingNodeIds = await GetChunkStorageNodesAsync(
+                var existingNodeIds = await GetKnownNodeOptionssAsync(
                     chunkInfo.FileId, chunkInfo.ChunkId, cancellationToken);
                 
                 if (existingNodeIds.Count >= effectiveReplicationFactor)
@@ -244,7 +239,7 @@ namespace VKR_Node.Services
         /// Handles incoming request to store a replica chunk on the current node
         /// </summary>
         public async Task HandleIncomingReplicaAsync(
-            ChunkInfoCore chunkInfo, 
+            ChunkModel chunkInfo, 
             Stream dataStream, 
             CancellationToken cancellationToken = default)
         {
@@ -303,7 +298,7 @@ namespace VKR_Node.Services
                 await _dataManager.DeleteChunkAsync(localChunk, cancellationToken);
                 
                 // Step 2: Update metadata to reflect removal
-                await _metadataManager.RemoveChunkStorageNodeAsync(
+                await _metadataManager.RemoveKnownNodeOptionsAsync(
                     localChunk.FileId, 
                     localChunk.ChunkId, 
                     _localNodeId, 
@@ -331,12 +326,12 @@ namespace VKR_Node.Services
         /// <summary>
         /// Gets the list of nodes currently storing a specific chunk
         /// </summary>
-        private async Task<List<string>> GetChunkStorageNodesAsync(
+        private async Task<List<string>> GetKnownNodeOptionssAsync(
             string fileId, 
             string chunkId, 
             CancellationToken cancellationToken)
         {
-            var nodes = await _metadataManager.GetChunkStorageNodesAsync(
+            var nodes = await _metadataManager.GetKnownNodeOptionssAsync(
                 fileId, 
                 chunkId, 
                 cancellationToken);
@@ -412,9 +407,9 @@ namespace VKR_Node.Services
         /// <summary>
         /// Finds all known nodes that are currently online
         /// </summary>
-        private async Task<List<ChunkStorageNode>> FindAllOnlineNodesAsync(CancellationToken cancellationToken)
+        private async Task<List<KnownNodeOptions>> FindAllOnlineNodesAsync(CancellationToken cancellationToken)
         {
-            var onlineNodes = new ConcurrentBag<ChunkStorageNode>();
+            var onlineNodes = new ConcurrentBag<KnownNodeOptions>();
             
             // Add all nodes that respond to ping
             await Task.WhenAll(_knownNodes.Select(async node => {
@@ -473,7 +468,7 @@ namespace VKR_Node.Services
                 .ToList();
             
             // Find which potential targets are online
-            var onlineTargets = new List<ChunkStorageNode>();
+            var onlineTargets = new List<KnownNodeOptions>();
             foreach (var target in potentialTargets)
             {
                 if (await IsNodeOnlineAsync(target.NodeId, cancellationToken))
@@ -513,7 +508,7 @@ namespace VKR_Node.Services
         /// Gets the data for a locally stored chunk
         /// </summary>
         private async Task<byte[]?> GetLocalChunkDataAsync(
-            ChunkInfoCore chunkInfo, 
+            ChunkModel chunkInfo, 
             CancellationToken cancellationToken)
         {
             Stream? localDataStream = null;
@@ -541,10 +536,10 @@ namespace VKR_Node.Services
         /// Replicates a chunk to a specific target node
         /// </summary>
         private async Task<bool> ReplicateToNodeAsync(
-            ChunkStorageNode targetNode, 
-            ChunkInfoCore chunkInfo, 
+            KnownNodeOptions targetNode, 
+            ChunkModel chunkInfo, 
             byte[] chunkData, 
-            FileMetadataCore? fileMetadata, 
+            FileModel? fileMetadata, 
             CancellationToken cancellationToken)
         {
             _logger.LogInformation("Replicating Chunk {ChunkId} to Node {NodeId} ({Address})", 

@@ -15,20 +15,23 @@ namespace VKR_Node.Services.NodeServices
 public class NodeConfigService : INodeConfigService
 {
     private readonly ILogger<NodeConfigService> _logger;
-    private readonly NodeOptions _nodeOptions;
+    private readonly NodeIdentityOptions _nodeIdentityOptions;
+    private readonly NetworkOptions _networkOptions;
     private readonly StorageOptions _storageOptions;
     private readonly DhtOptions _dhtOptions;
     private readonly IDataManager _dataManager; 
 
     public NodeConfigService(
         ILogger<NodeConfigService> logger,
-        IOptions<NodeOptions> nodeOptions,
+        IOptions<NodeIdentityOptions> nodeIdentityOptions,
+        IOptions<NetworkOptions> networkOptions,
         IOptions<StorageOptions> storageOptions,
         IOptions<DhtOptions> dhtOptions,
         IDataManager dataManager)
     {
         _logger = logger;
-        _nodeOptions = nodeOptions.Value;
+        _nodeIdentityOptions = nodeIdentityOptions.Value;
+        _networkOptions = networkOptions.Value;
         _storageOptions = storageOptions.Value;
         _dhtOptions = dhtOptions.Value;
         _dataManager = dataManager;
@@ -42,15 +45,14 @@ public class NodeConfigService : INodeConfigService
         
         try
         {
-            // Get system performance metrics
             var cpuUsage = await GetCpuUsageAsync();
             var (memoryUsed, memoryTotal) = await GetMemoryInfoAsync();
             var (diskAvailable, diskTotal) = await GetDiskSpaceInfoAsync();
             
             var reply = new GetNodeConfigurationReply
             {
-                NodeId = _nodeOptions.NodeId ?? "N/A",
-                ListenAddress = _nodeOptions.Address ?? "N/A",
+                NodeId = _nodeIdentityOptions.NodeId ?? "N/A",
+                ListenAddress = _networkOptions.ListenAddress ?? "N/A",
                 StorageBasePath = _storageOptions.BasePath ?? "N/A",
                 ReplicationFactor = _dhtOptions.ReplicationFactor,
                 DefaultChunkSize = _storageOptions.ChunkSize,
@@ -131,7 +133,6 @@ public class NodeConfigService : INodeConfigService
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                // Read from /proc/meminfo on Linux
                 var memInfo = File.ReadAllText("/proc/meminfo");
                 var match = Regex.Match(memInfo, @"MemTotal:\s+(\d+) kB");
                 if (match.Success && long.TryParse(match.Groups[1].Value, out var kbValue))
@@ -182,8 +183,8 @@ public class NodeConfigService : INodeConfigService
     {
         if (bytes == null || bytes < 0) return "Unknown";
         
-        string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
-        int suffixIndex = 0;
+        string[] suffixes = ["B", "KB", "MB", "GB", "TB"];
+        var suffixIndex = 0;
         double displaySize = bytes.Value;
         
         while (displaySize >= 1024 && suffixIndex < suffixes.Length - 1)
@@ -197,7 +198,7 @@ public class NodeConfigService : INodeConfigService
     
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
+    private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
 }
 
     [StructLayout(LayoutKind.Sequential)]

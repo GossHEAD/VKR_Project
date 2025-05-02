@@ -106,7 +106,7 @@ namespace VKR_Node.Services
         /// <param name="dataStream">The stream containing the chunk data.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>The chunk's path or ID.</returns>
-        public async Task<string> StoreChunkAsync(ChunkInfoCore chunkInfo, Stream dataStream, CancellationToken cancellationToken = default)
+        public async Task<string> StoreChunkAsync(ChunkModel chunkInfo, Stream dataStream, CancellationToken cancellationToken = default)
         {
             ValidateChunkInfo(chunkInfo);
             var filePath = GetChunkPath(chunkInfo.FileId, chunkInfo.ChunkId);
@@ -176,7 +176,7 @@ namespace VKR_Node.Services
         /// <param name="chunkInfo">Metadata of the chunk to retrieve.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A readable Stream containing the chunk data, or null if the chunk file is not found.</returns>
-        public Task<Stream?> RetrieveChunkAsync(ChunkInfoCore chunkInfo, CancellationToken cancellationToken = default)
+        public Task<Stream?> RetrieveChunkAsync(ChunkModel chunkInfo, CancellationToken cancellationToken = default)
         {
             ValidateChunkInfo(chunkInfo);
             var filePath = GetChunkPath(chunkInfo.FileId, chunkInfo.ChunkId);
@@ -229,7 +229,7 @@ namespace VKR_Node.Services
         /// <param name="chunkInfo">Metadata of the chunk to delete.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>True if the file was successfully deleted or did not exist; false otherwise.</returns>
-        public Task<bool> DeleteChunkAsync(ChunkInfoCore chunkInfo, CancellationToken cancellationToken = default)
+        public Task<bool> DeleteChunkAsync(ChunkModel chunkInfo, CancellationToken cancellationToken = default)
         {
             ValidateChunkInfo(chunkInfo);
             var filePath = GetChunkPath(chunkInfo.FileId, chunkInfo.ChunkId);
@@ -280,7 +280,7 @@ namespace VKR_Node.Services
         /// <param name="chunkInfo">Metadata of the chunk to check.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>True if the chunk exists, false otherwise.</returns>
-        public Task<bool> ChunkExistsAsync(ChunkInfoCore chunkInfo, CancellationToken cancellationToken = default)
+        public Task<bool> ChunkExistsAsync(ChunkModel chunkInfo, CancellationToken cancellationToken = default)
         {
             ValidateChunkInfo(chunkInfo);
             var filePath = GetChunkPath(chunkInfo.FileId, chunkInfo.ChunkId);
@@ -397,7 +397,7 @@ namespace VKR_Node.Services
         /// Validates that the chunk info contains required fields.
         /// </summary>
         /// <param name="chunkInfo">The chunk info to validate.</param>
-        private static void ValidateChunkInfo(ChunkInfoCore chunkInfo)
+        private static void ValidateChunkInfo(ChunkModel chunkInfo)
         {
             if (chunkInfo == null)
                 throw new ArgumentNullException(nameof(chunkInfo));

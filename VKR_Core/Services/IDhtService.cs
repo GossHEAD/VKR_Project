@@ -13,19 +13,19 @@ public interface IDhtService
     /// </summary>
     /// <param name="keyId">Идентификатор ключа.</param>
     /// <returns>Информация об ответственном узле.</returns>
-    Task<NodeInfoCore> FindSuccessorAsync(string keyId, CancellationToken cancellationToken = default);
+    Task<NodeModel> FindSuccessorAsync(string keyId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Получает информацию о текущем предшественнике данного узла в кольце DHT.
     /// </summary>
     /// <returns>Информация о предшественнике или null, если его нет.</returns>
-    Task<NodeInfoCore?> GetPredecessorAsync(CancellationToken cancellationToken = default);
+    Task<NodeModel?> GetPredecessorAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Обрабатывает уведомление от узла, который считает себя предшественником данного.
     /// </summary>
     /// <param name="potentialPredecessor">Узел, отправивший уведомление.</param>
-    Task NotifyAsync(NodeInfoCore potentialPredecessor, CancellationToken cancellationToken = default);
+    Task NotifyAsync(NodeModel potentialPredecessor, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Запускает периодическую задачу стабилизации для поддержания корректности ссылок
@@ -46,13 +46,13 @@ public interface IDhtService
     /// <summary>
     /// Получает информацию о текущем (локальном) узле.
     /// </summary>
-    NodeInfoCore GetCurrentNodeInfo();
+    NodeModel GetCurrentNodeInfo();
 
      /// <summary>
     /// Инициирует процесс присоединения к существующей DHT сети через известный узел.
     /// </summary>
     /// <param name="bootstrapNode">Известный узел для подключения.</param>
-    Task JoinNetworkAsync(NodeInfoCore bootstrapNode, CancellationToken cancellationToken = default);
+    Task JoinNetworkAsync(NodeModel bootstrapNode, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Инициирует процесс корректного выхода из сети (передача ключей и т.д.).

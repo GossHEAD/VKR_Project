@@ -40,17 +40,17 @@ namespace VKR_Core.Services
         /// <summary>
         /// Вызывает FindSuccessor на удаленном узле.
         /// </summary>
-        Task<NodeInfoCore?> FindSuccessorOnNodeAsync(NodeInfoCore targetNode, string keyId, CancellationToken cancellationToken = default);
+        Task<NodeModel?> FindSuccessorOnNodeAsync(NodeModel targetNode, string keyId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Вызывает GetPredecessor на удаленном узле.
         /// </summary>
-        Task<NodeInfoCore?> GetPredecessorFromNodeAsync(NodeInfoCore targetNode, CancellationToken cancellationToken = default);
+        Task<NodeModel?> GetPredecessorFromNodeAsync(NodeModel targetNode, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Вызывает Notify на удаленном узле.
         /// </summary>
-        Task<bool> NotifyNodeAsync(NodeInfoCore targetNode, NodeInfoCore selfInfo, CancellationToken cancellationToken = default); // Возвращает true при успехе
+        Task<bool> NotifyNodeAsync(NodeModel targetNode, NodeModel selfInfo, CancellationToken cancellationToken = default); // Возвращает true при успехе
 
         /// <summary>
         /// Requests chunk data from a target node via streaming.

@@ -10,6 +10,7 @@ using VKR_Node.Configuration;
 using VKR_Node.Services.FileService.FileInterface;
 using VKR_Node.Services.Utilities;
 using VKR.Protos;
+using FileMetadataMapper = VKR_Core.Extensions.FileMetadataMapper;
 
 namespace VKR_Node.Services.FileService
 {
@@ -21,7 +22,8 @@ namespace VKR_Node.Services.FileService
         private readonly INodeClient _nodeClient;
         private readonly IReplicationManager _replicationManager;
         private readonly string _localNodeId;
-        private readonly NodeOptions _nodeOptions;
+        private readonly NodeIdentityOptions _nodeIdentityOptions;
+        private readonly NetworkOptions _networkOptions;
         private readonly StorageOptions _storageOptions;
         private readonly DhtOptions _dhtOptions;
         private readonly ChunkStreamingHelper _streamingHelper;
@@ -31,8 +33,9 @@ namespace VKR_Node.Services.FileService
             IMetadataManager metadataManager,
             IDataManager dataManager,
             INodeClient nodeClient,
+            IOptions<NetworkOptions> networkOptions,
             IReplicationManager replicationManager,
-            IOptions<NodeOptions> nodeOptions,
+            IOptions<NodeIdentityOptions> nodeIdentityOptions,
             IOptions<StorageOptions> storageOptions,
             IOptions<DhtOptions> dhtOptions)
         {
@@ -41,10 +44,11 @@ namespace VKR_Node.Services.FileService
             _dataManager = dataManager;
             _nodeClient = nodeClient;
             _replicationManager = replicationManager;
-            _nodeOptions = nodeOptions.Value;
+            _nodeIdentityOptions = nodeIdentityOptions.Value;
             _storageOptions = storageOptions.Value;
             _dhtOptions = dhtOptions.Value;
-            _localNodeId = _nodeOptions.NodeId ?? throw new InvalidOperationException("NodeId is not configured.");
+            _networkOptions = networkOptions.Value;
+            _localNodeId = _nodeIdentityOptions.NodeId ?? throw new InvalidOperationException("NodeId is not configured.");
             _streamingHelper = new ChunkStreamingHelper(logger, dataManager, nodeClient, _localNodeId);
         }
 
@@ -108,7 +112,7 @@ namespace VKR_Node.Services.FileService
             ConcurrentDictionary<string, FileMetadata> aggregatedFiles,
             CancellationToken cancellationToken)
         {
-            var knownPeers = _nodeOptions.KnownNodes ?? new List<ChunkStorageNode>();
+            var knownPeers = _networkOptions.KnownNodes;
             var semaphore = new SemaphoreSlim(10); // Limit concurrent requests
             var peerTasks = new List<Task>();
 
@@ -141,7 +145,7 @@ namespace VKR_Node.Services.FileService
         }
 
         private async Task GetFilesFromPeerAsync(
-            ChunkStorageNode peer,
+            KnownNodeOptions peer,
             ConcurrentDictionary<string, FileMetadata> aggregatedFiles,
             CancellationToken cancellationToken)
         {
@@ -209,13 +213,13 @@ namespace VKR_Node.Services.FileService
         {
             _logger.LogInformation("UploadFile request initiated by client {Peer}", context.Peer);
             FileMetadata? fileMetadataProto = null;
-            FileMetadataCore? partialFileMetadataCore = null;
+            FileModel? partialFileModel = null;
             long totalBytesReceived = 0;
             int chunkCount = 0;
             string? fileId = null;
             int actualChunkSize = _storageOptions.ChunkSize > 0 ? _storageOptions.ChunkSize : 1048576;
             long expectedFileSize = 0;
-            bool metadataReceived = false;
+            bool metadataReceived = false;  // This is the key variable that's not being updated properly
             int expectedChunkIndex = 0;
 
             try
@@ -224,33 +228,108 @@ namespace VKR_Node.Services.FileService
                 {
                     if (request.PayloadCase == UploadFileRequest.PayloadOneofCase.Metadata)
                     {
-                        await ProcessMetadataRequestAsync(
-                            request,
-                            metadataReceived,
-                            fileMetadataProto,
-                            fileId,
-                            expectedFileSize,
-                            actualChunkSize,
-                            partialFileMetadataCore);
+                        if (metadataReceived)
+                        {
+                            _logger.LogWarning("Metadata sent more than once. Ignoring.");
+                            continue;
+                        }
+
+                        metadataReceived = true;  // This must be updated in the parent method's scope
+                        fileMetadataProto = request.Metadata;
+                        fileId = Guid.NewGuid().ToString();
+                        fileMetadataProto.FileId = fileId;
+                        expectedFileSize = fileMetadataProto.ExpectedFileSize > 0 ? fileMetadataProto.ExpectedFileSize : 0;
+                        actualChunkSize = expectedFileSize > 0 ? DetermineOptimalChunkSize(expectedFileSize) : actualChunkSize;
+                        fileMetadataProto.ChunkSize = actualChunkSize;
+
+                        _logger.LogInformation(
+                            "Received metadata for file: {FileName}, Gen FileId: {FileId}, ChunkSize: {ChunkSize}, ExpectedSize: {ExpectedSize}",
+                            fileMetadataProto.FileName, fileId, actualChunkSize,
+                            expectedFileSize > 0 ? expectedFileSize.ToString() : "N/A");
+
+                        partialFileModel = new FileModel
+                        {
+                            FileId = fileId,
+                            FileName = fileMetadataProto.FileName,
+                            FileSize = expectedFileSize,
+                            CreationTime = fileMetadataProto.CreationTime?.ToDateTime() ?? DateTime.UtcNow,
+                            ModificationTime = DateTime.UtcNow,
+                            ContentType = fileMetadataProto.ContentType,
+                            ChunkSize = actualChunkSize,
+                            TotalChunks = -1,
+                            State = FileStateCore.Uploading
+                        };
                     }
                     else if (request.PayloadCase == UploadFileRequest.PayloadOneofCase.Chunk)
                     {
-                        if (!ValidateChunkRequest(metadataReceived, fileMetadataProto, fileId, partialFileMetadataCore))
+                        if (!metadataReceived || fileMetadataProto == null || string.IsNullOrEmpty(fileId) ||
+                            partialFileModel == null)
                         {
                             throw new RpcException(new Status(StatusCode.InvalidArgument,
                                 "Chunk received before valid metadata."));
                         }
 
                         var chunkProto = request.Chunk;
-                        ValidateChunkIndex(chunkProto.ChunkIndex, expectedChunkIndex);
+                        if (chunkProto.ChunkIndex != expectedChunkIndex)
+                        {
+                            throw new RpcException(new Status(
+                                StatusCode.InvalidArgument,
+                                $"Unexpected chunk index. Expected {expectedChunkIndex}, received {chunkProto.ChunkIndex}"));
+                        }
 
-                        totalBytesReceived += await ProcessChunkAsync(
-                            chunkProto,
-                            fileId!,
-                            expectedChunkIndex,
-                            partialFileMetadataCore,
-                            context.CancellationToken);
+                        _logger.LogDebug("Received Chunk Index: {Index}, Size: {Size} bytes.", chunkProto.ChunkIndex,
+                            chunkProto.Data.Length);
 
+                        var chunkInfo = new ChunkModel
+                        {
+                            FileId = fileId,
+                            ChunkId = chunkProto.ChunkId,
+                            ChunkIndex = chunkProto.ChunkIndex,
+                            Size = chunkProto.Data.Length,
+                            StoredNodeId = _localNodeId,
+                            ChunkHash = null
+                        };
+
+                        // Store the chunk locally
+                        await using (var dataStream = new MemoryStream(chunkProto.Data.Memory.ToArray()))
+                        {
+                            await _dataManager.StoreChunkAsync(chunkInfo, dataStream, context.CancellationToken);
+                        }
+
+                        _logger.LogDebug("Stored Chunk {ChunkId} data locally.", chunkInfo.ChunkId);
+
+                        try
+                        {
+                            await _metadataManager.SaveChunkMetadataAsync(
+                                chunkInfo,
+                                new List<string> { _localNodeId },
+                                context.CancellationToken);
+
+                            _logger.LogDebug("Saved metadata for Chunk {ChunkId} locally.", chunkInfo.ChunkId);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to save metadata for locally stored Chunk {ChunkId}.", chunkInfo.ChunkId);
+
+                            try
+                            {
+                                await _dataManager.DeleteChunkAsync(chunkInfo, CancellationToken.None);
+                            }
+                            catch (Exception cleanupEx)
+                            {
+                                _logger.LogError(cleanupEx,
+                                    "Failed to clean up chunk data after metadata error for Chunk {ChunkId}", chunkInfo.ChunkId);
+                            }
+
+                            throw new RpcException(new Status(
+                                StatusCode.Internal,
+                                $"Failed to save metadata for chunk {chunkInfo.ChunkIndex}."));
+                        }
+
+                        // Trigger replication if needed
+                        await TriggerChunkReplicationAsync(chunkInfo, chunkProto, partialFileModel, context.CancellationToken);
+
+                        totalBytesReceived += chunkInfo.Size;
                         chunkCount++;
                         expectedChunkIndex++;
                     }
@@ -260,15 +339,39 @@ namespace VKR_Node.Services.FileService
                     }
                 }
 
-                return await FinalizeUploadAsync(
-                    metadataReceived,
-                    fileMetadataProto,
-                    fileId,
-                    expectedFileSize,
-                    totalBytesReceived,
-                    actualChunkSize,
-                    chunkCount,
-                    context.CancellationToken);
+                if (!metadataReceived || fileMetadataProto == null || string.IsNullOrEmpty(fileId))
+                {
+                    throw new RpcException(new Status(
+                        StatusCode.InvalidArgument,
+                        "Upload stream completed without receiving metadata."));
+                }
+
+                if (expectedFileSize > 0 && totalBytesReceived != expectedFileSize)
+                {
+                    _logger.LogWarning(
+                        "Uploaded file size mismatch for File {Id}. Expected: {ExpSize}, Received: {RecSize}.",
+                        fileId, expectedFileSize, totalBytesReceived);
+                }
+
+                var finalMetadataCore = new FileModel
+                {
+                    FileId = fileId,
+                    FileName = fileMetadataProto.FileName,
+                    FileSize = totalBytesReceived,
+                    CreationTime = fileMetadataProto.CreationTime?.ToDateTime() ?? DateTime.UtcNow,
+                    ModificationTime = DateTime.UtcNow,
+                    ContentType = fileMetadataProto.ContentType,
+                    ChunkSize = actualChunkSize,
+                    TotalChunks = chunkCount,
+                    State = FileStateCore.Available
+                };
+
+                await _metadataManager.SaveFileMetadataAsync(finalMetadataCore, context.CancellationToken);
+
+                _logger.LogInformation("File {Name} (ID: {Id}) uploaded successfully. Final Size: {Size}, Chunks: {Count}",
+                    finalMetadataCore.FileName, fileId, totalBytesReceived, chunkCount);
+
+                return new UploadFileReply { Success = true, Message = "File uploaded successfully.", FileId = fileId };
             }
             catch (RpcException ex)
             {
@@ -292,137 +395,16 @@ namespace VKR_Node.Services.FileService
             }
         }
 
-        private async Task ProcessMetadataRequestAsync(
-            UploadFileRequest request,
-            bool metadataReceived,
-            FileMetadata? fileMetadataProto,
-            string? fileId,
-            long expectedFileSize,
-            int actualChunkSize,
-            FileMetadataCore? partialFileMetadataCore)
-        {
-            if (metadataReceived)
-            {
-                _logger.LogWarning("Metadata sent more than once. Ignoring.");
-                return;
-            }
-
-            metadataReceived = true;
-            fileMetadataProto = request.Metadata;
-            fileId = Guid.NewGuid().ToString();
-            fileMetadataProto.FileId = fileId;
-            expectedFileSize = fileMetadataProto.ExpectedFileSize > 0 ? fileMetadataProto.ExpectedFileSize : 0;
-            actualChunkSize = expectedFileSize > 0 ? DetermineOptimalChunkSize(expectedFileSize) : actualChunkSize;
-            fileMetadataProto.ChunkSize = actualChunkSize;
-
-            _logger.LogInformation(
-                "Received metadata for file: {FileName}, Gen FileId: {FileId}, ChunkSize: {ChunkSize}, ExpectedSize: {ExpectedSize}",
-                fileMetadataProto.FileName, fileId, actualChunkSize,
-                expectedFileSize > 0 ? expectedFileSize.ToString() : "N/A");
-
-            partialFileMetadataCore = new FileMetadataCore
-            {
-                FileId = fileId,
-                FileName = fileMetadataProto.FileName,
-                FileSize = expectedFileSize,
-                CreationTime = fileMetadataProto.CreationTime?.ToDateTime() ?? DateTime.UtcNow,
-                ModificationTime = DateTime.UtcNow,
-                ContentType = fileMetadataProto.ContentType,
-                ChunkSize = actualChunkSize,
-                TotalChunks = -1,
-                State = FileStateCore.Uploading
-            };
-        }
-
-        private bool ValidateChunkRequest(bool metadataReceived, FileMetadata? fileMetadataProto, string? fileId,
-            FileMetadataCore? partialFileMetadataCore)
-        {
-            return metadataReceived && fileMetadataProto != null && !string.IsNullOrEmpty(fileId) &&
-                   partialFileMetadataCore != null;
-        }
-
-        private void ValidateChunkIndex(int receivedIndex, int expectedIndex)
-        {
-            if (receivedIndex != expectedIndex)
-            {
-                throw new RpcException(new Status(
-                    StatusCode.InvalidArgument,
-                    $"Unexpected chunk index. Expected {expectedIndex}, received {receivedIndex}"));
-            }
-        }
-
-        private async Task<int> ProcessChunkAsync(
-            FileChunk chunkProto,
-            string fileId,
-            int chunkIndex,
-            FileMetadataCore? partialFileMetadataCore,
-            CancellationToken cancellationToken)
-        {
-            _logger.LogDebug("Received Chunk Index: {Index}, Size: {Size} bytes.", chunkProto.ChunkIndex,
-                chunkProto.Data.Length);
-
-            var chunkInfo = new ChunkInfoCore
-            {
-                FileId = fileId,
-                ChunkId = chunkProto.ChunkId,
-                ChunkIndex = chunkProto.ChunkIndex,
-                Size = chunkProto.Data.Length,
-                StoredNodeId = _localNodeId,
-                ChunkHash = null
-            };
-
-            // Store the chunk locally
-            await using (var dataStream = new MemoryStream(chunkProto.Data.Memory.ToArray()))
-            {
-                await _dataManager.StoreChunkAsync(chunkInfo, dataStream, cancellationToken);
-            }
-
-            _logger.LogDebug("Stored Chunk {ChunkId} data locally.", chunkInfo.ChunkId);
-
-            try
-            {
-                await _metadataManager.SaveChunkMetadataAsync(
-                    chunkInfo,
-                    new List<string> { _localNodeId },
-                    cancellationToken);
-
-                _logger.LogDebug("Saved metadata for Chunk {ChunkId} locally.", chunkInfo.ChunkId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to save metadata for locally stored Chunk {ChunkId}.", chunkInfo.ChunkId);
-
-                try
-                {
-                    await _dataManager.DeleteChunkAsync(chunkInfo, CancellationToken.None);
-                }
-                catch (Exception cleanupEx)
-                {
-                    _logger.LogError(cleanupEx,
-                        "Failed to clean up chunk data after metadata error for Chunk {ChunkId}", chunkInfo.ChunkId);
-                }
-
-                throw new RpcException(new Status(
-                    StatusCode.Internal,
-                    $"Failed to save metadata for chunk {chunkInfo.ChunkIndex}."));
-            }
-
-            // Trigger replication if needed
-            await TriggerChunkReplicationAsync(chunkInfo, chunkProto, partialFileMetadataCore, cancellationToken);
-
-            return chunkInfo.Size;
-        }
-
         private async Task TriggerChunkReplicationAsync(
-            ChunkInfoCore chunkInfo,
+            ChunkModel chunkInfo,
             FileChunk chunkProto,
-            FileMetadataCore? partialFileMetadataCore,
+            FileModel? partialFileModel,
             CancellationToken cancellationToken)
         {
             int replicationFactor = Math.Max(2, _dhtOptions.ReplicationFactor);
             int replicasNeeded = replicationFactor - 1;
 
-            var potentialPeers = (_nodeOptions.KnownNodes ?? new List<ChunkStorageNode>())
+            var potentialPeers = (_networkOptions.KnownNodes)
                 .Where(n => n.NodeId != _localNodeId && !string.IsNullOrEmpty(n.Address))
                 .ToList();
 
@@ -447,7 +429,7 @@ namespace VKR_Node.Services.FileService
                 targetReplicaNodes.Count,
                 string.Join(", ", targetReplicaNodes.Select(n => n.NodeId)));
 
-            if (partialFileMetadataCore == null)
+            if (partialFileModel == null)
             {
                 _logger.LogError("Cannot trigger replication for Chunk {Id}: Parent metadata missing.",
                     chunkInfo.ChunkId);
@@ -468,7 +450,7 @@ namespace VKR_Node.Services.FileService
                     ChunkIndex = chunkInfo.ChunkIndex,
                     Data = chunkProto.Data,
                     OriginalNodeId = _localNodeId,
-                    ParentFileMetadata = FileMetadataMapper.MapCoreToProto(partialFileMetadataCore)
+                    ParentFileMetadata = FileMetadataMapper.MapCoreToProto(partialFileModel)
                 };
 
                 // Fire-and-forget task
@@ -503,53 +485,6 @@ namespace VKR_Node.Services.FileService
                     }
                 });
             }
-        }
-
-        private async Task<UploadFileReply> FinalizeUploadAsync(
-            bool metadataReceived,
-            FileMetadata? fileMetadataProto,
-            string? fileId,
-            long expectedFileSize,
-            long totalBytesReceived,
-            int actualChunkSize,
-            int chunkCount,
-            CancellationToken cancellationToken)
-        {
-            _logger.LogDebug("Finished reading upload request stream.");
-
-            if (!metadataReceived || fileMetadataProto == null || string.IsNullOrEmpty(fileId))
-            {
-                throw new RpcException(new Status(
-                    StatusCode.InvalidArgument,
-                    "Upload stream completed without receiving metadata."));
-            }
-
-            if (expectedFileSize > 0 && totalBytesReceived != expectedFileSize)
-            {
-                _logger.LogWarning(
-                    "Uploaded file size mismatch for File {Id}. Expected: {ExpSize}, Received: {RecSize}.",
-                    fileId, expectedFileSize, totalBytesReceived);
-            }
-
-            var finalMetadataCore = new FileMetadataCore
-            {
-                FileId = fileId,
-                FileName = fileMetadataProto.FileName,
-                FileSize = totalBytesReceived,
-                CreationTime = fileMetadataProto.CreationTime?.ToDateTime() ?? DateTime.UtcNow,
-                ModificationTime = DateTime.UtcNow,
-                ContentType = fileMetadataProto.ContentType,
-                ChunkSize = actualChunkSize,
-                TotalChunks = chunkCount,
-                State = FileStateCore.Available
-            };
-
-            await _metadataManager.SaveFileMetadataAsync(finalMetadataCore, cancellationToken);
-
-            _logger.LogInformation("File {Name} (ID: {Id}) uploaded successfully. Final Size: {Size}, Chunks: {Count}",
-                finalMetadataCore.FileName, fileId, totalBytesReceived, chunkCount);
-
-            return new UploadFileReply { Success = true, Message = "File uploaded successfully.", FileId = fileId };
         }
 
         private async Task HandleUploadErrorAsync(string? fileId, CancellationToken cancellationToken)
@@ -594,11 +529,11 @@ namespace VKR_Node.Services.FileService
             }
         }
 
-        private async Task<List<ChunkStorageNode>> FindOnlinePeersAsync(
-            List<ChunkStorageNode> peers,
+        private async Task<List<KnownNodeOptions>> FindOnlinePeersAsync(
+            List<KnownNodeOptions> peers,
             CancellationToken cancellationToken)
         {
-            var onlinePeers = new ConcurrentBag<ChunkStorageNode>();
+            var onlinePeers = new ConcurrentBag<KnownNodeOptions>();
             var pingTasks = new List<Task>();
             var semaphore = new SemaphoreSlim(10);
 
@@ -666,11 +601,11 @@ namespace VKR_Node.Services.FileService
 
             try
             {
-                var fileMetadataCore = await GetAndValidateFileMetadataAsync(request.FileId, context.CancellationToken);
+                var FileModel = await GetAndValidateFileMetadataAsync(request.FileId, context.CancellationToken);
 
-                await SendFileMetadataAsync(fileMetadataCore, responseStream, context.CancellationToken);
+                await SendFileMetadataAsync(FileModel, responseStream, context.CancellationToken);
 
-                await SendFileChunksAsync(fileMetadataCore, responseStream, context.CancellationToken);
+                await SendFileChunksAsync(FileModel, responseStream, context.CancellationToken);
 
                 _logger.LogInformation("Finished streaming all chunks for File ID: {Id}", request.FileId);
             }
@@ -694,81 +629,81 @@ namespace VKR_Node.Services.FileService
             }
         }
 
-        private async Task<FileMetadataCore> GetAndValidateFileMetadataAsync(
+        private async Task<FileModel> GetAndValidateFileMetadataAsync(
             string fileId,
             CancellationToken cancellationToken)
         {
-            var fileMetadataCore = await _metadataManager.GetFileMetadataAsync(fileId, cancellationToken);
+            var FileModel = await _metadataManager.GetFileMetadataAsync(fileId, cancellationToken);
 
-            if (fileMetadataCore == null)
+            if (FileModel == null)
             {
                 throw new RpcException(new Status(
                     StatusCode.NotFound,
                     $"File metadata not found for ID '{fileId}'."));
             }
 
-            if (fileMetadataCore.State is FileStateCore.Deleting or FileStateCore.Deleted)
+            if (FileModel.State is FileStateCore.Deleting or FileStateCore.Deleted)
             {
                 throw new RpcException(new Status(
                     StatusCode.NotFound,
-                    $"File '{fileMetadataCore.FileName}' (ID: {fileId}) is deleted or pending deletion."));
+                    $"File '{FileModel.FileName}' (ID: {fileId}) is deleted or pending deletion."));
             }
 
-            if (fileMetadataCore.State != FileStateCore.Available)
+            if (FileModel.State != FileStateCore.Available)
             {
                 _logger.LogWarning("File {Id} requested for download is not Available (State: {State}). Proceeding...",
-                    fileId, fileMetadataCore.State);
+                    fileId, FileModel.State);
             }
 
             _logger.LogInformation("Found metadata for file: {Name}, Size: {Size}, Chunks: {Chunks}, State: {State}",
-                fileMetadataCore.FileName, fileMetadataCore.FileSize, fileMetadataCore.TotalChunks,
-                fileMetadataCore.State);
+                FileModel.FileName, FileModel.FileSize, FileModel.TotalChunks,
+                FileModel.State);
 
-            return fileMetadataCore;
+            return FileModel;
         }
 
         private async Task SendFileMetadataAsync(
-            FileMetadataCore fileMetadataCore,
+            FileModel FileModel,
             IServerStreamWriter<DownloadFileReply> responseStream,
             CancellationToken cancellationToken)
         {
             await responseStream.WriteAsync(new DownloadFileReply
             {
-                Metadata = FileMetadataMapper.MapCoreToProto(fileMetadataCore)
+                Metadata = FileMetadataMapper.MapCoreToProto(FileModel)
             });
 
-            _logger.LogDebug("Sent metadata reply for File ID: {FileId}", fileMetadataCore.FileId);
+            _logger.LogDebug("Sent metadata reply for File ID: {FileId}", FileModel.FileId);
         }
 
         private async Task SendFileChunksAsync(
-            FileMetadataCore fileMetadataCore,
+            FileModel FileModel,
             IServerStreamWriter<DownloadFileReply> responseStream,
             CancellationToken cancellationToken)
         {
             var chunkInfos = (await _metadataManager.GetChunksMetadataForFileAsync(
-                fileMetadataCore.FileId, cancellationToken))?.OrderBy(c => c.ChunkIndex).ToList();
+                FileModel.FileId, cancellationToken))?.OrderBy(c => c.ChunkIndex).ToList();
 
             if (chunkInfos == null || !chunkInfos.Any())
             {
-                if (fileMetadataCore.FileSize > 0)
+                if (FileModel.FileSize > 0)
                 {
                     _logger.LogError(
                         "Inconsistency: File metadata for {Id} (Size: {Size}) exists, but no chunk metadata.",
-                        fileMetadataCore.FileId, fileMetadataCore.FileSize);
+                        FileModel.FileId, FileModel.FileSize);
 
                     throw new RpcException(new Status(
                         StatusCode.Internal,
-                        $"Inconsistency: Chunk metadata missing for file ID '{fileMetadataCore.FileId}'."));
+                        $"Inconsistency: Chunk metadata missing for file ID '{FileModel.FileId}'."));
                 }
                 else
                 {
-                    _logger.LogInformation("File {Id} is empty (Size 0). Download complete.", fileMetadataCore.FileId);
+                    _logger.LogInformation("File {Id} is empty (Size 0). Download complete.", FileModel.FileId);
                     return;
                 }
             }
 
             _logger.LogDebug("Found {Count} chunk metadata entries for File ID: {Id}. Starting streaming...",
-                chunkInfos.Count, fileMetadataCore.FileId);
+                chunkInfos.Count, FileModel.FileId);
 
             foreach (var chunkInfo in chunkInfos)
             {
@@ -783,7 +718,7 @@ namespace VKR_Node.Services.FileService
                 {
                     _logger.LogError(
                         "Failed to retrieve/stream Chunk {Id} (Index {Index}) from any source for File {FileId}. Aborting.",
-                        chunkInfo.ChunkId, chunkInfo.ChunkIndex, fileMetadataCore.FileId);
+                        chunkInfo.ChunkId, chunkInfo.ChunkIndex, FileModel.FileId);
 
                     throw new RpcException(new Status(
                         StatusCode.Internal,
@@ -793,7 +728,7 @@ namespace VKR_Node.Services.FileService
         }
 
         private async Task<bool> TryStreamChunkFromAnySourceAsync(
-            ChunkInfoCore chunkInfo,
+            ChunkModel chunkInfo,
             IServerStreamWriter<DownloadFileReply> responseStream,
             CancellationToken cancellationToken)
         {
@@ -833,7 +768,7 @@ namespace VKR_Node.Services.FileService
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var targetNodeInfo = _nodeOptions.KnownNodes?.FirstOrDefault(n => n.NodeId == remoteNodeId);
+                var targetNodeInfo = _networkOptions.KnownNodes?.FirstOrDefault(n => n.NodeId == remoteNodeId);
 
                 if (targetNodeInfo == null || string.IsNullOrEmpty(targetNodeInfo.Address))
                 {
@@ -857,7 +792,7 @@ namespace VKR_Node.Services.FileService
         }
 
         private async Task<bool> TryStreamLocalChunkAsync(
-            ChunkInfoCore chunkInfo,
+            ChunkModel chunkInfo,
             IServerStreamWriter<DownloadFileReply> responseStream,
             CancellationToken cancellationToken)
         {
@@ -865,7 +800,7 @@ namespace VKR_Node.Services.FileService
 
             try
             {
-                // Use 'with' expression for ChunkInfoCore (since it's a record)
+                // Use 'with' expression for ChunkModel (since it's a record)
                 var localChunkInfo = chunkInfo with { StoredNodeId = _localNodeId };
 
                 chunkStream = await _dataManager.RetrieveChunkAsync(localChunkInfo, cancellationToken);
@@ -918,8 +853,8 @@ namespace VKR_Node.Services.FileService
         }
         
         private async Task<bool> TryStreamRemoteChunkAsync(
-            ChunkInfoCore chunkInfo,
-            ChunkStorageNode targetNodeInfo,
+            ChunkModel chunkInfo,
+            KnownNodeOptions targetNodeInfo,
             IServerStreamWriter<DownloadFileReply> responseStream,
             CancellationToken cancellationToken)
         {
@@ -1022,8 +957,8 @@ namespace VKR_Node.Services.FileService
             
             _logger.LogInformation("DeleteFile request for File ID: {FileId} from {Peer}.", fileId, context.Peer);
             
-            FileMetadataCore? fileMeta = null;
-            IEnumerable<ChunkInfoCore>? chunkInfos = null;
+            FileModel? fileMeta = null;
+            IEnumerable<ChunkModel>? chunkInfos = null;
             var chunkNodeMap = new Dictionary<string, List<string>>();
             
             try
@@ -1092,7 +1027,7 @@ namespace VKR_Node.Services.FileService
             }
         }
 
-        private async Task<FileMetadataCore?> GetFileMetadataForDeletionAsync(
+        private async Task<FileModel?> GetFileMetadataForDeletionAsync(
             string fileId, 
             CancellationToken cancellationToken)
         {
@@ -1126,7 +1061,7 @@ namespace VKR_Node.Services.FileService
 
         private async Task<Dictionary<string, List<string>>> BuildChunkLocationMapAsync(
             string fileId,
-            IEnumerable<ChunkInfoCore> chunkInfos,
+            IEnumerable<ChunkModel> chunkInfos,
             CancellationToken cancellationToken)
         {
             _logger.LogDebug("Fetching chunk locations for File ID {Id}...", fileId);
@@ -1196,7 +1131,7 @@ namespace VKR_Node.Services.FileService
             
             foreach (var nodeId in allNodeIds)
             {
-                var nodeInfo = _nodeOptions.KnownNodes?.FirstOrDefault(n => n.NodeId == nodeId);
+                var nodeInfo = _networkOptions.KnownNodes?.FirstOrDefault(n => n.NodeId == nodeId);
                 
                 if (nodeInfo == null || string.IsNullOrEmpty(nodeInfo.Address))
                 {
@@ -1249,7 +1184,7 @@ namespace VKR_Node.Services.FileService
 
         private async Task DeleteLocalChunksAsync(
             string fileId,
-            IEnumerable<ChunkInfoCore> chunkInfos,
+            IEnumerable<ChunkModel> chunkInfos,
             Dictionary<string, List<string>> chunkNodeMap,
             CancellationToken cancellationToken)
         {

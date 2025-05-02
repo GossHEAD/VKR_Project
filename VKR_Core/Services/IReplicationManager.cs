@@ -14,7 +14,7 @@ public interface IReplicationManager
     /// <param name="chunkInfo">Метаданные чанка, который нужно реплицировать.</param>
     /// <param name="sourceDataStream">Поток с данными чанка для отправки репликам.</param>
     /// <param name="replicationFactor">Требуемое количество реплик (включая первичную копию).</param>
-    Task ReplicateChunkAsync(ChunkInfoCore chunkInfo, Func<Task<Stream>> sourceDataStreamFactory, int replicationFactor, CancellationToken cancellationToken = default);
+    Task ReplicateChunkAsync(ChunkModel chunkInfo, Func<Task<Stream>> sourceDataStreamFactory, int replicationFactor, CancellationToken cancellationToken = default);
     // Используем Func<Task<Stream>> чтобы не читать поток зря, если репликация не нужна или невозможна
 
     /// <summary>
@@ -37,7 +37,7 @@ public interface IReplicationManager
     /// </summary>
     /// <param name="chunkInfo">Метаданные чанка.</param>
     /// <param name="dataStream">Поток с данными чанка.</param>
-    Task HandleIncomingReplicaAsync(ChunkInfoCore chunkInfo, Stream dataStream, CancellationToken cancellationToken = default);
+    Task HandleIncomingReplicaAsync(ChunkModel chunkInfo, Stream dataStream, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Обрабатывает уведомление об удалении чанка (или файла), чтобы удалить локальную реплику.

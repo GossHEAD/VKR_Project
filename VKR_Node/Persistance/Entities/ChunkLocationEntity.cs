@@ -43,6 +43,6 @@ namespace VKR_Node.Persistance.Entities
         /// Navigation property back to the associated ChunkMetadataEntity.
         /// Configured via Fluent API in NodeDbContext.
         /// </summary>
-        public virtual ChunkMetadataEntity ChunkMetadataEntity { get; set; } = null!; // Required relationship
+        public virtual ChunkEntity ChunkEntity { get; set; } = null!; // Required relationship
     }
 }

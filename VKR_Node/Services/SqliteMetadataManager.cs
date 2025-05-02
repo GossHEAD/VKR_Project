@@ -9,7 +9,6 @@ using VKR_Core.Services;
 using VKR_Node.Configuration;
 using VKR_Node.Persistance;
 using VKR_Node.Persistance.Entities;
-using VKR.Node.Persistance.Entities;
 
 namespace VKR_Node.Services
 {
@@ -23,9 +22,7 @@ namespace VKR_Node.Services
         private readonly string _localNodeId;
         private readonly DatabaseOptions _databaseOptions;
         
-        // Simple cache to reduce database reads for frequently accessed data
-        private readonly ConcurrentDictionary<string, (object Value, DateTime Expiry)> _cacheItems = 
-            new ConcurrentDictionary<string, (object, DateTime)>();
+        private readonly ConcurrentDictionary<string, (object Value, DateTime Expiry)> _cacheItems = new();
         private readonly TimeSpan _defaultCacheExpiry = TimeSpan.FromMinutes(1);
         private int _lastCacheCleanup = Environment.TickCount;
 
@@ -35,7 +32,7 @@ namespace VKR_Node.Services
         public SqliteMetadataManager(
             IDbContextFactory<NodeDbContext> contextFactory,
             ILogger<SqliteMetadataManager> logger,
-            IOptions<NodeOptions> nodeOptions,
+            IOptions<NodeIdentityOptions> nodeOptions,
             IOptions<DatabaseOptions> databaseOptions)
         {
             _contextFactory = contextFactory;
@@ -114,11 +111,11 @@ namespace VKR_Node.Services
         }
 
         /// <summary>
-        /// Maps a FileMetadataEntity to a FileMetadataCore object.
+        /// Maps a FileEntity to a FileModel object.
         /// </summary>
-        private FileMetadataCore MapFileEntityToCore(FileMetadataEntity entity)
+        private FileModel MapFileEntityToCore(FileEntity entity)
         {
-            return new FileMetadataCore
+            return new FileModel
             {
                 FileId = entity.FileId,
                 FileName = entity.FileName,
@@ -126,18 +123,18 @@ namespace VKR_Node.Services
                 CreationTime = entity.CreationTime,
                 ModificationTime = entity.ModificationTime,
                 ContentType = entity.ContentType,
-                ChunkSize = entity.ChunkSize,
+                ChunkSize = (int)entity.ChunkSize,
                 TotalChunks = entity.TotalChunks,
                 State = (FileStateCore)entity.State
             };
         }
 
         /// <summary>
-        /// Maps a ChunkMetadataEntity to a ChunkInfoCore object.
+        /// Maps a ChunkEntity to a ChunkModel object.
         /// </summary>
-        private ChunkInfoCore MapChunkEntityToCore(ChunkMetadataEntity entity, string storedNodeId = "")
+        private ChunkModel MapChunkEntityToCore(ChunkEntity entity, string storedNodeId = "")
         {
-            return new ChunkInfoCore
+            return new ChunkModel
             {
                 FileId = entity.FileId,
                 ChunkId = entity.ChunkId,
@@ -149,13 +146,13 @@ namespace VKR_Node.Services
         }
 
         /// <summary>
-        /// Maps a NodeStateEntity to a NodeStateCoreInfo object.
+        /// Maps a NodeEntity to a NodeModel object.
         /// </summary>
-        private NodeStateCoreInfo MapNodeStateEntityToCore(NodeStateEntity entity)
+        private NodeModel MapNodeEntityToCore(NodeEntity entity)
         {
-            return new NodeStateCoreInfo
+            return new NodeModel
             {
-                NodeId = entity.NodeId,
+                Id = entity.NodeId,
                 Address = entity.Address,
                 State = (NodeStateCore)entity.State,
                 LastSeen = entity.LastSeen,
@@ -167,9 +164,9 @@ namespace VKR_Node.Services
         }
 
         /// <summary>
-        /// Updates fields of a FileMetadataEntity from a FileMetadataCore object.
+        /// Updates fields of a FileEntity from a FileModel object.
         /// </summary>
-        private void UpdateFileMetadataFields(FileMetadataEntity entity, FileMetadataCore metadata)
+        private void UpdateFileMetadataFields(FileEntity entity, FileModel metadata)
         {
             entity.FileName = metadata.FileName;
             entity.FileSize = metadata.FileSize;
@@ -267,7 +264,7 @@ namespace VKR_Node.Services
         /// <summary>
         /// Saves or updates file metadata in the database.
         /// </summary>
-        public async Task SaveFileMetadataAsync(FileMetadataCore metadata, CancellationToken cancellationToken = default)
+        public async Task SaveFileMetadataAsync(FileModel metadata, CancellationToken cancellationToken = default)
         {
             if (metadata == null) throw new ArgumentNullException(nameof(metadata));
             if (string.IsNullOrWhiteSpace(metadata.FileId)) throw new ArgumentException("FileId cannot be empty", nameof(metadata));
@@ -288,7 +285,7 @@ namespace VKR_Node.Services
                     else
                     {
                         _logger.LogDebug("Creating new metadata for File ID: {FileId}", metadata.FileId);
-                        var newEntity = new FileMetadataEntity
+                        var newEntity = new FileEntity
                         {
                             FileId = metadata.FileId,
                             FileName = metadata.FileName,
@@ -359,7 +356,7 @@ namespace VKR_Node.Services
         /// <summary>
         /// Retrieves file metadata by ID, with caching.
         /// </summary>
-        public async Task<FileMetadataCore?> GetFileMetadataAsync(string fileId, CancellationToken cancellationToken = default)
+        public async Task<FileModel?> GetFileMetadataAsync(string fileId, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(fileId))
             {
@@ -369,7 +366,7 @@ namespace VKR_Node.Services
             
             // Check cache first
             string cacheKey = $"file:{fileId}";
-            var cached = GetFromCache<FileMetadataCore>(cacheKey);
+            var cached = GetFromCache<FileModel>(cacheKey);
             if (cached != null)
             {
                 _logger.LogTrace("Retrieved file metadata from cache for ID: {FileId}", fileId);
@@ -411,11 +408,11 @@ namespace VKR_Node.Services
         /// <summary>
         /// Lists all files in the database with optional filtering.
         /// </summary>
-        public async Task<IEnumerable<FileMetadataCore>> ListFilesAsync(CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<FileModel>> ListFilesAsync(CancellationToken cancellationToken = default)
         {
             // Check cache first
             string cacheKey = "files:list";
-            var cached = GetFromCache<List<FileMetadataCore>>(cacheKey);
+            var cached = GetFromCache<List<FileModel>>(cacheKey);
             if (cached != null)
             {
                 _logger.LogTrace("Retrieved file list from cache ({Count} files)", cached.Count);
@@ -441,7 +438,7 @@ namespace VKR_Node.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error listing files metadata");
-                return Enumerable.Empty<FileMetadataCore>();
+                return Enumerable.Empty<FileModel>();
             }
         }
 
@@ -545,7 +542,7 @@ namespace VKR_Node.Services
         /// Saves or updates chunk metadata and storage locations.
         /// </summary>
         public async Task SaveChunkMetadataAsync(
-            ChunkInfoCore chunkInfo, 
+            ChunkModel chunkInfo, 
             IEnumerable<string> initialNodeIds, 
             CancellationToken cancellationToken = default)
         {
@@ -558,15 +555,15 @@ namespace VKR_Node.Services
                 await ExecuteInTransactionAsync<bool>("SaveChunkMetadata", async (context, ct) =>
                 {
                     // Check if parent file exists, create placeholder if not
-                    var fileMetadataEntity = await context.FilesMetadata
+                    var FileEntity = await context.FilesMetadata
                         .FindAsync(new object[] { chunkInfo.FileId }, ct);
                     
-                    if (fileMetadataEntity == null)
+                    if (FileEntity == null)
                     {
                         _logger.LogWarning("Parent FileMetadata not found for File ID {FileId} while saving chunk {ChunkId}. Creating placeholder.", 
                             chunkInfo.FileId, chunkInfo.ChunkId);
                         
-                        fileMetadataEntity = new FileMetadataEntity 
+                        FileEntity = new FileEntity 
                         {
                             FileId = chunkInfo.FileId, 
                             FileName = $"_placeholder_{chunkInfo.FileId}",
@@ -577,7 +574,7 @@ namespace VKR_Node.Services
                             TotalChunks = 0
                         };
                         
-                        await context.FilesMetadata.AddAsync(fileMetadataEntity, ct);
+                        await context.FilesMetadata.AddAsync(FileEntity, ct);
                         
                         try
                         {
@@ -587,10 +584,10 @@ namespace VKR_Node.Services
                         {
                             _logger.LogWarning("Race condition during placeholder file insert. Reloading.");
                             // Reload the entity that was inserted by another process
-                            fileMetadataEntity = await context.FilesMetadata
+                            FileEntity = await context.FilesMetadata
                                 .FirstOrDefaultAsync(f => f.FileId == chunkInfo.FileId, ct);
                                 
-                            if (fileMetadataEntity == null)
+                            if (FileEntity == null)
                             {
                                 _logger.LogError("Failed to create or find parent file metadata for chunk {ChunkId}", chunkInfo.ChunkId);
                                 throw;
@@ -598,17 +595,17 @@ namespace VKR_Node.Services
                         }
                     }
 
-                    // Find or create ChunkMetadataEntity
-                    var chunkMetadataEntity = await context.ChunksMetadata
+                    // Find or create ChunkEntity
+                    var ChunkEntity = await context.ChunksMetadata
                         .Include(c => c.Locations)
                         .FirstOrDefaultAsync(c => c.FileId == chunkInfo.FileId && c.ChunkId == chunkInfo.ChunkId, ct);
 
-                    if (chunkMetadataEntity == null)
+                    if (ChunkEntity == null)
                     {
-                        _logger.LogDebug("Creating new ChunkMetadataEntity for Chunk ID: {ChunkId}, File ID: {FileId}", 
+                        _logger.LogDebug("Creating new ChunkEntity for Chunk ID: {ChunkId}, File ID: {FileId}", 
                             chunkInfo.ChunkId, chunkInfo.FileId);
                             
-                        chunkMetadataEntity = new ChunkMetadataEntity
+                        ChunkEntity = new ChunkEntity
                         {
                             ChunkId = chunkInfo.ChunkId, 
                             FileId = chunkInfo.FileId,
@@ -617,27 +614,27 @@ namespace VKR_Node.Services
                             ChunkHash = chunkInfo.ChunkHash
                         };
                         
-                        await context.ChunksMetadata.AddAsync(chunkMetadataEntity, ct);
+                        await context.ChunksMetadata.AddAsync(ChunkEntity, ct);
                         await context.SaveChangesAsync(ct);
                     }
                     else
                     {
                         // Update existing if needed
                         bool updated = false;
-                        if (chunkMetadataEntity.Size != chunkInfo.Size)
+                        if (ChunkEntity.Size != chunkInfo.Size)
                         {
-                            chunkMetadataEntity.Size = chunkInfo.Size;
+                            ChunkEntity.Size = chunkInfo.Size;
                             updated = true;
                         }
-                        if (chunkMetadataEntity.ChunkHash != chunkInfo.ChunkHash)
+                        if (ChunkEntity.ChunkHash != chunkInfo.ChunkHash)
                         {
-                            chunkMetadataEntity.ChunkHash = chunkInfo.ChunkHash;
+                            ChunkEntity.ChunkHash = chunkInfo.ChunkHash;
                             updated = true;
                         }
                         
                         if (updated)
                         {
-                            context.ChunksMetadata.Update(chunkMetadataEntity);
+                            context.ChunksMetadata.Update(ChunkEntity);
                             await context.SaveChangesAsync(ct);
                         }
                     }
@@ -645,13 +642,13 @@ namespace VKR_Node.Services
                     // Add ChunkLocationEntity for initial nodes
                     foreach (var nodeId in initialNodeIds ?? Enumerable.Empty<string>())
                     {
-                        bool locationExists = chunkMetadataEntity.Locations.Any(loc => loc.StoredNodeId == nodeId);
+                        bool locationExists = ChunkEntity.Locations.Any(loc => loc.StoredNodeId == nodeId);
                         if (!locationExists)
                         {
                             _logger.LogDebug("Adding storage location for Chunk ID: {ChunkId} on Node ID: {NodeId}", 
                                 chunkInfo.ChunkId, nodeId);
                                 
-                            chunkMetadataEntity.Locations.Add(new ChunkLocationEntity 
+                            ChunkEntity.Locations.Add(new ChunkLocationEntity 
                             {
                                 FileId = chunkInfo.FileId, 
                                 ChunkId = chunkInfo.ChunkId, 
@@ -686,14 +683,14 @@ namespace VKR_Node.Services
         /// <summary>
         /// Retrieves metadata for a specific chunk.
         /// </summary>
-        public async Task<ChunkInfoCore?> GetChunkMetadataAsync(
+        public async Task<ChunkModel?> GetChunkMetadataAsync(
             string fileId, string chunkId, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(fileId)) throw new ArgumentException("FileId cannot be empty", nameof(fileId));
             if (string.IsNullOrWhiteSpace(chunkId)) throw new ArgumentException("ChunkId cannot be empty", nameof(chunkId));
             
             string cacheKey = $"chunk:{fileId}:{chunkId}";
-            var cached = GetFromCache<ChunkInfoCore>(cacheKey);
+            var cached = GetFromCache<ChunkModel>(cacheKey);
             if (cached != null)
             {
                 _logger.LogTrace("Retrieved chunk metadata from cache for ID: {ChunkId}", chunkId);
@@ -731,13 +728,13 @@ namespace VKR_Node.Services
         /// <summary>
         /// Retrieves all chunks for a specific file.
         /// </summary>
-        public async Task<IEnumerable<ChunkInfoCore>> GetChunksMetadataForFileAsync(
+        public async Task<IEnumerable<ChunkModel>> GetChunksMetadataForFileAsync(
             string fileId, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(fileId)) throw new ArgumentException("FileId cannot be empty", nameof(fileId));
             
             string cacheKey = $"chunks:file:{fileId}:list";
-            var cached = GetFromCache<List<ChunkInfoCore>>(cacheKey);
+            var cached = GetFromCache<List<ChunkModel>>(cacheKey);
             if (cached != null)
             {
                 _logger.LogTrace("Retrieved file chunks from cache for File ID: {FileId} ({Count} chunks)", 
@@ -765,18 +762,18 @@ namespace VKR_Node.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving chunks metadata for File ID: {FileId}", fileId);
-                return Enumerable.Empty<ChunkInfoCore>();
+                return Enumerable.Empty<ChunkModel>();
             }
         }
 
         /// <summary>
         /// Retrieves all chunks stored on the local node.
         /// </summary>
-        public async Task<IEnumerable<ChunkInfoCore>> GetChunksStoredLocallyAsync(
+        public async Task<IEnumerable<ChunkModel>> GetChunksStoredLocallyAsync(
             CancellationToken cancellationToken = default)
         {
             string cacheKey = "chunks:local:list";
-            var cached = GetFromCache<List<ChunkInfoCore>>(cacheKey);
+            var cached = GetFromCache<List<ChunkModel>>(cacheKey);
             if (cached != null)
             {
                 _logger.LogTrace("Retrieved local chunks from cache ({Count} chunks)", cached.Count);
@@ -813,7 +810,7 @@ namespace VKR_Node.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving chunks stored locally on node {NodeId}", _localNodeId);
-                return Enumerable.Empty<ChunkInfoCore>();
+                return Enumerable.Empty<ChunkModel>();
             }
         }
 
@@ -831,13 +828,13 @@ namespace VKR_Node.Services
                 await ExecuteInTransactionAsync<bool>("DeleteChunkMetadata", async (context, ct) =>
                 {
                     // Find the chunk with its locations
-                    var chunkEntity = await context.ChunksMetadata
+                    var ChunkEntity = await context.ChunksMetadata
                         .Include(c => c.Locations)
                         .FirstOrDefaultAsync(c => c.FileId == fileId && c.ChunkId == chunkId, ct);
 
-                    if (chunkEntity != null)
+                    if (ChunkEntity != null)
                     {
-                        context.ChunksMetadata.Remove(chunkEntity);
+                        context.ChunksMetadata.Remove(ChunkEntity);
                         await context.SaveChangesAsync(ct);
                         
                         // Invalidate cache
@@ -1131,10 +1128,10 @@ namespace VKR_Node.Services
         /// Saves or updates the state information for a node.
         /// </summary>
         public async Task SaveNodeStateAsync(
-            NodeStateCoreInfo nodeStateInfo, CancellationToken cancellationToken = default)
+            NodeModel nodeStateInfo, CancellationToken cancellationToken = default)
         {
             if (nodeStateInfo == null) throw new ArgumentNullException(nameof(nodeStateInfo));
-            if (string.IsNullOrWhiteSpace(nodeStateInfo.NodeId)) throw new ArgumentException("NodeId cannot be empty", nameof(nodeStateInfo));
+            if (string.IsNullOrWhiteSpace(nodeStateInfo.Id)) throw new ArgumentException("NodeId cannot be empty", nameof(nodeStateInfo));
             if (string.IsNullOrWhiteSpace(nodeStateInfo.Address)) throw new ArgumentException("Address cannot be empty", nameof(nodeStateInfo));
             
             try
@@ -1142,11 +1139,11 @@ namespace VKR_Node.Services
                 await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
                 
                 var existingEntity = await context.NodeStates
-                    .FirstOrDefaultAsync(n => n.NodeId == nodeStateInfo.NodeId, cancellationToken);
+                    .FirstOrDefaultAsync(n => n.NodeId == nodeStateInfo.Id, cancellationToken);
 
                 if (existingEntity != null)
                 {
-                    _logger.LogDebug("Updating existing NodeStateEntity for Node ID: {NodeId}", nodeStateInfo.NodeId);
+                    _logger.LogDebug("Updating existing NodeEntity for Node ID: {NodeId}", nodeStateInfo.Id);
                     
                     // Update fields
                     existingEntity.Address = nodeStateInfo.Address;
@@ -1161,12 +1158,12 @@ namespace VKR_Node.Services
                 }
                 else
                 {
-                    _logger.LogDebug("Creating new NodeStateEntity for Node ID: {NodeId}", nodeStateInfo.NodeId);
+                    _logger.LogDebug("Creating new NodeEntity for Node ID: {NodeId}", nodeStateInfo.Id);
                     
                     // Create new entity
-                    var newEntity = new NodeStateEntity
+                    var newEntity = new NodeEntity
                     {
-                        NodeId = nodeStateInfo.NodeId,
+                        NodeId = nodeStateInfo.Id,
                         Address = nodeStateInfo.Address,
                         State = (int)nodeStateInfo.State,
                         LastSeen = nodeStateInfo.LastSeen.ToUniversalTime(),
@@ -1182,16 +1179,16 @@ namespace VKR_Node.Services
                 await context.SaveChangesAsync(cancellationToken);
                 
                 // Invalidate cache
-                InvalidateCache($"nodestate:{nodeStateInfo.NodeId}");
+                InvalidateCache($"nodestate:{nodeStateInfo.Id}");
                 InvalidateCache("nodestates:all", isPrefix: true);
                 
-                _logger.LogTrace("Successfully saved node state for Node ID: {NodeId}", nodeStateInfo.NodeId);
+                _logger.LogTrace("Successfully saved node state for Node ID: {NodeId}", nodeStateInfo.Id);
                 
                 return;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error saving node state for Node ID: {NodeId}", nodeStateInfo.NodeId);
+                _logger.LogError(ex, "Error saving node state for Node ID: {NodeId}", nodeStateInfo.Id);
                 throw;
             }
         }
@@ -1199,7 +1196,7 @@ namespace VKR_Node.Services
         /// <summary>
         /// Gets the state information for specific nodes.
         /// </summary>
-        public async Task<IEnumerable<NodeStateCoreInfo>> GetNodeStatesAsync(
+        public async Task<IEnumerable<NodeModel>> GetNodeStatesAsync(
             IEnumerable<string> nodeIds, CancellationToken cancellationToken = default)
         {
             if (nodeIds == null) throw new ArgumentNullException(nameof(nodeIds));
@@ -1208,7 +1205,7 @@ namespace VKR_Node.Services
             if (!nodeIdsList.Any())
             {
                 _logger.LogDebug("No valid node IDs provided for state retrieval");
-                return Enumerable.Empty<NodeStateCoreInfo>();
+                return Enumerable.Empty<NodeModel>();
             }
             
             try
@@ -1220,7 +1217,7 @@ namespace VKR_Node.Services
                     .Where(n => nodeIdsList.Contains(n.NodeId))
                     .ToListAsync(cancellationToken);
 
-                var result = entities.Select(MapNodeStateEntityToCore).ToList();
+                var result = entities.Select(MapNodeEntityToCore).ToList();
                 
                 _logger.LogDebug("Retrieved {Count} node states of {Requested} requested", 
                     result.Count, nodeIdsList.Count);
@@ -1231,18 +1228,18 @@ namespace VKR_Node.Services
             {
                 _logger.LogError(ex, "Error retrieving node states for Node IDs: {NodeIds}", 
                     string.Join(", ", nodeIdsList));
-                return Enumerable.Empty<NodeStateCoreInfo>();
+                return Enumerable.Empty<NodeModel>();
             }
         }
 
         /// <summary>
         /// Gets the state information for all known nodes.
         /// </summary>
-        public async Task<IEnumerable<NodeStateCoreInfo>> GetAllNodeStatesAsync(
+        public async Task<IEnumerable<NodeModel>> GetAllNodeStatesAsync(
             CancellationToken cancellationToken = default)
         {
             string cacheKey = "nodestates:all:list";
-            var cached = GetFromCache<List<NodeStateCoreInfo>>(cacheKey);
+            var cached = GetFromCache<List<NodeModel>>(cacheKey);
             if (cached != null)
             {
                 _logger.LogTrace("Retrieved all node states from cache ({Count} nodes)", cached.Count);
@@ -1258,7 +1255,7 @@ namespace VKR_Node.Services
                     .OrderBy(n => n.NodeId)
                     .ToListAsync(cancellationToken);
 
-                var result = entities.Select(MapNodeStateEntityToCore).ToList();
+                var result = entities.Select(MapNodeEntityToCore).ToList();
                 
                 // Store in cache with short expiry (node states change frequently)
                 AddToCache(cacheKey, result, TimeSpan.FromSeconds(15));
@@ -1269,7 +1266,7 @@ namespace VKR_Node.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving all node states");
-                return Enumerable.Empty<NodeStateCoreInfo>();
+                return Enumerable.Empty<NodeModel>();
             }
         }
 

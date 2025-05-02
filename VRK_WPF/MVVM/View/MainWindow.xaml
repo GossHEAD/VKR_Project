@@ -289,7 +289,106 @@
                  </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Симуляция" IsEnabled="False"> <TextBlock Text="Функционал симуляции не реализован." Margin="20" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Gray"/>
+            <TabItem Header="Симуляция">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Simulation Controls -->
+                    <GroupBox Grid.Row="0" Header="Управление симуляцией" Padding="10" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="Выберите узлы для отключения:" Margin="0,0,0,5"/>
+                            <ListView Name="SimNodesListView" 
+                                      ItemsSource="{Binding SimulationNodes}" 
+                                      SelectionMode="Multiple" 
+                                      Height="150" 
+                                      Margin="0,0,0,10">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="ID узла" DisplayMemberBinding="{Binding NodeId}" Width="150"/>
+                                        <GridViewColumn Header="Адрес" DisplayMemberBinding="{Binding Address}" Width="200"/>
+                                        <GridViewColumn Header="Статус" Width="100">
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Status}" Style="{StaticResource StatusTextBlockStyle}"/>
+                                                </DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                            
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Отключить выбранные узлы" 
+                                        Command="{Binding DisableSelectedNodesCommand}" 
+                                        IsEnabled="{Binding CanSimulateNodeFailure}"/>
+                                <Button Content="Восстановить все узлы" 
+                                        Command="{Binding RestoreAllNodesCommand}" 
+                                        Margin="10,0,0,0"
+                                        IsEnabled="{Binding CanRestoreNodes}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+                    
+                    <!-- Simulation Results -->
+                    <GroupBox Grid.Row="1" Header="Результаты симуляции" Padding="10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <!-- File Status Panel -->
+                            <GroupBox Grid.Column="0" Header="Статус файлов" Margin="0,0,5,0" Padding="5">
+                                <ListView ItemsSource="{Binding SimulationFileStatuses}">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="Файл" DisplayMemberBinding="{Binding FileName}" Width="150"/>
+                                            <GridViewColumn Header="Доступность" DisplayMemberBinding="{Binding Availability}" Width="100"/>
+                                            <GridViewColumn Header="Репликации" DisplayMemberBinding="{Binding ReplicationStatus}" Width="100"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+                            </GroupBox>
+                            
+                            <!-- Chunk Distribution Panel -->
+                            <GroupBox Grid.Column="1" Header="Распределение чанков" Margin="5,0,0,0" Padding="5">
+                                <ListView ItemsSource="{Binding SimulationChunkDistribution}">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="Чанк" DisplayMemberBinding="{Binding ChunkId}" Width="120"/>
+                                            <GridViewColumn Header="Файл" DisplayMemberBinding="{Binding FileName}" Width="120"/>
+                                            <GridViewColumn Header="Узлы" DisplayMemberBinding="{Binding NodeLocations}" Width="150"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+                            </GroupBox>
+                        </Grid>
+                    </GroupBox>
+                    
+                    <!-- Activity Log -->
+                    <GroupBox Grid.Row="2" Header="Журнал активности" Padding="5" Margin="0,10,0,0">
+                        <TextBox Text="{Binding SimulationLog}" 
+                                 IsReadOnly="True" 
+                                 VerticalScrollBarVisibility="Auto" 
+                                 Height="100"/>
+                    </GroupBox>
+                    
+                    <!-- Simulation Status -->
+                    <StackPanel Grid.Row="3" Margin="0,10,0,0">
+                        <TextBlock Text="{Binding SimulationStatus}" 
+                                   FontWeight="SemiBold" 
+                                   Foreground="{Binding SimulationStatusColor}"/>
+                        <ProgressBar Value="{Binding SimulationProgress}" 
+                                     Visibility="{Binding IsSimulationInProgress, Converter={StaticResource BoolToVis}}" 
+                                     Height="10" 
+                                     Margin="0,5,0,0"/>
+                    </StackPanel>
+                </Grid>
             </TabItem>
 
             <TabItem Header="Журнал событий" IsEnabled="False">

@@ -6,7 +6,7 @@ namespace VKR_Node.Services.Utilities;
 
 public static class FileMetadataMapper
 {
-    public static FileMetadata MapCoreToProto(FileMetadataCore core)
+    public static FileMetadata MapCoreToProto(FileModel core)
     {
         if (core == null) return null;
         return new FileMetadata {

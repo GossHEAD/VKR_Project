@@ -4,22 +4,15 @@ using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
-using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
 using VKR.Protos;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
-using VRK_WPF.MVVM.View;
-using VRK_WPF.MVVM.ViewModel;
 
 
 namespace VRK_WPF.MVVM.ViewModel
@@ -32,6 +25,30 @@ namespace VRK_WPF.MVVM.ViewModel
         private CancellationTokenSource? _uploadCts;
         private CancellationTokenSource? _downloadCts;
         private readonly ILoggerFactory? _loggerFactory;
+        
+        [ObservableProperty]
+        private bool _isSimulationTabEnabled = true;  // Now enabled
+
+        [ObservableProperty]
+        private string _simulationDuration = "30 секунд";
+
+        [ObservableProperty]
+        private bool _isGracefulFailure = true;
+
+        [ObservableProperty]
+        private string _simulationAvailableNodes = "N/A";
+
+        [ObservableProperty]
+        private string _simulationUnavailableNodes = "N/A";
+
+        [ObservableProperty]
+        private string _simulationFileAvailability = "N/A";
+
+        [ObservableProperty]
+        private string _simulationFailoverTime = "N/A";
+
+        [ObservableProperty]
+        private string _simulationRecoveryStatus = "Не запущено";
 
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
@@ -43,7 +60,36 @@ namespace VRK_WPF.MVVM.ViewModel
         [ObservableProperty]
         private Brush _connectionStatusColor = Brushes.OrangeRed;
         
+        [ObservableProperty]
+        private ObservableCollection<NodeViewModel> _simulationNodes = new();
 
+        [ObservableProperty]
+        private ObservableCollection<SimulationFileStatusViewModel> _simulationFileStatuses = new();
+
+        [ObservableProperty]
+        private ObservableCollection<SimulationChunkDistributionViewModel> _simulationChunkDistribution = new();
+
+        [ObservableProperty]
+        private string _simulationLog = "";
+
+        [ObservableProperty]
+        private string _simulationStatus = "Готово к симуляции";
+
+        [ObservableProperty]
+        private Brush _simulationStatusColor = Brushes.Black;
+
+        [ObservableProperty]
+        private double _simulationProgress = 0;
+
+        [ObservableProperty]
+        private bool _isSimulationInProgress = false;
+
+        [ObservableProperty]
+        private bool _canSimulateNodeFailure = false;
+
+        [ObservableProperty]
+        private bool _canRestoreNodes = false;
+        
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(UploadFileCommand))] 
         private string? _selectedFilePath;
@@ -105,10 +151,11 @@ namespace VRK_WPF.MVVM.ViewModel
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(RefreshNodeStatusCommand))]
         private bool _isNodeStatusRefreshing;
-        public ObservableCollection<FileViewModel> StoredFiles { get; } = new ObservableCollection<FileViewModel>();
-        public ICollectionView FilesView { get; } 
-        public ObservableCollection<NodeViewModel> NetworkNodes { get; } = new ObservableCollection<NodeViewModel>();
-        public ICollectionView NodesView { get; } 
+
+        ObservableCollection<FileViewModel> StoredFiles { get; } = new();
+        ICollectionView FilesView { get; } 
+        ObservableCollection<NodeViewModel> NetworkNodes { get; } = new();
+        ICollectionView NodesView { get; } 
         
         #region Node Settings Properties
         
@@ -184,6 +231,8 @@ namespace VRK_WPF.MVVM.ViewModel
             }
         }
 
+        
+        
         private void UpdateConnectionStatus(string status, Brush color)
         {
             ConnectionStatus = status;
@@ -252,6 +301,7 @@ namespace VRK_WPF.MVVM.ViewModel
             {
                 await RefreshFilesListAsync();
                 await RefreshNodeStatusAsync();
+                InitializeSimulationTab();
             }
             else
             {
@@ -259,8 +309,227 @@ namespace VRK_WPF.MVVM.ViewModel
             }
         }
         
+        private void InitializeSimulationTab()
+        {
+            if (_storageClient != null)
+            {
+                UpdateSimulationNodesList();
+                CanSimulateNodeFailure = true;
+                CanRestoreNodes = false;
+                SimulationStatus = "Готово к симуляции";
+                SimulationStatusColor = Brushes.Black;
+                SimulationLog = "Инициализация симуляции завершена. Выберите узлы для отключения.\n";
+            }
+        }
         
-        
+        [RelayCommand(CanExecute = nameof(CanSimulateNodeFailure))]
+        private async Task DisableSelectedNodesAsync()
+        {
+            if (_storageClient == null) return;
+            
+            var selectedNodes = SimNodesListView.SelectedItems.Cast<NodeViewModel>().ToList();
+            if (!selectedNodes.Any())
+            {
+                MessageBox.Show("Не выбрано ни одного узла для отключения!", "Симуляция", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            
+            IsSimulationInProgress = true;
+            CanSimulateNodeFailure = false;
+            SimulationStatus = "Симуляция отключения узлов...";
+            SimulationStatusColor = Brushes.Orange;
+            
+            try
+            {
+                AppendToSimulationLog($"Начало симуляции отключения {selectedNodes.Count} узлов: {string.Join(", ", selectedNodes.Select(n => n.NodeId))}");
+                
+                // Call the server method to disable nodes
+                foreach (var node in selectedNodes)
+                {
+                    await SimulateNodeFailureAsync(node.NodeId);
+                    AppendToSimulationLog($"Узел {node.Id} отключен.");
+                    SimulationProgress += 100.0 / selectedNodes.Count;
+                }
+                
+                // Refresh network status
+                await RefreshNodeStatusAsync();
+                
+                // Update simulation nodes from the refreshed network nodes
+                UpdateSimulationNodesList();
+                
+                // Get and display the impact on file and chunk availability
+                await UpdateFileAndChunkStatusAsync();
+                
+                SimulationStatus = "Симуляция завершена. Узлы отключены.";
+                SimulationStatusColor = Brushes.Green;
+                CanRestoreNodes = true;
+            }
+            catch (Exception ex)
+            {
+                SimulationStatus = $"Ошибка симуляции: {ex.Message}";
+                SimulationStatusColor = Brushes.Red;
+                AppendToSimulationLog($"Ошибка: {ex.Message}");
+            }
+            finally
+            {
+                IsSimulationInProgress = false;
+                SimulationProgress = 0;
+                // Re-enable simulation after a brief delay
+                await Task.Delay(2000);
+                CanSimulateNodeFailure = _storageClient != null;
+            }
+        }
+
+        [RelayCommand(CanExecute = nameof(CanRestoreNodes))]
+        private async Task RestoreAllNodesAsyncClient()
+        {
+            if (_storageClient == null) return;
+            
+            IsSimulationInProgress = true;
+            CanRestoreNodes = false;
+            SimulationStatus = "Восстановление всех узлов...";
+            SimulationStatusColor = Brushes.Orange;
+            
+            try
+            {
+                AppendToSimulationLog("Восстановление всех узлов...");
+                
+                // Call server method to restore all nodes
+                await RestoreAllNodesAsync();
+                
+                // Refresh network status
+                await RefreshNodeStatusAsync();
+                
+                // Update simulation nodes from the refreshed network nodes
+                UpdateSimulationNodesList();
+                
+                // Get and display the impact on file and chunk availability
+                await UpdateFileAndChunkStatusAsync();
+                
+                SimulationStatus = "Все узлы восстановлены.";
+                SimulationStatusColor = Brushes.Green;
+            }
+            catch (Exception ex)
+            {
+                SimulationStatus = $"Ошибка восстановления: {ex.Message}";
+                SimulationStatusColor = Brushes.Red;
+                AppendToSimulationLog($"Ошибка: {ex.Message}");
+            }
+            finally
+            {
+                IsSimulationInProgress = false;
+                SimulationProgress = 0;
+                CanSimulateNodeFailure = _storageClient != null;
+            }
+        }
+
+        // Helper methods
+        private void AppendToSimulationLog(string message)
+        {
+            string timestamp = DateTime.Now.ToString("HH:mm:ss");
+            SimulationLog += $"[{timestamp}] {message}\n";
+        }
+
+        private void UpdateSimulationNodesList()
+        {
+            SimulationNodes.Clear();
+            foreach (var node in NetworkNodes)
+            {
+                SimulationNodes.Add(new NodeViewModel
+                {
+                    NodeId = node.NodeId,
+                    Address = node.Address,
+                    Status = node.Status,
+                    StatusDetails = node.StatusDetails
+                });
+            }
+        }
+
+        private async Task SimulateNodeFailureAsync(string nodeId)
+        {
+            // Call the server API to simulate node failure
+            try
+            {
+                var request = new SimulateNodeFailureRequest { NodeId = nodeId };
+                var reply = await _storageClient.SimulateNodeFailureAsync(request);
+                
+                if (!reply.Success)
+                {
+                    AppendToSimulationLog($"Ошибка отключения узла {nodeId}: {reply.Message}");
+                }
+            }
+            catch (RpcException ex)
+            {
+                AppendToSimulationLog($"gRPC ошибка при отключении узла {nodeId}: {ex.Status.Detail}");
+                throw;
+            }
+        }
+
+        private async Task RestoreAllNodesAsyncServer()
+        {
+            // Call the server API to restore all nodes
+            try
+            {
+                var request = new RestoreAllNodesRequest();
+                var reply = await _storageClient.RestoreAllNodesAsync(request);
+                
+                if (!reply.Success)
+                {
+                    AppendToSimulationLog($"Ошибка восстановления узлов: {reply.Message}");
+                }
+            }
+            catch (RpcException ex)
+            {
+                AppendToSimulationLog($"gRPC ошибка при восстановлении узлов: {ex.Status.Detail}");
+                throw;
+            }
+        }
+
+        private async Task UpdateFileAndChunkStatusAsync()
+        {
+            SimulationFileStatuses.Clear();
+            SimulationChunkDistribution.Clear();
+            
+            try
+            {
+                // Get file statuses
+                var fileStatusRequest = new GetFileStatusesRequest();
+                var fileStatusReply = await _storageClient.GetFileStatusesAsync(fileStatusRequest);
+                
+                foreach (var fileStatus in fileStatusReply.FileStatuses)
+                {
+                    SimulationFileStatuses.Add(new SimulationFileStatusViewModel
+                    {
+                        FileName = fileStatus.FileName,
+                        Availability = fileStatus.IsAvailable ? "Доступен" : "Недоступен",
+                        ReplicationStatus = $"{fileStatus.CurrentReplicationFactor}/{fileStatus.DesiredReplicationFactor}",
+                        StatusColor = fileStatus.IsAvailable ? Brushes.Green : Brushes.Red
+                    });
+                }
+                
+                // Get chunk distribution
+                var chunkRequest = new GetChunkDistributionRequest();
+                var chunkReply = await _storageClient.GetChunkDistributionAsync(chunkRequest);
+                
+                foreach (var chunk in chunkReply.ChunkDistributions)
+                {
+                    SimulationChunkDistribution.Add(new SimulationChunkDistributionViewModel
+                    {
+                        ChunkId = chunk.ChunkId,
+                        FileName = chunk.FileName,
+                        NodeLocations = string.Join(", ", chunk.NodeIds),
+                        ReplicaCount = chunk.NodeIds.Count
+                    });
+                }
+                
+                AppendToSimulationLog($"Обновлена информация о {SimulationFileStatuses.Count} файлах и {SimulationChunkDistribution.Count} чанках.");
+            }
+            catch (Exception ex)
+            {
+                AppendToSimulationLog($"Ошибка обновления статусов: {ex.Message}");
+            }
+        }
+                
         [RelayCommand]
         private void SelectFile()
         {

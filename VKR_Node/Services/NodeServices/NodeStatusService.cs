@@ -13,20 +13,22 @@ namespace VKR_Node.Services.NodeServices;
 public class NodeStatusService : INodeStatusService
 {
     private readonly ILogger<NodeStatusService> _logger;
-    private readonly NodeOptions _nodeOptions;
+    private readonly NodeIdentityOptions _nodeIdentityOptions;
+    private readonly NetworkOptions _networkOptions;
     private readonly INodeClient _nodeClient;
     
     private readonly string _localNodeId;
 
     public NodeStatusService(
         ILogger<NodeStatusService> logger,
-        IOptions<NodeOptions> nodeOptions,
+        IOptions<NodeIdentityOptions> nodeIdentityOptions,
+        IOptions<NetworkOptions> networkOptions,
         INodeClient nodeClient)
     {
         _logger = logger;
-        _nodeOptions = nodeOptions.Value;
+        _nodeIdentityOptions = nodeIdentityOptions.Value;
         _nodeClient = nodeClient;
-        _localNodeId = _nodeOptions.NodeId ?? throw new InvalidOperationException("NodeId is not configured.");
+        _localNodeId = _nodeIdentityOptions.NodeId ?? throw new InvalidOperationException("NodeId is not configured.");
     }
 
     public async Task<GetNodeStatusesReply> GetNodeStatuses(GetNodeStatusesRequest request, ServerCallContext context)
@@ -40,7 +42,7 @@ public class NodeStatusService : INodeStatusService
             reply.Nodes.Add(new NodeStatusInfo
             {
                 NodeId = _localNodeId,
-                Address = _nodeOptions.Address ?? "Unknown",
+                Address = _networkOptions.ListenAddress ?? "Unknown",
                 Status = NodeState.Online,
                 Details = "Online (Self)"
             });
@@ -67,13 +69,13 @@ public class NodeStatusService : INodeStatusService
         GetNodeStatusesReply reply,
         CancellationToken cancellationToken)
     {
-        var knownNodes = _nodeOptions.KnownNodes ?? new List<ChunkStorageNode>();
+        var knownNodes = _networkOptions.KnownNodes;
         var pingTasks = new List<Task<NodeStatusInfo>>();
 
         foreach (var node in knownNodes)
         {
             if (node.NodeId == _localNodeId || NodeSelectionHelper.IsSelfNode(
-                node.NodeId, node.Address, _localNodeId, _nodeOptions.Address ?? "", _logger))
+                node.NodeId, node.Address, _localNodeId, _networkOptions.ListenAddress ?? "", _logger))
                 continue;
 
             pingTasks.Add(PingNodeAsync(node, cancellationToken));
@@ -84,7 +86,7 @@ public class NodeStatusService : INodeStatusService
     }
 
     private async Task<NodeStatusInfo> PingNodeAsync(
-        ChunkStorageNode node,
+        KnownNodeOptions node,
         CancellationToken cancellationToken)
     {
         NodeStatusInfo statusInfo;

@@ -35,7 +35,7 @@ public class ChunkStreamingHelper
     /// </summary>
     /// <returns>True if successful, false otherwise</returns>
     public async Task<bool> TryStreamLocalChunkAsync(
-        ChunkInfoCore chunkInfo,
+        ChunkModel chunkInfo,
         IServerStreamWriter<DownloadFileReply> responseStream,
         ServerCallContext context)
     {
@@ -105,7 +105,7 @@ public class ChunkStreamingHelper
     /// </summary>
     /// <returns>True if successful, false otherwise</returns>
     public async Task<bool> TryStreamRemoteChunkAsync(
-        ChunkInfoCore chunkInfo,
+        ChunkModel chunkInfo,
         ChunkStorageNode targetNodeInfo,
         IServerStreamWriter<DownloadFileReply> responseStream,
         ServerCallContext context)
