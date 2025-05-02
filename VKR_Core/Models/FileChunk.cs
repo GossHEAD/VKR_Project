@@ -1,6 +1,6 @@
 using System;
 
-namespace VKR_Core.Models
+namespace VKR_Core.Test
 {
     public class FileChunk
     {

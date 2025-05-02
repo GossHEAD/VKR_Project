@@ -7,18 +7,17 @@ using Microsoft.Extensions.DependencyInjection; // Required for IServiceCollecti
 using Microsoft.Extensions.Hosting; // Required for IHost, Host
 using Microsoft.Extensions.Logging; // Required for ILogger
 using Microsoft.Extensions.Options; // Required for IOptions access
-using System;
-using System.Collections.Generic; // Required for IEnumerable
-using System.IO; // Required for Path
-using System.Linq; // Required for Linq extensions like Any
 using System.Net; // Required for IPAddress
-using System.Text.Json; // Required for JsonSerializer
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using VKR_Core.Services;
 using VKR_Node.Configuration;
 using VKR_Node.Persistance;
-using VKR_Node.Services; // Required for Task
+using VKR_Node.Services;
+using VKR_Node.Services.FileService;
+using VKR_Node.Services.FileService.FileInterface;
+using VKR_Node.Services.NodeServices;
+using VKR_Node.Services.NodeServices.NodeInterfaces;
+using VKR_Node.Services.Utilities; // Required for Task
 
 namespace VKR.Node
 {
@@ -217,6 +216,11 @@ namespace VKR.Node
 
                     services.AddSingleton<IReplicationManager, BackgroundReplicationManager>();
                     services.AddHostedService<ReplicationHealthService>();
+
+                    services.AddSingleton<IFileStorageService, FileStorageService>();
+                    services.AddSingleton<INodeStatusService, NodeStatusService>();
+                    services.AddSingleton<INodeConfigService, NodeConfigService>();
+                    services.AddSingleton<ChunkStreamingHelper>();
                     // Application Services
                     services.AddSingleton<IDataManager, FileSystemDataManager>();
                     services.AddSingleton<IAsyncInitializable>(sp => sp.GetRequiredService<IDataManager>() as FileSystemDataManager ?? throw new InvalidOperationException("IDataManager is not FileSystemDataManager"));

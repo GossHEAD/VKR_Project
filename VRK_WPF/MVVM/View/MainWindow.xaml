@@ -243,6 +243,9 @@
                                           <RowDefinition Height="Auto"/>
                                           <RowDefinition Height="Auto"/>
                                           <RowDefinition Height="Auto"/>
+                                          <RowDefinition Height="Auto"/>
+                                          <RowDefinition Height="Auto"/>
+                                          <RowDefinition Height="Auto"/>
                                           <RowDefinition Height="*"/>
                                       </Grid.RowDefinitions>
 
@@ -258,8 +261,24 @@
                                      <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Фактор репликации:"/>
                                      <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingReplicationFactor}"/>
 
-                                      <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Размер чанка (байт):"/>
-                                      <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingDefaultChunkSize}"/>
+                                     <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Размер чанка (байт):"/>
+                                     <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingDefaultChunkSize}"/>
+                                     <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Использование ЦП:"/>
+                                     <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal">
+                                         <TextBlock Style="{StaticResource SettingValue}">
+                                             <TextBlock.Text>
+                                                 <Binding Path="SettingCpuUsage" StringFormat="{}{0:F1}%"/>
+                                             </TextBlock.Text>
+                                         </TextBlock>
+                                         <ProgressBar Width="100" Height="16" Margin="10,0,0,0" Minimum="0" Maximum="100" 
+                                                      Value="{Binding SettingCpuUsage}" VerticalAlignment="Center"/>
+                                     </StackPanel>
+
+                                     <TextBlock Grid.Row="6" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Использование RAM:"/>
+                                     <TextBlock Grid.Row="6" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingMemoryUsage}"/>
+
+                                     <TextBlock Grid.Row="7" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Дисковое пространство:"/>
+                                     <TextBlock Grid.Row="7" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingDiskSpace}"/>
                                   </Grid>
                                  <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
                                      <Button Content="Обновить конфигурацию" Command="{Binding RefreshSettingsCommand}" />

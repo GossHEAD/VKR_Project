@@ -94,6 +94,15 @@ namespace VRK_WPF.MVVM.ViewModel
         }
         
         [ObservableProperty]
+        private double _settingCpuUsage;
+
+        [ObservableProperty]
+        private string _settingMemoryUsage = "N/A";
+
+        [ObservableProperty]
+        private string _settingDiskSpace = "N/A";
+        
+        [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(RefreshNodeStatusCommand))]
         private bool _isNodeStatusRefreshing;
         public ObservableCollection<FileViewModel> StoredFiles { get; } = new ObservableCollection<FileViewModel>();
@@ -122,7 +131,8 @@ namespace VRK_WPF.MVVM.ViewModel
         private string _settingsErrorMessage = string.Empty;
 
         [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(IsSettingsInteractionEnabled))] // Notify dependent property
+        [NotifyPropertyChangedFor(nameof(IsSettingsInteractionEnabled))]
+        [NotifyCanExecuteChangedFor(nameof(RefreshSettingsCommand))] 
         private bool _isSettingsLoading = false;
 
         [ObservableProperty]
@@ -203,6 +213,7 @@ namespace VRK_WPF.MVVM.ViewModel
                 _currentChannel = GrpcChannel.ForAddress(TargetNodeAddress, channelOptions);
                 _storageClient = new StorageService.StorageServiceClient(_currentChannel);
                 OnPropertyChanged(nameof(Debug_IsUploadPossible));
+                RefreshSettingsCommand.NotifyCanExecuteChanged();
                 _logger?.LogInformation("gRPC client initialized for address: {Address}", TargetNodeAddress);
                 UpdateConnectionStatus($"Connected to {TargetNodeAddress}", Brushes.Green);
                 return true; 
@@ -782,21 +793,37 @@ namespace VRK_WPF.MVVM.ViewModel
                 if (reply.Success)
                 {
                     _logger?.LogInformation("Successfully loaded node settings.");
-                    // Update properties (ObservableObject handles UI thread dispatching)
+                    // Update properties
                     SettingNodeId = reply.NodeId;
                     SettingListenAddress = reply.ListenAddress;
                     SettingStorageBasePath = reply.StorageBasePath;
                     SettingReplicationFactor = reply.ReplicationFactor;
                     SettingDefaultChunkSize = reply.DefaultChunkSize;
+        
+                    // Add new property updates
+                    SettingCpuUsage = reply.CpuUsagePercent;
+        
+                    // Format memory usage
+                    if (reply.MemoryUsedBytes > 0 && reply.MemoryTotalBytes > 0)
+                    {
+                        SettingMemoryUsage = $"{FormatBytes(reply.MemoryUsedBytes)} / {FormatBytes(reply.MemoryTotalBytes)}";
+                    }
+                    else
+                    {
+                        SettingMemoryUsage = "Unknown";
+                    }
+        
+                    // Format disk space
+                    if (reply.DiskSpaceAvailableBytes > 0 && reply.DiskSpaceTotalBytes > 0)
+                    {
+                        SettingDiskSpace = $"{FormatBytes(reply.DiskSpaceAvailableBytes)} free of {FormatBytes(reply.DiskSpaceTotalBytes)}";
+                    }
+                    else
+                    {
+                        SettingDiskSpace = "Unknown";
+                    }
+        
                     UpdateStatusBar("Node settings loaded.");
-                }
-                else
-                {
-                    SettingsErrorMessage = $"Failed to load settings: {reply.ErrorMessage}";
-                    HasSettingsError = true;
-                    _logger?.LogError("Failed to load node settings from server: {Error}", reply.ErrorMessage);
-                    // Keep previous values or set to "Error"? Let's keep previous for now.
-                    UpdateStatusBar($"Failed to load settings: {reply.ErrorMessage}");
                 }
             }
             catch (RpcException rpcex)
@@ -822,6 +849,23 @@ namespace VRK_WPF.MVVM.ViewModel
             }
         }
 
+        private string FormatBytes(long bytes)
+        {
+            if (bytes <= 0) return "0 B";
+    
+            string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+            int suffixIndex = 0;
+            double size = bytes;
+    
+            while (size >= 1024 && suffixIndex < suffixes.Length - 1)
+            {
+                size /= 1024;
+                suffixIndex++;
+            }
+    
+            return $"{size:F2} {suffixes[suffixIndex]}";
+        }
+        
         // Command to manually refresh settings
         [RelayCommand(CanExecute = nameof(CanRefreshSettings))]
         private async Task RefreshSettingsAsync()

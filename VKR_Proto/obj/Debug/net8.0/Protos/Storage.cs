@@ -87,53 +87,56 @@ namespace VKR.Protos {
             "ES5zdG9yYWdlLk5vZGVJbmZvImcKDk5vZGVTdGF0dXNJbmZvEg8KB25vZGVf",
             "aWQYASABKAkSDwoHYWRkcmVzcxgCIAEoCRIiCgZzdGF0dXMYAyABKA4yEi5z",
             "dG9yYWdlLk5vZGVTdGF0ZRIPCgdkZXRhaWxzGAQgASgJIh0KG0dldE5vZGVD",
-            "b25maWd1cmF0aW9uUmVxdWVzdCK/AQoZR2V0Tm9kZUNvbmZpZ3VyYXRpb25S",
+            "b25maWd1cmF0aW9uUmVxdWVzdCLVAgoZR2V0Tm9kZUNvbmZpZ3VyYXRpb25S",
             "ZXBseRIPCgdub2RlX2lkGAEgASgJEhYKDmxpc3Rlbl9hZGRyZXNzGAIgASgJ",
             "EhkKEXN0b3JhZ2VfYmFzZV9wYXRoGAMgASgJEhoKEnJlcGxpY2F0aW9uX2Zh",
-            "Y3RvchgEIAEoBRIaChJkZWZhdWx0X2NodW5rX3NpemUYBSABKAUSDwoHc3Vj",
-            "Y2VzcxgGIAEoCBIVCg1lcnJvcl9tZXNzYWdlGAcgASgJIhgKFkdldE5vZGVG",
-            "aWxlTGlzdFJlcXVlc3QiPAoUR2V0Tm9kZUZpbGVMaXN0UmVwbHkSJAoFZmls",
-            "ZXMYASADKAsyFS5zdG9yYWdlLkZpbGVNZXRhZGF0YSq5AQoJRmlsZVN0YXRl",
-            "EhYKEkZJTEVfU1RBVEVfVU5LTk9XThAAEhgKFEZJTEVfU1RBVEVfVVBMT0FE",
-            "SU5HEAESGAoURklMRV9TVEFURV9BVkFJTEFCTEUQAhIXChNGSUxFX1NUQVRF",
-            "X0RFTEVUSU5HEAMSFgoSRklMRV9TVEFURV9ERUxFVEVEEAQSFAoQRklMRV9T",
-            "VEFURV9FUlJPUhAFEhkKFUZJTEVfU1RBVEVfUkVDT1ZFUklORxAGKpgBCglO",
-            "b2RlU3RhdGUSFgoSTk9ERV9TVEFURV9VTktOT1dOEAASFgoSTk9ERV9TVEFU",
-            "RV9PRkZMSU5FEAESFgoSTk9ERV9TVEFURV9KT0lOSU5HEAISFQoRTk9ERV9T",
-            "VEFURV9PTkxJTkUQAxIWChJOT0RFX1NUQVRFX0xFQVZJTkcQBBIUChBOT0RF",
-            "X1NUQVRFX0VSUk9SEAUyqQQKDlN0b3JhZ2VTZXJ2aWNlEkQKClVwbG9hZEZp",
-            "bGUSGi5zdG9yYWdlLlVwbG9hZEZpbGVSZXF1ZXN0Ghguc3RvcmFnZS5VcGxv",
-            "YWRGaWxlUmVwbHkoARJKCgxEb3dubG9hZEZpbGUSHC5zdG9yYWdlLkRvd25s",
-            "b2FkRmlsZVJlcXVlc3QaGi5zdG9yYWdlLkRvd25sb2FkRmlsZVJlcGx5MAES",
-            "QgoKRGVsZXRlRmlsZRIaLnN0b3JhZ2UuRGVsZXRlRmlsZVJlcXVlc3QaGC5z",
-            "dG9yYWdlLkRlbGV0ZUZpbGVSZXBseRI/CglMaXN0RmlsZXMSGS5zdG9yYWdl",
-            "Lkxpc3RGaWxlc1JlcXVlc3QaFy5zdG9yYWdlLkxpc3RGaWxlc1JlcGx5EksK",
-            "DUdldEZpbGVTdGF0dXMSHS5zdG9yYWdlLkdldEZpbGVTdGF0dXNSZXF1ZXN0",
-            "Ghsuc3RvcmFnZS5HZXRGaWxlU3RhdHVzUmVwbHkSUQoPR2V0Tm9kZVN0YXR1",
-            "c2VzEh8uc3RvcmFnZS5HZXROb2RlU3RhdHVzZXNSZXF1ZXN0Gh0uc3RvcmFn",
-            "ZS5HZXROb2RlU3RhdHVzZXNSZXBseRJgChRHZXROb2RlQ29uZmlndXJhdGlv",
-            "bhIkLnN0b3JhZ2UuR2V0Tm9kZUNvbmZpZ3VyYXRpb25SZXF1ZXN0GiIuc3Rv",
-            "cmFnZS5HZXROb2RlQ29uZmlndXJhdGlvblJlcGx5MqQFChNOb2RlSW50ZXJu",
-            "YWxTZXJ2aWNlEk4KDlJlcGxpY2F0ZUNodW5rEh4uc3RvcmFnZS5SZXBsaWNh",
-            "dGVDaHVua1JlcXVlc3QaHC5zdG9yYWdlLlJlcGxpY2F0ZUNodW5rUmVwbHkS",
-            "SgoMUmVxdWVzdENodW5rEhwuc3RvcmFnZS5SZXF1ZXN0Q2h1bmtSZXF1ZXN0",
-            "Ghouc3RvcmFnZS5SZXF1ZXN0Q2h1bmtSZXBseTABEkUKC0RlbGV0ZUNodW5r",
-            "Ehsuc3RvcmFnZS5EZWxldGVDaHVua1JlcXVlc3QaGS5zdG9yYWdlLkRlbGV0",
-            "ZUNodW5rUmVwbHkSMAoEUGluZxIULnN0b3JhZ2UuUGluZ1JlcXVlc3QaEi5z",
-            "dG9yYWdlLlBpbmdSZXBseRJRCg9HZXROb2RlRmlsZUxpc3QSHy5zdG9yYWdl",
-            "LkdldE5vZGVGaWxlTGlzdFJlcXVlc3QaHS5zdG9yYWdlLkdldE5vZGVGaWxl",
-            "TGlzdFJlcGx5ElAKEkFja25vd2xlZGdlUmVwbGljYRIiLnN0b3JhZ2UuQWNr",
-            "bm93bGVkZ2VSZXBsaWNhUmVxdWVzdBoWLmdvb2dsZS5wcm90b2J1Zi5FbXB0",
-            "eRJLCg1GaW5kU3VjY2Vzc29yEh0uc3RvcmFnZS5GaW5kU3VjY2Vzc29yUmVx",
-            "dWVzdBobLnN0b3JhZ2UuRmluZFN1Y2Nlc3NvclJlcGx5Ek4KDkdldFByZWRl",
-            "Y2Vzc29yEh4uc3RvcmFnZS5HZXRQcmVkZWNlc3NvclJlcXVlc3QaHC5zdG9y",
-            "YWdlLkdldFByZWRlY2Vzc29yUmVwbHkSNgoGTm90aWZ5EhYuc3RvcmFnZS5O",
-            "b3RpZnlSZXF1ZXN0GhQuc3RvcmFnZS5Ob3RpZnlSZXBseTK6AQoMQWRtaW5T",
-            "ZXJ2aWNlEk4KDkdldFN5c3RlbVN0YXRzEh4uc3RvcmFnZS5HZXRTeXN0ZW1T",
-            "dGF0c1JlcXVlc3QaHC5zdG9yYWdlLkdldFN5c3RlbVN0YXRzUmVwbHkSWgoS",
-            "VHJpZ2dlck1haW50ZW5hbmNlEiIuc3RvcmFnZS5UcmlnZ2VyTWFpbnRlbmFu",
-            "Y2VSZXF1ZXN0GiAuc3RvcmFnZS5UcmlnZ2VyTWFpbnRlbmFuY2VSZXBseUIN",
-            "qgIKVktSLlByb3Rvc2IGcHJvdG8z"));
+            "Y3RvchgEIAEoBRIaChJkZWZhdWx0X2NodW5rX3NpemUYBSABKAUSGQoRY3B1",
+            "X3VzYWdlX3BlcmNlbnQYBiABKAESGQoRbWVtb3J5X3VzZWRfYnl0ZXMYByAB",
+            "KAMSGgoSbWVtb3J5X3RvdGFsX2J5dGVzGAggASgDEiIKGmRpc2tfc3BhY2Vf",
+            "YXZhaWxhYmxlX2J5dGVzGAkgASgDEh4KFmRpc2tfc3BhY2VfdG90YWxfYnl0",
+            "ZXMYCiABKAMSDwoHc3VjY2VzcxgLIAEoCBIVCg1lcnJvcl9tZXNzYWdlGAwg",
+            "ASgJIhgKFkdldE5vZGVGaWxlTGlzdFJlcXVlc3QiPAoUR2V0Tm9kZUZpbGVM",
+            "aXN0UmVwbHkSJAoFZmlsZXMYASADKAsyFS5zdG9yYWdlLkZpbGVNZXRhZGF0",
+            "YSq5AQoJRmlsZVN0YXRlEhYKEkZJTEVfU1RBVEVfVU5LTk9XThAAEhgKFEZJ",
+            "TEVfU1RBVEVfVVBMT0FESU5HEAESGAoURklMRV9TVEFURV9BVkFJTEFCTEUQ",
+            "AhIXChNGSUxFX1NUQVRFX0RFTEVUSU5HEAMSFgoSRklMRV9TVEFURV9ERUxF",
+            "VEVEEAQSFAoQRklMRV9TVEFURV9FUlJPUhAFEhkKFUZJTEVfU1RBVEVfUkVD",
+            "T1ZFUklORxAGKpgBCglOb2RlU3RhdGUSFgoSTk9ERV9TVEFURV9VTktOT1dO",
+            "EAASFgoSTk9ERV9TVEFURV9PRkZMSU5FEAESFgoSTk9ERV9TVEFURV9KT0lO",
+            "SU5HEAISFQoRTk9ERV9TVEFURV9PTkxJTkUQAxIWChJOT0RFX1NUQVRFX0xF",
+            "QVZJTkcQBBIUChBOT0RFX1NUQVRFX0VSUk9SEAUyqQQKDlN0b3JhZ2VTZXJ2",
+            "aWNlEkQKClVwbG9hZEZpbGUSGi5zdG9yYWdlLlVwbG9hZEZpbGVSZXF1ZXN0",
+            "Ghguc3RvcmFnZS5VcGxvYWRGaWxlUmVwbHkoARJKCgxEb3dubG9hZEZpbGUS",
+            "HC5zdG9yYWdlLkRvd25sb2FkRmlsZVJlcXVlc3QaGi5zdG9yYWdlLkRvd25s",
+            "b2FkRmlsZVJlcGx5MAESQgoKRGVsZXRlRmlsZRIaLnN0b3JhZ2UuRGVsZXRl",
+            "RmlsZVJlcXVlc3QaGC5zdG9yYWdlLkRlbGV0ZUZpbGVSZXBseRI/CglMaXN0",
+            "RmlsZXMSGS5zdG9yYWdlLkxpc3RGaWxlc1JlcXVlc3QaFy5zdG9yYWdlLkxp",
+            "c3RGaWxlc1JlcGx5EksKDUdldEZpbGVTdGF0dXMSHS5zdG9yYWdlLkdldEZp",
+            "bGVTdGF0dXNSZXF1ZXN0Ghsuc3RvcmFnZS5HZXRGaWxlU3RhdHVzUmVwbHkS",
+            "UQoPR2V0Tm9kZVN0YXR1c2VzEh8uc3RvcmFnZS5HZXROb2RlU3RhdHVzZXNS",
+            "ZXF1ZXN0Gh0uc3RvcmFnZS5HZXROb2RlU3RhdHVzZXNSZXBseRJgChRHZXRO",
+            "b2RlQ29uZmlndXJhdGlvbhIkLnN0b3JhZ2UuR2V0Tm9kZUNvbmZpZ3VyYXRp",
+            "b25SZXF1ZXN0GiIuc3RvcmFnZS5HZXROb2RlQ29uZmlndXJhdGlvblJlcGx5",
+            "MqQFChNOb2RlSW50ZXJuYWxTZXJ2aWNlEk4KDlJlcGxpY2F0ZUNodW5rEh4u",
+            "c3RvcmFnZS5SZXBsaWNhdGVDaHVua1JlcXVlc3QaHC5zdG9yYWdlLlJlcGxp",
+            "Y2F0ZUNodW5rUmVwbHkSSgoMUmVxdWVzdENodW5rEhwuc3RvcmFnZS5SZXF1",
+            "ZXN0Q2h1bmtSZXF1ZXN0Ghouc3RvcmFnZS5SZXF1ZXN0Q2h1bmtSZXBseTAB",
+            "EkUKC0RlbGV0ZUNodW5rEhsuc3RvcmFnZS5EZWxldGVDaHVua1JlcXVlc3Qa",
+            "GS5zdG9yYWdlLkRlbGV0ZUNodW5rUmVwbHkSMAoEUGluZxIULnN0b3JhZ2Uu",
+            "UGluZ1JlcXVlc3QaEi5zdG9yYWdlLlBpbmdSZXBseRJRCg9HZXROb2RlRmls",
+            "ZUxpc3QSHy5zdG9yYWdlLkdldE5vZGVGaWxlTGlzdFJlcXVlc3QaHS5zdG9y",
+            "YWdlLkdldE5vZGVGaWxlTGlzdFJlcGx5ElAKEkFja25vd2xlZGdlUmVwbGlj",
+            "YRIiLnN0b3JhZ2UuQWNrbm93bGVkZ2VSZXBsaWNhUmVxdWVzdBoWLmdvb2ds",
+            "ZS5wcm90b2J1Zi5FbXB0eRJLCg1GaW5kU3VjY2Vzc29yEh0uc3RvcmFnZS5G",
+            "aW5kU3VjY2Vzc29yUmVxdWVzdBobLnN0b3JhZ2UuRmluZFN1Y2Nlc3NvclJl",
+            "cGx5Ek4KDkdldFByZWRlY2Vzc29yEh4uc3RvcmFnZS5HZXRQcmVkZWNlc3Nv",
+            "clJlcXVlc3QaHC5zdG9yYWdlLkdldFByZWRlY2Vzc29yUmVwbHkSNgoGTm90",
+            "aWZ5EhYuc3RvcmFnZS5Ob3RpZnlSZXF1ZXN0GhQuc3RvcmFnZS5Ob3RpZnlS",
+            "ZXBseTK6AQoMQWRtaW5TZXJ2aWNlEk4KDkdldFN5c3RlbVN0YXRzEh4uc3Rv",
+            "cmFnZS5HZXRTeXN0ZW1TdGF0c1JlcXVlc3QaHC5zdG9yYWdlLkdldFN5c3Rl",
+            "bVN0YXRzUmVwbHkSWgoSVHJpZ2dlck1haW50ZW5hbmNlEiIuc3RvcmFnZS5U",
+            "cmlnZ2VyTWFpbnRlbmFuY2VSZXF1ZXN0GiAuc3RvcmFnZS5UcmlnZ2VyTWFp",
+            "bnRlbmFuY2VSZXBseUINqgIKVktSLlByb3Rvc2IGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Google.Protobuf.WellKnownTypes.TimestampReflection.Descriptor, global::Google.Protobuf.WellKnownTypes.EmptyReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::VKR.Protos.FileState), typeof(global::VKR.Protos.NodeState), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -174,7 +177,7 @@ namespace VKR.Protos {
             new pbr::GeneratedClrTypeInfo(typeof(global::VKR.Protos.ChunkStatusInfo), global::VKR.Protos.ChunkStatusInfo.Parser, new[]{ "ChunkId", "CurrentReplication", "Locations" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::VKR.Protos.NodeStatusInfo), global::VKR.Protos.NodeStatusInfo.Parser, new[]{ "NodeId", "Address", "Status", "Details" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::VKR.Protos.GetNodeConfigurationRequest), global::VKR.Protos.GetNodeConfigurationRequest.Parser, null, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::VKR.Protos.GetNodeConfigurationReply), global::VKR.Protos.GetNodeConfigurationReply.Parser, new[]{ "NodeId", "ListenAddress", "StorageBasePath", "ReplicationFactor", "DefaultChunkSize", "Success", "ErrorMessage" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::VKR.Protos.GetNodeConfigurationReply), global::VKR.Protos.GetNodeConfigurationReply.Parser, new[]{ "NodeId", "ListenAddress", "StorageBasePath", "ReplicationFactor", "DefaultChunkSize", "CpuUsagePercent", "MemoryUsedBytes", "MemoryTotalBytes", "DiskSpaceAvailableBytes", "DiskSpaceTotalBytes", "Success", "ErrorMessage" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::VKR.Protos.GetNodeFileListRequest), global::VKR.Protos.GetNodeFileListRequest.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::VKR.Protos.GetNodeFileListReply), global::VKR.Protos.GetNodeFileListReply.Parser, new[]{ "Files" }, null, null, null, null)
           }));
@@ -9487,6 +9490,11 @@ namespace VKR.Protos {
       storageBasePath_ = other.storageBasePath_;
       replicationFactor_ = other.replicationFactor_;
       defaultChunkSize_ = other.defaultChunkSize_;
+      cpuUsagePercent_ = other.cpuUsagePercent_;
+      memoryUsedBytes_ = other.memoryUsedBytes_;
+      memoryTotalBytes_ = other.memoryTotalBytes_;
+      diskSpaceAvailableBytes_ = other.diskSpaceAvailableBytes_;
+      diskSpaceTotalBytes_ = other.diskSpaceTotalBytes_;
       success_ = other.success_;
       errorMessage_ = other.errorMessage_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
@@ -9558,12 +9566,84 @@ namespace VKR.Protos {
       }
     }
 
-    /// <summary>Field number for the "success" field.</summary>
-    public const int SuccessFieldNumber = 6;
-    private bool success_;
+    /// <summary>Field number for the "cpu_usage_percent" field.</summary>
+    public const int CpuUsagePercentFieldNumber = 6;
+    private double cpuUsagePercent_;
     /// <summary>
-    /// To indicate success/failure
+    /// Added CPU usage
     /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public double CpuUsagePercent {
+      get { return cpuUsagePercent_; }
+      set {
+        cpuUsagePercent_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "memory_used_bytes" field.</summary>
+    public const int MemoryUsedBytesFieldNumber = 7;
+    private long memoryUsedBytes_;
+    /// <summary>
+    /// Added memory used
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long MemoryUsedBytes {
+      get { return memoryUsedBytes_; }
+      set {
+        memoryUsedBytes_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "memory_total_bytes" field.</summary>
+    public const int MemoryTotalBytesFieldNumber = 8;
+    private long memoryTotalBytes_;
+    /// <summary>
+    /// Added total memory
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long MemoryTotalBytes {
+      get { return memoryTotalBytes_; }
+      set {
+        memoryTotalBytes_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "disk_space_available_bytes" field.</summary>
+    public const int DiskSpaceAvailableBytesFieldNumber = 9;
+    private long diskSpaceAvailableBytes_;
+    /// <summary>
+    /// Already exists but moved
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long DiskSpaceAvailableBytes {
+      get { return diskSpaceAvailableBytes_; }
+      set {
+        diskSpaceAvailableBytes_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "disk_space_total_bytes" field.</summary>
+    public const int DiskSpaceTotalBytesFieldNumber = 10;
+    private long diskSpaceTotalBytes_;
+    /// <summary>
+    /// Already exists but moved
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long DiskSpaceTotalBytes {
+      get { return diskSpaceTotalBytes_; }
+      set {
+        diskSpaceTotalBytes_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "success" field.</summary>
+    public const int SuccessFieldNumber = 11;
+    private bool success_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public bool Success {
@@ -9574,11 +9654,8 @@ namespace VKR.Protos {
     }
 
     /// <summary>Field number for the "error_message" field.</summary>
-    public const int ErrorMessageFieldNumber = 7;
+    public const int ErrorMessageFieldNumber = 12;
     private string errorMessage_ = "";
-    /// <summary>
-    /// Optional error details
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string ErrorMessage {
@@ -9608,6 +9685,11 @@ namespace VKR.Protos {
       if (StorageBasePath != other.StorageBasePath) return false;
       if (ReplicationFactor != other.ReplicationFactor) return false;
       if (DefaultChunkSize != other.DefaultChunkSize) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(CpuUsagePercent, other.CpuUsagePercent)) return false;
+      if (MemoryUsedBytes != other.MemoryUsedBytes) return false;
+      if (MemoryTotalBytes != other.MemoryTotalBytes) return false;
+      if (DiskSpaceAvailableBytes != other.DiskSpaceAvailableBytes) return false;
+      if (DiskSpaceTotalBytes != other.DiskSpaceTotalBytes) return false;
       if (Success != other.Success) return false;
       if (ErrorMessage != other.ErrorMessage) return false;
       return Equals(_unknownFields, other._unknownFields);
@@ -9622,6 +9704,11 @@ namespace VKR.Protos {
       if (StorageBasePath.Length != 0) hash ^= StorageBasePath.GetHashCode();
       if (ReplicationFactor != 0) hash ^= ReplicationFactor.GetHashCode();
       if (DefaultChunkSize != 0) hash ^= DefaultChunkSize.GetHashCode();
+      if (CpuUsagePercent != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(CpuUsagePercent);
+      if (MemoryUsedBytes != 0L) hash ^= MemoryUsedBytes.GetHashCode();
+      if (MemoryTotalBytes != 0L) hash ^= MemoryTotalBytes.GetHashCode();
+      if (DiskSpaceAvailableBytes != 0L) hash ^= DiskSpaceAvailableBytes.GetHashCode();
+      if (DiskSpaceTotalBytes != 0L) hash ^= DiskSpaceTotalBytes.GetHashCode();
       if (Success != false) hash ^= Success.GetHashCode();
       if (ErrorMessage.Length != 0) hash ^= ErrorMessage.GetHashCode();
       if (_unknownFields != null) {
@@ -9662,12 +9749,32 @@ namespace VKR.Protos {
         output.WriteRawTag(40);
         output.WriteInt32(DefaultChunkSize);
       }
+      if (CpuUsagePercent != 0D) {
+        output.WriteRawTag(49);
+        output.WriteDouble(CpuUsagePercent);
+      }
+      if (MemoryUsedBytes != 0L) {
+        output.WriteRawTag(56);
+        output.WriteInt64(MemoryUsedBytes);
+      }
+      if (MemoryTotalBytes != 0L) {
+        output.WriteRawTag(64);
+        output.WriteInt64(MemoryTotalBytes);
+      }
+      if (DiskSpaceAvailableBytes != 0L) {
+        output.WriteRawTag(72);
+        output.WriteInt64(DiskSpaceAvailableBytes);
+      }
+      if (DiskSpaceTotalBytes != 0L) {
+        output.WriteRawTag(80);
+        output.WriteInt64(DiskSpaceTotalBytes);
+      }
       if (Success != false) {
-        output.WriteRawTag(48);
+        output.WriteRawTag(88);
         output.WriteBool(Success);
       }
       if (ErrorMessage.Length != 0) {
-        output.WriteRawTag(58);
+        output.WriteRawTag(98);
         output.WriteString(ErrorMessage);
       }
       if (_unknownFields != null) {
@@ -9700,12 +9807,32 @@ namespace VKR.Protos {
         output.WriteRawTag(40);
         output.WriteInt32(DefaultChunkSize);
       }
+      if (CpuUsagePercent != 0D) {
+        output.WriteRawTag(49);
+        output.WriteDouble(CpuUsagePercent);
+      }
+      if (MemoryUsedBytes != 0L) {
+        output.WriteRawTag(56);
+        output.WriteInt64(MemoryUsedBytes);
+      }
+      if (MemoryTotalBytes != 0L) {
+        output.WriteRawTag(64);
+        output.WriteInt64(MemoryTotalBytes);
+      }
+      if (DiskSpaceAvailableBytes != 0L) {
+        output.WriteRawTag(72);
+        output.WriteInt64(DiskSpaceAvailableBytes);
+      }
+      if (DiskSpaceTotalBytes != 0L) {
+        output.WriteRawTag(80);
+        output.WriteInt64(DiskSpaceTotalBytes);
+      }
       if (Success != false) {
-        output.WriteRawTag(48);
+        output.WriteRawTag(88);
         output.WriteBool(Success);
       }
       if (ErrorMessage.Length != 0) {
-        output.WriteRawTag(58);
+        output.WriteRawTag(98);
         output.WriteString(ErrorMessage);
       }
       if (_unknownFields != null) {
@@ -9732,6 +9859,21 @@ namespace VKR.Protos {
       }
       if (DefaultChunkSize != 0) {
         size += 1 + pb::CodedOutputStream.ComputeInt32Size(DefaultChunkSize);
+      }
+      if (CpuUsagePercent != 0D) {
+        size += 1 + 8;
+      }
+      if (MemoryUsedBytes != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(MemoryUsedBytes);
+      }
+      if (MemoryTotalBytes != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(MemoryTotalBytes);
+      }
+      if (DiskSpaceAvailableBytes != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(DiskSpaceAvailableBytes);
+      }
+      if (DiskSpaceTotalBytes != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(DiskSpaceTotalBytes);
       }
       if (Success != false) {
         size += 1 + 1;
@@ -9765,6 +9907,21 @@ namespace VKR.Protos {
       }
       if (other.DefaultChunkSize != 0) {
         DefaultChunkSize = other.DefaultChunkSize;
+      }
+      if (other.CpuUsagePercent != 0D) {
+        CpuUsagePercent = other.CpuUsagePercent;
+      }
+      if (other.MemoryUsedBytes != 0L) {
+        MemoryUsedBytes = other.MemoryUsedBytes;
+      }
+      if (other.MemoryTotalBytes != 0L) {
+        MemoryTotalBytes = other.MemoryTotalBytes;
+      }
+      if (other.DiskSpaceAvailableBytes != 0L) {
+        DiskSpaceAvailableBytes = other.DiskSpaceAvailableBytes;
+      }
+      if (other.DiskSpaceTotalBytes != 0L) {
+        DiskSpaceTotalBytes = other.DiskSpaceTotalBytes;
       }
       if (other.Success != false) {
         Success = other.Success;
@@ -9811,11 +9968,31 @@ namespace VKR.Protos {
             DefaultChunkSize = input.ReadInt32();
             break;
           }
-          case 48: {
+          case 49: {
+            CpuUsagePercent = input.ReadDouble();
+            break;
+          }
+          case 56: {
+            MemoryUsedBytes = input.ReadInt64();
+            break;
+          }
+          case 64: {
+            MemoryTotalBytes = input.ReadInt64();
+            break;
+          }
+          case 72: {
+            DiskSpaceAvailableBytes = input.ReadInt64();
+            break;
+          }
+          case 80: {
+            DiskSpaceTotalBytes = input.ReadInt64();
+            break;
+          }
+          case 88: {
             Success = input.ReadBool();
             break;
           }
-          case 58: {
+          case 98: {
             ErrorMessage = input.ReadString();
             break;
           }
@@ -9858,11 +10035,31 @@ namespace VKR.Protos {
             DefaultChunkSize = input.ReadInt32();
             break;
           }
-          case 48: {
+          case 49: {
+            CpuUsagePercent = input.ReadDouble();
+            break;
+          }
+          case 56: {
+            MemoryUsedBytes = input.ReadInt64();
+            break;
+          }
+          case 64: {
+            MemoryTotalBytes = input.ReadInt64();
+            break;
+          }
+          case 72: {
+            DiskSpaceAvailableBytes = input.ReadInt64();
+            break;
+          }
+          case 80: {
+            DiskSpaceTotalBytes = input.ReadInt64();
+            break;
+          }
+          case 88: {
             Success = input.ReadBool();
             break;
           }
-          case 58: {
+          case 98: {
             ErrorMessage = input.ReadString();
             break;
           }

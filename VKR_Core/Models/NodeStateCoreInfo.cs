@@ -9,19 +9,21 @@ namespace VKR_Core.Models
     /// Data Transfer Object representing the state and characteristics of a node,
     /// suitable for use in Core interfaces and inter-node communication context.
     /// </summary>
+    // In VKR_Core/Models/NodeStateCoreInfo.cs
     public class NodeStateCoreInfo
     {
         public required string NodeId { get; set; }
         public required string Address { get; set; }
-        public NodeStateCore State { get; set; } // Use the Core Enum
+        public NodeStateCore State { get; set; }
         public DateTime LastSeen { get; set; }
-
-        // --- NEW PROPERTIES (matching NodeStateEntity additions) ---
         public DateTime? LastSuccessfulPingTimestamp { get; set; }
         public long? DiskSpaceAvailableBytes { get; set; }
         public long? DiskSpaceTotalBytes { get; set; }
         public int? StoredChunkCount { get; set; }
-
-        // Add other properties as needed (e.g., CPU/Memory if implemented)
+    
+        // Add new properties for CPU and memory usage
+        public double? CpuUsagePercent { get; set; }
+        public long? MemoryUsedBytes { get; set; }
+        public long? MemoryTotalBytes { get; set; }
     }
 }

@@ -301,9 +301,13 @@ message GetNodeConfigurationReply {
   string storage_base_path = 3;
   int32 replication_factor = 4;
   int32 default_chunk_size = 5;
-  bool success = 6;         // To indicate success/failure
-  string error_message = 7; // Optional error details
-  // Add other settings here as needed
+  double cpu_usage_percent = 6;  // Added CPU usage
+  int64 memory_used_bytes = 7;   // Added memory used
+  int64 memory_total_bytes = 8;  // Added total memory
+  int64 disk_space_available_bytes = 9;  // Already exists but moved
+  int64 disk_space_total_bytes = 10;     // Already exists but moved
+  bool success = 11;
+  string error_message = 12;
 }
 
 message GetNodeFileListRequest {
