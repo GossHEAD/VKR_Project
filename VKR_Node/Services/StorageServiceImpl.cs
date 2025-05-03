@@ -1,5 +1,6 @@
 ﻿using Grpc.Core;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using VKR_Core.Enums;
 using VKR_Core.Services;
 using VKR_Node.Configuration;
@@ -18,7 +19,7 @@ namespace VKR_Node.Services
         private readonly ILogger<StorageServiceImpl> _logger;
         private readonly IMetadataManager _metadataManager;
         private readonly IReplicationManager _replicationManager;
-        private readonly DhtOptions _dhtOptions;
+        private readonly DhtOptions  _dhtOptions;
         
         public StorageServiceImpl(
             IFileStorageService fileService,
@@ -27,7 +28,7 @@ namespace VKR_Node.Services
             ILogger<StorageServiceImpl> logger,
             IMetadataManager metadataManager,
             IReplicationManager replicationManager,
-            DhtOptions dhtOptions)
+            IOptions<DhtOptions> dhtOptions)
         {
             _fileService = fileService;
             _nodeStatusService = nodeStatusService;
@@ -35,7 +36,7 @@ namespace VKR_Node.Services
             _logger = logger;
             _metadataManager = metadataManager;
             _replicationManager = replicationManager;
-            _dhtOptions = dhtOptions;
+            _dhtOptions = dhtOptions.Value;
         }
 
         public override Task<ListFilesReply> ListFiles(

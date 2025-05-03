@@ -301,6 +301,9 @@ namespace VRK_WPF.MVVM.ViewModel
             {
                 await RefreshFilesListAsync();
                 await RefreshNodeStatusAsync();
+                await LoadSettingsAsync();
+                
+                UpdateStatusBar($"Connected to {TargetNodeAddress}. Configuration loaded.");
             }
             else
             {
@@ -855,16 +858,15 @@ namespace VRK_WPF.MVVM.ViewModel
             if (_storageClient == null)
             {
                 _logger.LogWarning("Cannot load settings: StorageServiceClient is null (not connected).");
-                // Reset settings properties to default/disconnected state
                 SettingNodeId = "N/A";
                 SettingListenAddress = "N/A";
                 SettingStorageBasePath = "N/A";
                 SettingReplicationFactor = 0;
                 SettingDefaultChunkSize = 0;
                 SettingsErrorMessage = "Not connected to a node.";
-                HasSettingsError = true; // Indicate an error state (not connected)
+                HasSettingsError = true; 
                 IsSettingsLoading = false;
-                OnPropertyChanged(nameof(IsSettingsInteractionEnabled)); // Update dependent property
+                OnPropertyChanged(nameof(IsSettingsInteractionEnabled)); 
                 return;
             }
 
@@ -873,7 +875,6 @@ namespace VRK_WPF.MVVM.ViewModel
             SettingsErrorMessage = string.Empty;
             UpdateStatusBar("Loading node settings...");
             _logger.LogInformation("Attempting to load node settings...");
-            // Notify UI that interaction might be disabled
             RefreshSettingsCommand.NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(IsSettingsInteractionEnabled));
 
@@ -886,17 +887,14 @@ namespace VRK_WPF.MVVM.ViewModel
                 if (reply.Success)
                 {
                     _logger.LogInformation("Successfully loaded node settings.");
-                    // Update properties
                     SettingNodeId = reply.NodeId;
                     SettingListenAddress = reply.ListenAddress;
                     SettingStorageBasePath = reply.StorageBasePath;
                     SettingReplicationFactor = reply.ReplicationFactor;
                     SettingDefaultChunkSize = reply.DefaultChunkSize;
         
-                    // Add new property updates
                     SettingCpuUsage = reply.CpuUsagePercent;
         
-                    // Format memory usage
                     if (reply.MemoryUsedBytes > 0 && reply.MemoryTotalBytes > 0)
                     {
                         SettingMemoryUsage = $"{FormatBytes(reply.MemoryUsedBytes)} / {FormatBytes(reply.MemoryTotalBytes)}";
@@ -906,7 +904,6 @@ namespace VRK_WPF.MVVM.ViewModel
                         SettingMemoryUsage = "Unknown";
                     }
         
-                    // Format disk space
                     if (reply.DiskSpaceAvailableBytes > 0 && reply.DiskSpaceTotalBytes > 0)
                     {
                         SettingDiskSpace = $"{FormatBytes(reply.DiskSpaceAvailableBytes)} free of {FormatBytes(reply.DiskSpaceTotalBytes)}";
