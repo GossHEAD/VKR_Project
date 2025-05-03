@@ -87,11 +87,9 @@ public class NodeConfigService : INodeConfigService
     {
         try
         {
-            // Get CPU usage with a simple measurement
             var startTime = DateTime.UtcNow;
             var startCpuUsage = Process.GetCurrentProcess().TotalProcessorTime;
             
-            // Wait a short time for measurement
             await Task.Delay(500);
             
             var endTime = DateTime.UtcNow;
@@ -116,7 +114,6 @@ public class NodeConfigService : INodeConfigService
             var process = Process.GetCurrentProcess();
             var memoryUsed = process.WorkingSet64;
             
-            // Get total physical memory
             long totalMemory;
             
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -146,8 +143,6 @@ public class NodeConfigService : INodeConfigService
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                // For macOS, we'd need to use sysctl
-                // For simplicity in this example:
                 totalMemory = -1;
             }
             else

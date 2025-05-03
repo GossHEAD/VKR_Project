@@ -271,7 +271,7 @@ namespace VKR_Node.Services
             
             try
             {
-                await ExecuteInTransactionAsync<bool>("SaveFileMetadata", async (context, ct) => 
+                await ExecuteInTransactionAsync("SaveFileMetadata", async (context, ct) => 
                 {
                     var existingEntity = await context.FilesMetadata
                         .FirstOrDefaultAsync(f => f.FileId == metadata.FileId, ct);
@@ -455,7 +455,7 @@ namespace VKR_Node.Services
             
             try
             {
-                await ExecuteInTransactionAsync<bool>("DeleteFileMetadata", async (context, ct) =>
+                await ExecuteInTransactionAsync("DeleteFileMetadata", async (context, ct) =>
                 {
                     // Use include to ensure cascade delete works properly
                     var fileEntity = await context.FilesMetadata
@@ -552,18 +552,17 @@ namespace VKR_Node.Services
 
             try
             {
-                await ExecuteInTransactionAsync<bool>("SaveChunkMetadata", async (context, ct) =>
+                await ExecuteInTransactionAsync("SaveChunkMetadata", async (context, ct) =>
                 {
-                    // Check if parent file exists, create placeholder if not
-                    var FileEntity = await context.FilesMetadata
+                    var fileEntity = await context.FilesMetadata
                         .FindAsync(new object[] { chunkInfo.FileId }, ct);
                     
-                    if (FileEntity == null)
+                    if (fileEntity == null)
                     {
                         _logger.LogWarning("Parent FileMetadata not found for File ID {FileId} while saving chunk {ChunkId}. Creating placeholder.", 
                             chunkInfo.FileId, chunkInfo.ChunkId);
                         
-                        FileEntity = new FileEntity 
+                        fileEntity = new FileEntity 
                         {
                             FileId = chunkInfo.FileId, 
                             FileName = $"_placeholder_{chunkInfo.FileId}",
@@ -574,7 +573,7 @@ namespace VKR_Node.Services
                             TotalChunks = 0
                         };
                         
-                        await context.FilesMetadata.AddAsync(FileEntity, ct);
+                        await context.FilesMetadata.AddAsync(fileEntity, ct);
                         
                         try
                         {
@@ -584,10 +583,10 @@ namespace VKR_Node.Services
                         {
                             _logger.LogWarning("Race condition during placeholder file insert. Reloading.");
                             // Reload the entity that was inserted by another process
-                            FileEntity = await context.FilesMetadata
+                            fileEntity = await context.FilesMetadata
                                 .FirstOrDefaultAsync(f => f.FileId == chunkInfo.FileId, ct);
                                 
-                            if (FileEntity == null)
+                            if (fileEntity == null)
                             {
                                 _logger.LogError("Failed to create or find parent file metadata for chunk {ChunkId}", chunkInfo.ChunkId);
                                 throw;
@@ -596,16 +595,16 @@ namespace VKR_Node.Services
                     }
 
                     // Find or create ChunkEntity
-                    var ChunkEntity = await context.ChunksMetadata
+                    var chunkEntity = await context.ChunksMetadata
                         .Include(c => c.Locations)
                         .FirstOrDefaultAsync(c => c.FileId == chunkInfo.FileId && c.ChunkId == chunkInfo.ChunkId, ct);
 
-                    if (ChunkEntity == null)
+                    if (chunkEntity == null)
                     {
                         _logger.LogDebug("Creating new ChunkEntity for Chunk ID: {ChunkId}, File ID: {FileId}", 
                             chunkInfo.ChunkId, chunkInfo.FileId);
                             
-                        ChunkEntity = new ChunkEntity
+                        chunkEntity = new ChunkEntity
                         {
                             ChunkId = chunkInfo.ChunkId, 
                             FileId = chunkInfo.FileId,
@@ -614,27 +613,27 @@ namespace VKR_Node.Services
                             ChunkHash = chunkInfo.ChunkHash
                         };
                         
-                        await context.ChunksMetadata.AddAsync(ChunkEntity, ct);
+                        await context.ChunksMetadata.AddAsync(chunkEntity, ct);
                         await context.SaveChangesAsync(ct);
                     }
                     else
                     {
                         // Update existing if needed
                         bool updated = false;
-                        if (ChunkEntity.Size != chunkInfo.Size)
+                        if (chunkEntity.Size != chunkInfo.Size)
                         {
-                            ChunkEntity.Size = chunkInfo.Size;
+                            chunkEntity.Size = chunkInfo.Size;
                             updated = true;
                         }
-                        if (ChunkEntity.ChunkHash != chunkInfo.ChunkHash)
+                        if (chunkEntity.ChunkHash != chunkInfo.ChunkHash)
                         {
-                            ChunkEntity.ChunkHash = chunkInfo.ChunkHash;
+                            chunkEntity.ChunkHash = chunkInfo.ChunkHash;
                             updated = true;
                         }
                         
                         if (updated)
                         {
-                            context.ChunksMetadata.Update(ChunkEntity);
+                            context.ChunksMetadata.Update(chunkEntity);
                             await context.SaveChangesAsync(ct);
                         }
                     }
@@ -642,13 +641,13 @@ namespace VKR_Node.Services
                     // Add ChunkLocationEntity for initial nodes
                     foreach (var nodeId in initialNodeIds ?? Enumerable.Empty<string>())
                     {
-                        bool locationExists = ChunkEntity.Locations.Any(loc => loc.StoredNodeId == nodeId);
+                        bool locationExists = chunkEntity.Locations.Any(loc => loc.StoredNodeId == nodeId);
                         if (!locationExists)
                         {
                             _logger.LogDebug("Adding storage location for Chunk ID: {ChunkId} on Node ID: {NodeId}", 
                                 chunkInfo.ChunkId, nodeId);
                                 
-                            ChunkEntity.Locations.Add(new ChunkLocationEntity 
+                            chunkEntity.Locations.Add(new ChunkLocationEntity 
                             {
                                 FileId = chunkInfo.FileId, 
                                 ChunkId = chunkInfo.ChunkId, 
@@ -825,16 +824,16 @@ namespace VKR_Node.Services
             
             try
             {
-                await ExecuteInTransactionAsync<bool>("DeleteChunkMetadata", async (context, ct) =>
+                await ExecuteInTransactionAsync("DeleteChunkMetadata", async (context, ct) =>
                 {
                     // Find the chunk with its locations
-                    var ChunkEntity = await context.ChunksMetadata
+                    var chunkEntity = await context.ChunksMetadata
                         .Include(c => c.Locations)
                         .FirstOrDefaultAsync(c => c.FileId == fileId && c.ChunkId == chunkId, ct);
 
-                    if (ChunkEntity != null)
+                    if (chunkEntity != null)
                     {
-                        context.ChunksMetadata.Remove(ChunkEntity);
+                        context.ChunksMetadata.Remove(chunkEntity);
                         await context.SaveChangesAsync(ct);
                         
                         // Invalidate cache
@@ -875,9 +874,8 @@ namespace VKR_Node.Services
             
             try
             {
-                await ExecuteInTransactionAsync<bool>("AddChunkStorageNode", async (context, ct) =>
+                await ExecuteInTransactionAsync("AddChunkStorageNode", async (context, ct) =>
                 {
-                    // First check if the chunk metadata exists
                     bool chunkExists = await context.ChunksMetadata
                         .AnyAsync(c => c.FileId == fileId && c.ChunkId == chunkId, ct);
                         
@@ -888,7 +886,6 @@ namespace VKR_Node.Services
                         throw new InvalidOperationException($"Chunk metadata not found for File: {fileId}, Chunk: {chunkId}");
                     }
 
-                    // Check if the location already exists
                     bool locationExists = await context.ChunkLocations
                         .AnyAsync(loc => loc.FileId == fileId && loc.ChunkId == chunkId && loc.StoredNodeId == nodeId, ct);
 
@@ -905,7 +902,6 @@ namespace VKR_Node.Services
                         await context.ChunkLocations.AddAsync(newLocation, ct);
                         await context.SaveChangesAsync(ct);
                         
-                        // Invalidate cache
                         InvalidateCache($"chunknodes:{fileId}:{chunkId}");
                         if (nodeId == _localNodeId)
                         {
@@ -944,9 +940,8 @@ namespace VKR_Node.Services
             
             try
             {
-                return await ExecuteInTransactionAsync<bool>("RemoveChunkStorageNode", async (context, ct) =>
+                return await ExecuteInTransactionAsync("RemoveChunkStorageNode", async (context, ct) =>
                 {
-                    // Use ExecuteDeleteAsync for efficient deletion without loading entities
                     int deletedCount = await context.ChunkLocations
                         .Where(loc => loc.FileId == fileId && loc.ChunkId == chunkId && loc.StoredNodeId == nodeId)
                         .ExecuteDeleteAsync(ct);
@@ -956,12 +951,10 @@ namespace VKR_Node.Services
                         _logger.LogInformation("Successfully removed storage node {NodeId} for Chunk ID: {ChunkId}, File ID: {FileId}", 
                             nodeId, chunkId, fileId);
                             
-                        // Check if there are any remaining locations
                         int remainingCount = await context.ChunkLocations
                             .Where(loc => loc.FileId == fileId && loc.ChunkId == chunkId)
                             .CountAsync(ct);
                             
-                        // If no more locations, delete the chunk metadata too
                         if (remainingCount == 0)
                         {
                             _logger.LogInformation("Last location removed for Chunk ID: {ChunkId}, also removing chunk metadata", chunkId);
@@ -971,7 +964,6 @@ namespace VKR_Node.Services
                                 .ExecuteDeleteAsync(ct);
                         }
                         
-                        // Invalidate cache
                         InvalidateCache($"chunknodes:{fileId}:{chunkId}");
                         if (nodeId == _localNodeId)
                         {
@@ -1051,7 +1043,7 @@ namespace VKR_Node.Services
             
             try
             {
-                await ExecuteInTransactionAsync<bool>("UpdateChunkStorageNodes", async (context, ct) =>
+                await ExecuteInTransactionAsync("UpdateChunkStorageNodes", async (context, ct) =>
                 {
                     // Get existing locations
                     var existingLocations = await context.ChunkLocations

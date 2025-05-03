@@ -79,16 +79,16 @@ namespace VRK_WPF.MVVM.ViewModel
         private Brush _simulationStatusColor = Brushes.Black;
 
         [ObservableProperty]
-        private double _simulationProgress = 0;
+        private double _simulationProgress;
 
         [ObservableProperty]
-        private bool _isSimulationInProgress = false;
+        private bool _isSimulationInProgress;
 
         [ObservableProperty]
-        private bool _canSimulateNodeFailure = false;
+        private bool _canSimulateNodeFailure;
 
         [ObservableProperty]
-        private bool _canRestoreNodes = false;
+        private bool _canRestoreNodes;
         
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(UploadFileCommand))] 
@@ -180,11 +180,11 @@ namespace VRK_WPF.MVVM.ViewModel
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(IsSettingsInteractionEnabled))]
         [NotifyCanExecuteChangedFor(nameof(RefreshSettingsCommand))] 
-        private bool _isSettingsLoading = false;
+        private bool _isSettingsLoading;
 
         [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(IsSettingsInteractionEnabled))] // Notify dependent property
-        private bool _hasSettingsError = false;
+        [NotifyPropertyChangedFor(nameof(IsSettingsInteractionEnabled))] 
+        private bool _hasSettingsError;
         
         public bool IsSettingsInteractionEnabled => _storageClient != null && !IsSettingsLoading && !HasSettingsError;
 
@@ -205,7 +205,7 @@ namespace VRK_WPF.MVVM.ViewModel
             UpdateStatusBar("Ready. Enter node address and connect.");
         }
     
-        public MainWindowViewModel(ILogger<MainWindowViewModel> logger) 
+        MainWindowViewModel(ILogger<MainWindowViewModel> logger) 
         {
             _logger = logger;
             
@@ -251,7 +251,7 @@ namespace VRK_WPF.MVVM.ViewModel
             {
                  if (string.IsNullOrWhiteSpace(TargetNodeAddress) || !Uri.TryCreate(TargetNodeAddress, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
                  {
-                     _logger?.LogError("Invalid gRPC server address format: {Address}", TargetNodeAddress);
+                     _logger.LogError("Invalid gRPC server address format: {Address}", TargetNodeAddress);
                      UpdateConnectionStatus($"Error: Invalid address format.", Brushes.Red);
                      MessageBox.Show($"Invalid server address format: {TargetNodeAddress}\nPlease use http://host:port or https://host:port", "Connection Error", MessageBoxButton.OK, MessageBoxImage.Error);
                      return false;
@@ -263,13 +263,13 @@ namespace VRK_WPF.MVVM.ViewModel
                 _storageClient = new StorageService.StorageServiceClient(_currentChannel);
                 OnPropertyChanged(nameof(Debug_IsUploadPossible));
                 RefreshSettingsCommand.NotifyCanExecuteChanged();
-                _logger?.LogInformation("gRPC client initialized for address: {Address}", TargetNodeAddress);
+                _logger.LogInformation("gRPC client initialized for address: {Address}", TargetNodeAddress);
                 UpdateConnectionStatus($"Connected to {TargetNodeAddress}", Brushes.Green);
                 return true; 
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Failed to initialize gRPC client for address: {Address}", TargetNodeAddress);
+                _logger.LogError(ex, "Failed to initialize gRPC client for address: {Address}", TargetNodeAddress);
                 UpdateConnectionStatus($"Error connecting to {TargetNodeAddress}", Brushes.Red);
                 MessageBox.Show($"Failed to connect to gRPC server at {TargetNodeAddress}.\nEnsure the server is running and the address is correct.\n\nError: {ex.Message}", "gRPC Connection Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 _storageClient = null;
@@ -278,7 +278,7 @@ namespace VRK_WPF.MVVM.ViewModel
             }
         }
         
-        private void UpdateStatusBar(string message) { StatusBarText = message; _logger?.LogInformation("Status Bar: {Message}", message); }
+        private void UpdateStatusBar(string message) { StatusBarText = message; _logger.LogInformation("Status Bar: {Message}", message); }
         private bool CanExecuteUpload() => !string.IsNullOrEmpty(SelectedFilePath) && File.Exists(SelectedFilePath) && !IsUploading && !IsDownloading && _storageClient != null;
         
         public bool Debug_IsUploadPossible => !string.IsNullOrEmpty(SelectedFilePath) && File.Exists(SelectedFilePath) && !IsUploading && !IsDownloading && _storageClient != null;
@@ -293,7 +293,7 @@ namespace VRK_WPF.MVVM.ViewModel
         [RelayCommand(CanExecute = nameof(CanExecuteConnect))]
         private async Task ConnectAsync()
         {
-            _logger?.LogInformation("Attempting to connect to node: {Address}", TargetNodeAddress);
+            _logger.LogInformation("Attempting to connect to node: {Address}", TargetNodeAddress);
             StoredFiles.Clear(); 
             NetworkNodes.Clear();
 
@@ -301,7 +301,6 @@ namespace VRK_WPF.MVVM.ViewModel
             {
                 await RefreshFilesListAsync();
                 await RefreshNodeStatusAsync();
-                InitializeSimulationTab();
             }
             else
             {
@@ -309,181 +308,6 @@ namespace VRK_WPF.MVVM.ViewModel
             }
         }
         
-        private void InitializeSimulationTab()
-        {
-            if (_storageClient != null)
-            {
-                UpdateSimulationNodesList();
-                CanSimulateNodeFailure = true;
-                CanRestoreNodes = false;
-                SimulationStatus = "Готово к симуляции";
-                SimulationStatusColor = Brushes.Black;
-                SimulationLog = "Инициализация симуляции завершена. Выберите узлы для отключения.\n";
-            }
-        }
-        
-        [RelayCommand(CanExecute = nameof(CanSimulateNodeFailure))]
-        private async Task DisableSelectedNodesAsync()
-        {
-            if (_storageClient == null) return;
-            
-            var selectedNodes = SimNodesListView.SelectedItems.Cast<NodeViewModel>().ToList();
-            if (!selectedNodes.Any())
-            {
-                MessageBox.Show("Не выбрано ни одного узла для отключения!", "Симуляция", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-            
-            IsSimulationInProgress = true;
-            CanSimulateNodeFailure = false;
-            SimulationStatus = "Симуляция отключения узлов...";
-            SimulationStatusColor = Brushes.Orange;
-            
-            try
-            {
-                AppendToSimulationLog($"Начало симуляции отключения {selectedNodes.Count} узлов: {string.Join(", ", selectedNodes.Select(n => n.NodeId))}");
-                
-                // Call the server method to disable nodes
-                foreach (var node in selectedNodes)
-                {
-                    await SimulateNodeFailureAsync(node.NodeId);
-                    AppendToSimulationLog($"Узел {node.Id} отключен.");
-                    SimulationProgress += 100.0 / selectedNodes.Count;
-                }
-                
-                // Refresh network status
-                await RefreshNodeStatusAsync();
-                
-                // Update simulation nodes from the refreshed network nodes
-                UpdateSimulationNodesList();
-                
-                // Get and display the impact on file and chunk availability
-                await UpdateFileAndChunkStatusAsync();
-                
-                SimulationStatus = "Симуляция завершена. Узлы отключены.";
-                SimulationStatusColor = Brushes.Green;
-                CanRestoreNodes = true;
-            }
-            catch (Exception ex)
-            {
-                SimulationStatus = $"Ошибка симуляции: {ex.Message}";
-                SimulationStatusColor = Brushes.Red;
-                AppendToSimulationLog($"Ошибка: {ex.Message}");
-            }
-            finally
-            {
-                IsSimulationInProgress = false;
-                SimulationProgress = 0;
-                // Re-enable simulation after a brief delay
-                await Task.Delay(2000);
-                CanSimulateNodeFailure = _storageClient != null;
-            }
-        }
-
-        [RelayCommand(CanExecute = nameof(CanRestoreNodes))]
-        private async Task RestoreAllNodesAsyncClient()
-        {
-            if (_storageClient == null) return;
-            
-            IsSimulationInProgress = true;
-            CanRestoreNodes = false;
-            SimulationStatus = "Восстановление всех узлов...";
-            SimulationStatusColor = Brushes.Orange;
-            
-            try
-            {
-                AppendToSimulationLog("Восстановление всех узлов...");
-                
-                // Call server method to restore all nodes
-                await RestoreAllNodesAsync();
-                
-                // Refresh network status
-                await RefreshNodeStatusAsync();
-                
-                // Update simulation nodes from the refreshed network nodes
-                UpdateSimulationNodesList();
-                
-                // Get and display the impact on file and chunk availability
-                await UpdateFileAndChunkStatusAsync();
-                
-                SimulationStatus = "Все узлы восстановлены.";
-                SimulationStatusColor = Brushes.Green;
-            }
-            catch (Exception ex)
-            {
-                SimulationStatus = $"Ошибка восстановления: {ex.Message}";
-                SimulationStatusColor = Brushes.Red;
-                AppendToSimulationLog($"Ошибка: {ex.Message}");
-            }
-            finally
-            {
-                IsSimulationInProgress = false;
-                SimulationProgress = 0;
-                CanSimulateNodeFailure = _storageClient != null;
-            }
-        }
-
-        // Helper methods
-        private void AppendToSimulationLog(string message)
-        {
-            string timestamp = DateTime.Now.ToString("HH:mm:ss");
-            SimulationLog += $"[{timestamp}] {message}\n";
-        }
-
-        private void UpdateSimulationNodesList()
-        {
-            SimulationNodes.Clear();
-            foreach (var node in NetworkNodes)
-            {
-                SimulationNodes.Add(new NodeViewModel
-                {
-                    NodeId = node.NodeId,
-                    Address = node.Address,
-                    Status = node.Status,
-                    StatusDetails = node.StatusDetails
-                });
-            }
-        }
-
-        private async Task SimulateNodeFailureAsync(string nodeId)
-        {
-            // Call the server API to simulate node failure
-            try
-            {
-                var request = new SimulateNodeFailureRequest { NodeId = nodeId };
-                var reply = await _storageClient.SimulateNodeFailureAsync(request);
-                
-                if (!reply.Success)
-                {
-                    AppendToSimulationLog($"Ошибка отключения узла {nodeId}: {reply.Message}");
-                }
-            }
-            catch (RpcException ex)
-            {
-                AppendToSimulationLog($"gRPC ошибка при отключении узла {nodeId}: {ex.Status.Detail}");
-                throw;
-            }
-        }
-
-        private async Task RestoreAllNodesAsyncServer()
-        {
-            // Call the server API to restore all nodes
-            try
-            {
-                var request = new RestoreAllNodesRequest();
-                var reply = await _storageClient.RestoreAllNodesAsync(request);
-                
-                if (!reply.Success)
-                {
-                    AppendToSimulationLog($"Ошибка восстановления узлов: {reply.Message}");
-                }
-            }
-            catch (RpcException ex)
-            {
-                AppendToSimulationLog($"gRPC ошибка при восстановлении узлов: {ex.Status.Detail}");
-                throw;
-            }
-        }
 
         private async Task UpdateFileAndChunkStatusAsync()
         {
@@ -522,11 +346,10 @@ namespace VRK_WPF.MVVM.ViewModel
                     });
                 }
                 
-                AppendToSimulationLog($"Обновлена информация о {SimulationFileStatuses.Count} файлах и {SimulationChunkDistribution.Count} чанках.");
             }
             catch (Exception ex)
             {
-                AppendToSimulationLog($"Ошибка обновления статусов: {ex.Message}");
+                _logger.LogError(ex.Message);
             }
         }
                 
@@ -543,7 +366,7 @@ namespace VRK_WPF.MVVM.ViewModel
             {
                 SelectedFilePath = openFileDialog.FileName;
                 SelectedFileName = Path.GetFileName(SelectedFilePath);
-                 _logger?.LogInformation("File selected for upload: {FilePath}", SelectedFilePath);
+                 _logger.LogInformation("File selected for upload: {FilePath}", SelectedFilePath);
             }
         }
 
@@ -561,7 +384,7 @@ namespace VRK_WPF.MVVM.ViewModel
             UploadStatus = "Starting upload...";
             _uploadCts = new CancellationTokenSource();
             UpdateStatusBar($"Uploading {SelectedFileName}...");
-            _logger?.LogInformation("Upload started for file: {FilePath}", SelectedFilePath); // Added log
+            _logger.LogInformation("Upload started for file: {FilePath}", SelectedFilePath); // Added log
 
             AsyncClientStreamingCall<UploadFileRequest, UploadFileReply>? call = null; // Declare call object outside try
 
@@ -579,21 +402,21 @@ namespace VRK_WPF.MVVM.ViewModel
                     CreationTime = Timestamp.FromDateTime(DateTime.UtcNow)
                     // ChunkSize determined by server
                 };
-                _logger?.LogInformation("Prepared metadata. Expected Size: {FileSize}", fileSize);
+                _logger.LogInformation("Prepared metadata. Expected Size: {FileSize}", fileSize);
 
 
                 // Start the call
                 call = _storageClient.UploadFile(cancellationToken: _uploadCts.Token);
-                _logger?.LogInformation("gRPC UploadFile call initiated.");
+                _logger.LogInformation("gRPC UploadFile call initiated.");
 
                 // 1. Send Metadata FIRST
-                _logger?.LogDebug("Sending metadata...");
+                _logger.LogDebug("Sending metadata...");
                 await call.RequestStream.WriteAsync(new UploadFileRequest { Metadata = metadata });
                 UploadStatus = "Sent metadata, sending chunks...";
-                 _logger?.LogDebug("Metadata sent.");
+                 _logger.LogDebug("Metadata sent.");
 
                 // 2. Send Chunks IN A LOOP
-                 _logger?.LogDebug("Starting chunk sending loop...");
+                 _logger.LogDebug("Starting chunk sending loop...");
                 long totalBytesSent = 0;
                 int chunkIndex = 0;
                 // Chunk size for buffer reading - can be different from server's internal chunking if needed, but using a reasonable size like 1MB is fine.
@@ -619,9 +442,9 @@ namespace VRK_WPF.MVVM.ViewModel
                             Size = bytesRead // Important: Send the actual size read
                         };
 
-                        _logger?.LogTrace("Sending Chunk Index: {Index}, Size: {Size}", chunkIndex, bytesRead);
+                        _logger.LogTrace("Sending Chunk Index: {Index}, Size: {Size}", chunkIndex, bytesRead);
                         await call.RequestStream.WriteAsync(new UploadFileRequest { Chunk = chunk });
-                         _logger?.LogTrace("Sent Chunk Index: {Index}", chunkIndex);
+                         _logger.LogTrace("Sent Chunk Index: {Index}", chunkIndex);
 
 
                         totalBytesSent += bytesRead;
@@ -639,18 +462,18 @@ namespace VRK_WPF.MVVM.ViewModel
                         }
                     }
                 } // FileStream disposed here
-                _logger?.LogInformation("Finished sending {ChunkCount} chunks. Total bytes sent: {TotalBytes}", chunkIndex, totalBytesSent);
+                _logger.LogInformation("Finished sending {ChunkCount} chunks. Total bytes sent: {TotalBytes}", chunkIndex, totalBytesSent);
 
                 // 3. Complete Request Stream **AFTER** the loop finishes
-                 _logger?.LogDebug("Completing request stream...");
+                 _logger.LogDebug("Completing request stream...");
                 await call.RequestStream.CompleteAsync(); // CRITICAL: This must be called only ONCE and AFTER all chunks are written
-                 _logger?.LogInformation("Request stream completed.");
+                 _logger.LogInformation("Request stream completed.");
 
                 UploadStatus = "Waiting for server confirmation...";
 
                 // 4. Get Response
                 var response = await call.ResponseAsync;
-                _logger?.LogInformation("Received final response from server. Success: {Success}, Message: {Message}", response.Success, response.Message);
+                _logger.LogInformation("Received final response from server. Success: {Success}, Message: {Message}", response.Success, response.Message);
 
 
                 if (response.Success)
@@ -668,20 +491,20 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             catch (RpcException ex)
             {
-                _logger?.LogError(ex, "gRPC Error during upload: Status={StatusCode}, Detail={Detail}", ex.StatusCode, ex.Status.Detail);
+                _logger.LogError(ex, "gRPC Error during upload: Status={StatusCode}, Detail={Detail}", ex.StatusCode, ex.Status.Detail);
                 UploadStatus = $"gRPC Error: {ex.StatusCode}";
                 UpdateStatusBar($"Upload failed for {SelectedFileName} (gRPC Error)");
                 MessageBox.Show($"An error occurred during upload:\nStatus: {ex.StatusCode}\nDetail: {ex.Status.Detail}", "Upload Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch (OperationCanceledException)
             {
-                _logger?.LogInformation("Upload cancelled by user.");
+                _logger.LogInformation("Upload cancelled by user.");
                 UploadStatus = "Upload cancelled.";
                 UpdateStatusBar($"Upload cancelled for {SelectedFileName}");
             }
             catch (Exception ex)
             {
-                 _logger?.LogError(ex, "Unexpected error during upload.");
+                 _logger.LogError(ex, "Unexpected error during upload.");
                 UploadStatus = $"Error: {ex.Message}";
                 UpdateStatusBar($"Upload failed for {SelectedFileName} (Error)");
                 MessageBox.Show($"An unexpected error occurred during upload:\n{ex.Message}", "Upload Error", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -697,7 +520,7 @@ namespace VRK_WPF.MVVM.ViewModel
                 _uploadCts = null;
                 // Note: The 'call' object (AsyncClientStreamingCall) doesn't need explicit disposal typically,
                 // as completing/awaiting the response handles resource cleanup.
-                _logger?.LogInformation("Upload operation finished.");
+                _logger.LogInformation("Upload operation finished.");
             }
         }
 
@@ -708,7 +531,7 @@ namespace VRK_WPF.MVVM.ViewModel
         {
             if (IsUploading && _uploadCts != null && !_uploadCts.IsCancellationRequested)
             {
-                _logger?.LogInformation("Attempting to cancel upload.");
+                _logger.LogInformation("Attempting to cancel upload.");
                 _uploadCts.Cancel();
                 UploadStatus = "Cancelling upload...";
             }
@@ -835,7 +658,7 @@ namespace VRK_WPF.MVVM.ViewModel
         {
             if (IsDownloading && _downloadCts != null && !_downloadCts.IsCancellationRequested)
             {
-                 _logger?.LogInformation("Attempting to cancel download.");
+                 _logger.LogInformation("Attempting to cancel download.");
                 _downloadCts.Cancel();
                 DownloadStatus = "Cancelling download...";
             }
@@ -857,7 +680,7 @@ namespace VRK_WPF.MVVM.ViewModel
             if (result != MessageBoxResult.Yes) return;
 
              UpdateStatusBar($"Deleting {fileToDelete.FileName}...");
-             _logger?.LogInformation("Initiating delete request for File ID: {FileId}", fileToDelete.FileId);
+             _logger.LogInformation("Initiating delete request for File ID: {FileId}", fileToDelete.FileId);
 
              // Optionally disable interaction while deleting
              // IsDeleting = true; // Need IsDeleting property if used
@@ -910,7 +733,7 @@ namespace VRK_WPF.MVVM.ViewModel
             }
 
             UpdateStatusBar("Refreshing file list...");
-             _logger?.LogInformation("Refreshing file list...");
+             _logger.LogInformation("Refreshing file list...");
              // Consider showing a busy indicator
 
             try
@@ -941,14 +764,14 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             catch (RpcException ex)
             {
-                 _logger?.LogError(ex, "gRPC Error refreshing file list");
+                 _logger.LogError(ex, "gRPC Error refreshing file list");
                 UpdateStatusBar("Error refreshing file list (gRPC Error)");
                 MessageBox.Show($"Failed to refresh file list:\nStatus: {ex.StatusCode}\nDetail: {ex.Status.Detail}", "Refresh Error", MessageBoxButton.OK, MessageBoxImage.Error);
                  StoredFiles.Clear(); // Clear potentially partial list
             }
             catch (Exception ex)
             {
-                 _logger?.LogError(ex, "Unexpected error refreshing file list");
+                 _logger.LogError(ex, "Unexpected error refreshing file list");
                 UpdateStatusBar("Error refreshing file list");
                 MessageBox.Show($"An unexpected error occurred while refreshing the file list:\n{ex.Message}", "Refresh Error", MessageBoxButton.OK, MessageBoxImage.Error);
                  StoredFiles.Clear(); // Clear potentially partial list
@@ -962,16 +785,17 @@ namespace VRK_WPF.MVVM.ViewModel
         [RelayCommand(CanExecute = nameof(CanExecuteRefreshNodeStatus))]
         private async Task RefreshNodeStatusAsync()
         {
-             if (_storageClient == null)
-            {
-                UpdateStatusBar("Cannot refresh node status: gRPC client not ready.");
-                 MessageBox.Show("Cannot refresh node statuses because the connection to the server is not established.", "Connection Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
+            if (_storageClient == null) 
+            { 
+                UpdateStatusBar("Cannot refresh node status: gRPC client not ready."); 
+                MessageBox.Show("Cannot refresh node statuses because the connection to the server is not established.", "Connection Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return; 
             }
+             
+            IsNodeStatusRefreshing = true; 
 
-            IsNodeStatusRefreshing = true; // Triggers CanExecute changes
             UpdateStatusBar("Refreshing node statuses...");
-            _logger?.LogInformation("Refreshing node statuses...");
+            _logger.LogInformation("Refreshing node statuses...");
 
             NetworkNodes.Clear();
             NetworkNodes.Add(new NodeViewModel { NodeId = "Refreshing...", Status = "Busy"});
@@ -981,7 +805,7 @@ namespace VRK_WPF.MVVM.ViewModel
                 var request = new GetNodeStatusesRequest();
                 var reply = await _storageClient.GetNodeStatusesAsync(request, deadline: DateTime.UtcNow.AddSeconds(15));
 
-                NetworkNodes.Clear(); // Clear "Refreshing..."
+                NetworkNodes.Clear(); 
                 if (reply.Nodes != null)
                 {
                     foreach (var nodeProto in reply.Nodes.OrderBy(n => n.NodeId))
@@ -1000,7 +824,7 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             catch (RpcException ex)
             {
-                 _logger?.LogError(ex, "gRPC Error refreshing node statuses");
+                 _logger.LogError(ex, "gRPC Error refreshing node statuses");
                  NetworkNodes.Clear();
                  NetworkNodes.Add(new NodeViewModel { NodeId = "Error", Status = "Failed", StatusDetails = $"gRPC: {ex.StatusCode}"});
                 UpdateStatusBar("Error refreshing node statuses (gRPC Error)");
@@ -1008,7 +832,7 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             catch (Exception ex)
             {
-                 _logger?.LogError(ex, "Unexpected error refreshing node statuses");
+                 _logger.LogError(ex, "Unexpected error refreshing node statuses");
                  NetworkNodes.Clear();
                  NetworkNodes.Add(new NodeViewModel { NodeId = "Error", Status = "Failed", StatusDetails = $"Error: {ex.Message}"});
                 UpdateStatusBar("Error refreshing node statuses");
@@ -1030,7 +854,7 @@ namespace VRK_WPF.MVVM.ViewModel
         {
             if (_storageClient == null)
             {
-                _logger?.LogWarning("Cannot load settings: StorageServiceClient is null (not connected).");
+                _logger.LogWarning("Cannot load settings: StorageServiceClient is null (not connected).");
                 // Reset settings properties to default/disconnected state
                 SettingNodeId = "N/A";
                 SettingListenAddress = "N/A";
@@ -1048,7 +872,7 @@ namespace VRK_WPF.MVVM.ViewModel
             HasSettingsError = false;
             SettingsErrorMessage = string.Empty;
             UpdateStatusBar("Loading node settings...");
-            _logger?.LogInformation("Attempting to load node settings...");
+            _logger.LogInformation("Attempting to load node settings...");
             // Notify UI that interaction might be disabled
             RefreshSettingsCommand.NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(IsSettingsInteractionEnabled));
@@ -1061,7 +885,7 @@ namespace VRK_WPF.MVVM.ViewModel
 
                 if (reply.Success)
                 {
-                    _logger?.LogInformation("Successfully loaded node settings.");
+                    _logger.LogInformation("Successfully loaded node settings.");
                     // Update properties
                     SettingNodeId = reply.NodeId;
                     SettingListenAddress = reply.ListenAddress;
@@ -1099,14 +923,14 @@ namespace VRK_WPF.MVVM.ViewModel
             {
                 SettingsErrorMessage = $"gRPC Error loading settings: {rpcex.StatusCode}";
                 HasSettingsError = true;
-                _logger?.LogError(rpcex, "gRPC error loading node settings: {StatusCode}", rpcex.StatusCode);
+                _logger.LogError(rpcex, "gRPC error loading node settings: {StatusCode}", rpcex.StatusCode);
                 UpdateStatusBar($"Error loading settings (gRPC: {rpcex.StatusCode})");
             }
             catch (Exception ex)
             {
                 SettingsErrorMessage = $"Error loading settings: {ex.Message}";
                 HasSettingsError = true;
-                _logger?.LogError(ex, "Unexpected error loading node settings.");
+                _logger.LogError(ex, "Unexpected error loading node settings.");
                 UpdateStatusBar("Error loading settings.");
             }
             finally

@@ -128,3 +128,6 @@ C:\Users\bagda\RiderProjects\VKR_Network\VRK_WPF\obj\Debug\net8.0-windows\refint
 C:\Users\bagda\RiderProjects\VKR_Network\VRK_WPF\obj\Debug\net8.0-windows\VRK_WPF.pdb
 C:\Users\bagda\RiderProjects\VKR_Network\VRK_WPF\obj\Debug\net8.0-windows\VRK_WPF.genruntimeconfig.cache
 C:\Users\bagda\RiderProjects\VKR_Network\VRK_WPF\obj\Debug\net8.0-windows\ref\VRK_WPF.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VRK_WPF\bin\Debug\net8.0-windows\AutoMapper.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VRK_WPF\bin\Debug\net8.0-windows\ComputerInfo.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VRK_WPF\bin\Debug\net8.0-windows\Microsoft.DotNet.PlatformAbstractions.dll

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VRK_WPF")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e5bf4d5711b13b4d6bf6949532a789bb541f4e0c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fee6c0e4c1d1f8501a59fea09f56e702c64c93d2")]
 [assembly: System.Reflection.AssemblyProductAttribute("VRK_WPF")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VRK_WPF")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

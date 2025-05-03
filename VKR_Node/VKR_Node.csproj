@@ -13,6 +13,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="ComputerInfo" Version="0.2.0" />
       <PackageReference Include="Grpc.AspNetCore" Version="2.70.0" />
       <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.3">
         <PrivateAssets>all</PrivateAssets>

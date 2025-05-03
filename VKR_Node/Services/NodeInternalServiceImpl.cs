@@ -1,4 +1,6 @@
-﻿using Google.Protobuf;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
+using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
@@ -21,6 +23,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
     private readonly INodeClient _nodeClient;
     private readonly NodeIdentityOptions _nodeOptions;
 
+    private readonly ConcurrentDictionary<string, (long Count, long TotalMs)> _methodMetrics = new();
     public NodeInternalServiceImpl(
         ILogger<NodeInternalServiceImpl> logger,
         IMetadataManager metadataManager,
@@ -34,10 +37,37 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         _nodeClient = nodeClient;
         _nodeOptions = nodeOptions.Value;
     }
+   
+    private void RecordMetric(string methodName, long elapsedMs)
+    {
+        _methodMetrics.AddOrUpdate(
+            methodName,
+            (1, elapsedMs),
+            (_, current) => (current.Count + 1, current.TotalMs + elapsedMs)
+        );
+    }
+
+    private void LogMetrics()
+    {
+        foreach (var kvp in _methodMetrics.ToArray())
+        {
+            string method = kvp.Key;
+            var (count, totalMs) = kvp.Value;
+        
+            if (count > 0)
+            {
+                _logger.LogInformation(
+                    "Method: {Method}, Calls: {Count}, AvgTime: {AvgTime:F2}ms", 
+                    method, count, (double)totalMs / count);
+            }
+        }
+    }
 
     public override async Task<ReplicateChunkReply> ReplicateChunk(ReplicateChunkRequest request,
         ServerCallContext context)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        
         _logger.LogInformation(
             "Node {NodeId} received ReplicateChunk request for Chunk {ChunkId} of File {FileId} from Node {OriginalNodeId}",
             _nodeOptions.NodeId, request.ChunkId, request.FileId, request.OriginalNodeId);
@@ -64,6 +94,17 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
 
         try
         {
+            // Check available disk space
+            long availableSpace = await _dataManager.GetFreeDiskSpaceAsync(context.CancellationToken);
+            long requiredSpace = (long)(request.Data.Length * 1.1); // Add 10% buffer
+            
+            if (availableSpace < requiredSpace)
+            {
+                string errorMsg = $"Insufficient disk space. Required: {FormatBytes(requiredSpace)}, Available: {FormatBytes(availableSpace)}";
+                _logger.LogError("Cannot store chunk {ChunkId}: {ErrorMessage}", request.ChunkId, errorMsg);
+                return new ReplicateChunkReply { Success = false, Message = errorMsg };
+            }
+
             // Store chunk data and update metadata
             bool success = await StoreChunkAndMetadataAsync(chunkInfo, request.Data, context.CancellationToken);
             if (!success)
@@ -78,21 +119,41 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
                     context.CancellationToken);
             }
 
-            // Send acknowledgement to original sender if needed
+            // Send acknowledgement to original sender
             if (!string.IsNullOrEmpty(request.OriginalNodeId) && request.OriginalNodeId != localNodeId)
             {
                 // Fire-and-forget acknowledgement task
-                _ = SendReplicaAcknowledgementAsync(request.OriginalNodeId, request.FileId, request.ChunkId,
-                    localNodeId);
+                _ = SendReplicaAcknowledgementAsync(request.OriginalNodeId, request.FileId, request.ChunkId, localNodeId);
             }
 
+            sw.Stop();
+            _logger.LogInformation("Successfully replicated Chunk {ChunkId} in {ElapsedMs}ms", 
+                request.ChunkId, sw.ElapsedMilliseconds);
+                
             return new ReplicateChunkReply { Success = true, Message = "Chunk replicated successfully" };
         }
         catch (Exception ex)
         {
+            sw.Stop();
             _logger.LogError(ex, "Error processing ReplicateChunk request for Chunk {ChunkId}", request.ChunkId);
             return new ReplicateChunkReply { Success = false, Message = $"Error: {ex.Message}" };
         }
+    }
+
+    // Helper for formatting bytes in logged messages
+    private string FormatBytes(long bytes)
+    {
+        string[] sizes = ["B", "KB", "MB", "GB", "TB"];
+        double len = bytes;
+        int order = 0;
+        
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        
+        return $"{len:0.##} {sizes[order]}";
     }
 
     private async Task<bool> StoreChunkAndMetadataAsync(ChunkModel chunkInfo, ByteString data,
@@ -143,12 +204,23 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
             return false;
         }
     }
-
-    private async Task ProcessParentFileMetadataAsync(string fileId, FileMetadata protoMetadata,
+    
+    private async Task ProcessParentFileMetadataAsync(string fileId, FileMetadata protoMetadata, 
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrEmpty(fileId) || protoMetadata == null)
+        {
+            _logger.LogWarning("Invalid file metadata provided: FileId or metadata is null");
+            return;
+        }
+    
         try
         {
+            if (string.IsNullOrEmpty(protoMetadata.FileName) || protoMetadata.FileSize <= 0)
+            {
+                _logger.LogWarning("Incomplete file metadata for {FileId}: Missing filename or size", fileId);
+            }
+        
             var existingMetadata = await _metadataManager.GetFileMetadataAsync(fileId, cancellationToken);
             bool shouldSaveMetadata = ShouldUpdateFileMetadata(existingMetadata, protoMetadata);
 
@@ -157,6 +229,10 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
                 var coreMetadata = MapProtoToFileModel(fileId, protoMetadata);
                 await _metadataManager.SaveFileMetadataAsync(coreMetadata, cancellationToken);
                 _logger.LogDebug("Saved/updated FileMetadata for {FileId} based on replica request", fileId);
+            }
+            else
+            {
+                _logger.LogDebug("No need to update FileMetadata for {FileId} (no changes or local version is newer)", fileId);
             }
         }
         catch (Exception ex)
@@ -258,9 +334,6 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         };
     }
 
-    /// <summary>
-    /// Handles requests to delete a specific chunk replica.
-    /// </summary>
     public override async Task<DeleteChunkReply> DeleteChunk(DeleteChunkRequest request, ServerCallContext context)
     {
         if (string.IsNullOrEmpty(request.FileId) || string.IsNullOrEmpty(request.ChunkId))
@@ -269,16 +342,88 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
             return new DeleteChunkReply { Success = false, Message = "File ID and Chunk ID are required" };
         }
 
+        var sw = Stopwatch.StartNew();
         _logger.LogInformation("Node {NodeId} received DeleteChunk request for Chunk {ChunkId} of File {FileId}",
             _nodeOptions.NodeId, request.ChunkId, request.FileId);
 
         try
         {
-            var result = await DeleteLocalChunkAsync(request.FileId, request.ChunkId, context.CancellationToken);
-            return new DeleteChunkReply { Success = result.Success, Message = result.Message };
+            // Check if the chunk exists before attempting deletion
+            var chunkInfo = new ChunkModel
+            {
+                FileId = request.FileId,
+                ChunkId = request.ChunkId,
+                StoredNodeId = _nodeOptions.NodeId
+            };
+            
+            bool exists = await _dataManager.ChunkExistsAsync(chunkInfo, context.CancellationToken);
+            
+            if (!exists)
+            {
+                // Not an error - might have been already deleted or never stored here
+                _logger.LogInformation("Chunk {ChunkId} not found locally, nothing to delete", request.ChunkId);
+                return new DeleteChunkReply { Success = true, Message = "Chunk not found locally (no action required)" };
+            }
+            
+            bool metadataRemoved = false;
+            bool dataRemoved = false;
+
+            // 1. Remove chunk location from metadata
+            try
+            {
+                metadataRemoved = await _metadataManager.RemoveChunkStorageNodeAsync(
+                    request.FileId, request.ChunkId, _nodeOptions.NodeId, context.CancellationToken);
+
+                if (!metadataRemoved)
+                {
+                    _logger.LogWarning("Failed to remove metadata location for Chunk {ChunkId} (or it was already gone)",
+                        request.ChunkId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error removing chunk metadata for Chunk {ChunkId}", request.ChunkId);
+                // Continue to attempt data removal anyway
+            }
+
+            // 2. Delete the actual chunk data file
+            try
+            {
+                dataRemoved = await _dataManager.DeleteChunkAsync(chunkInfo, context.CancellationToken);
+
+                if (!dataRemoved)
+                {
+                    _logger.LogWarning("Failed to delete chunk data file for Chunk {ChunkId} (or it was already gone)",
+                        request.ChunkId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting chunk data for Chunk {ChunkId}", request.ChunkId);
+            }
+
+            // Consider success if EITHER metadata or data was successfully removed
+            bool overallSuccess = metadataRemoved || dataRemoved;
+            string message;
+            
+            if (metadataRemoved && dataRemoved)
+                message = "Chunk metadata and data successfully deleted";
+            else if (metadataRemoved)
+                message = "Chunk metadata removed but data deletion failed";
+            else if (dataRemoved)
+                message = "Chunk data deleted but metadata removal failed";
+            else
+                message = "Failed to delete chunk metadata or data (may not exist)";
+
+            sw.Stop();
+            _logger.LogInformation("Delete operation for Chunk {ChunkId} completed in {ElapsedMs}ms: {Message}", 
+                request.ChunkId, sw.ElapsedMilliseconds, message);
+                
+            return new DeleteChunkReply { Success = overallSuccess, Message = message };
         }
         catch (Exception ex)
         {
+            sw.Stop();
             _logger.LogError(ex, "Error processing DeleteChunk request for Chunk {ChunkId}", request.ChunkId);
             return new DeleteChunkReply
             {
@@ -298,10 +443,10 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
             StoredNodeId = _nodeOptions.NodeId
         };
 
-        bool metadataRemoved = false;
-        bool dataRemoved = false;
+        bool metadataRemoved;
+        bool dataRemoved;
 
-        // 1. Remove chunk location from metadata
+        // 1. First attempt to remove metadata (if this fails, we don't try data deletion)
         try
         {
             metadataRemoved = await _metadataManager.RemoveChunkStorageNodeAsync(
@@ -316,30 +461,43 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error removing chunk metadata for Chunk {ChunkId}", chunkId);
-            // Continue to attempt data removal anyway
+            return (false, $"Metadata deletion failed: {ex.Message}");
         }
 
-        // 2. Delete the actual chunk data file
-        try
+        // 2. Only delete the data if metadata was successfully removed (or not found)
+        if (metadataRemoved || true) // Always try to delete data for safety
         {
-            dataRemoved = await _dataManager.DeleteChunkAsync(chunkInfo, cancellationToken);
-
-            if (!dataRemoved)
+            try
             {
-                _logger.LogWarning("Failed to delete chunk data file for Chunk {ChunkId} (or it was already gone)",
-                    chunkId);
+                dataRemoved = await _dataManager.DeleteChunkAsync(chunkInfo, cancellationToken);
+
+                if (!dataRemoved)
+                {
+                    _logger.LogWarning("Failed to delete chunk data file for Chunk {ChunkId} (or it was already gone)",
+                        chunkId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting chunk data for Chunk {ChunkId}", chunkId);
+                // Return partial success if metadata was removed but data deletion failed
+                if (metadataRemoved)
+                {
+                    return (true, "Chunk metadata removed but data deletion failed");
+                }
+                return (false, $"Data deletion failed: {ex.Message}");
             }
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deleting chunk data for Chunk {ChunkId}", chunkId);
-        }
 
-        // Consider success if EITHER metadata or data was successfully removed
-        bool overallSuccess = metadataRemoved || dataRemoved;
-        string message = GetDeleteResultMessage(metadataRemoved, dataRemoved);
-
-        return (overallSuccess, message);
+        // Return success based on results
+        if (metadataRemoved && dataRemoved)
+            return (true, "Chunk metadata and data successfully deleted");
+        if (metadataRemoved)
+            return (true, "Chunk metadata removed but data deletion failed");
+        if (dataRemoved)
+            return (true, "Chunk data deleted but metadata removal failed");
+        
+        return (false, "Failed to delete chunk metadata or data (may not exist)");
     }
 
     private string GetDeleteResultMessage(bool metadataRemoved, bool dataRemoved)
@@ -353,27 +511,30 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         return "Failed to delete chunk metadata or data (may not exist)";
     }
 
-    /// <summary>
-    /// Handles Ping requests from other nodes. Simply acknowledges the ping.
-    /// </summary>
-    /// <summary>
-    /// Handles Ping requests from other nodes. Simply acknowledges the ping.
-    /// </summary>
     public override Task<PingReply> Ping(PingRequest request, ServerCallContext context)
     {
-        _logger.LogDebug("Node {NodeId} received Ping request from Node {SenderNodeId}.", _nodeOptions.NodeId,
-            request.SenderNodeId ?? "Unknown");
+        var sw = Stopwatch.StartNew();
+    
+        _logger.LogDebug("Node {NodeId} received Ping request from Node {SenderNodeId}.",
+            _nodeOptions.NodeId, request.SenderNodeId ?? "Unknown");
+        
         var reply = new PingReply
         {
             ResponderNodeId = _nodeOptions.NodeId,
             Success = true
         };
+    
+        sw.Stop();
+    
+        // Only log slower pings to avoid log spam
+        if (sw.ElapsedMilliseconds > 10)
+        {
+            _logger.LogDebug("Processed ping from {SenderNodeId} in {ElapsedMs}ms", 
+                request.SenderNodeId ?? "Unknown", sw.ElapsedMilliseconds);
+        }
+    
         return Task.FromResult(reply);
     }
-
-    /// <summary>
-    /// Handles requests from other nodes to stream a specific chunk's data.
-    /// </summary>
     public override async Task RequestChunk(
         RequestChunkRequest request,
         IServerStreamWriter<RequestChunkReply> responseStream,
@@ -385,15 +546,17 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
             throw new RpcException(new Status(StatusCode.InvalidArgument, "File ID and Chunk ID are required"));
         }
 
+        var sw = Stopwatch.StartNew();
         _logger.LogInformation(
             "Node {NodeId} received RequestChunk for Chunk {ChunkId} of File {FileId} from peer {Peer}",
             _nodeOptions.NodeId, request.ChunkId, request.FileId, context.Peer);
 
         Stream? chunkDataStream = null;
+        long totalBytesSent = 0;
+        
         try
         {
-            chunkDataStream =
-                await GetLocalChunkDataStreamAsync(request.FileId, request.ChunkId, context.CancellationToken);
+            chunkDataStream = await GetLocalChunkDataStreamAsync(request.FileId, request.ChunkId, context.CancellationToken);
 
             if (chunkDataStream == null)
             {
@@ -402,13 +565,57 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
                 throw new RpcException(new Status(StatusCode.NotFound, "Chunk not found locally"));
             }
 
-            await StreamChunkDataAsync(chunkDataStream, responseStream, context.CancellationToken);
+            // Get chunk size for progress reporting
+            long totalSize = chunkDataStream.Length;
+            
+            // Use larger buffer size for better streaming performance
+            const int bufferSize = 256 * 1024; // 256KB chunks for streaming
+            byte[] buffer = new byte[bufferSize];
+            int bytesRead;
+            int chunksSent = 0;
 
-            _logger.LogInformation("Finished streaming chunk {ChunkId} to peer {Peer}", request.ChunkId, context.Peer);
+            while ((bytesRead = await chunkDataStream.ReadAsync(buffer, 0, buffer.Length, context.CancellationToken)) > 0)
+            {
+                // Check if client is still connected
+                if (context.CancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogInformation("Client cancelled streaming of Chunk {ChunkId}", request.ChunkId);
+                    break;
+                }
+                
+                totalBytesSent += bytesRead;
+                chunksSent++;
+                
+                // Log progress for large chunks
+                if (totalSize > 10 * 1024 * 1024 && chunksSent % 10 == 0) // Log every 10 chunks for 10MB+ files
+                {
+                    double progressPercent = (double)totalBytesSent / totalSize * 100;
+                    _logger.LogDebug("Streaming Chunk {ChunkId} progress: {Progress:F1}% ({BytesSent}/{TotalSize})", 
+                        request.ChunkId, progressPercent, FormatBytes(totalBytesSent), FormatBytes(totalSize));
+                }
+
+                await responseStream.WriteAsync(new RequestChunkReply
+                {
+                    Data = ByteString.CopyFrom(buffer, 0, bytesRead)
+                }, context.CancellationToken);
+            }
+
+            sw.Stop();
+            double transferSpeed = sw.ElapsedMilliseconds > 0 
+                ? totalBytesSent / (1024.0 * 1024) / (sw.ElapsedMilliseconds / 1000.0) 
+                : 0;
+                
+            _logger.LogInformation(
+                "Finished streaming Chunk {ChunkId} ({TotalBytes}) to {Peer} in {ElapsedMs}ms at {Speed:F2}MB/s", 
+                request.ChunkId, 
+                FormatBytes(totalBytesSent),
+                context.Peer, 
+                sw.ElapsedMilliseconds,
+                transferSpeed);
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("Streaming chunk {ChunkId} to {Peer} was cancelled", request.ChunkId, context.Peer);
+            _logger.LogInformation("Streaming Chunk {ChunkId} to {Peer} was cancelled", request.ChunkId, context.Peer);
             throw new RpcException(new Status(StatusCode.Cancelled, "Operation was cancelled"));
         }
         catch (RpcException)
@@ -418,7 +625,9 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error streaming chunk {ChunkId} to peer {Peer}", request.ChunkId, context.Peer);
+            sw.Stop();
+            _logger.LogError(ex, "Error streaming Chunk {ChunkId} to peer {Peer} after sending {BytesSent} bytes", 
+                request.ChunkId, context.Peer, FormatBytes(totalBytesSent));
             throw new RpcException(new Status(StatusCode.Internal, $"Failed to stream chunk: {ex.Message}"));
         }
         finally
@@ -426,6 +635,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
             if (chunkDataStream != null)
             {
                 await chunkDataStream.DisposeAsync();
+                _logger.LogDebug("Released resources for Chunk {ChunkId} stream", request.ChunkId);
             }
         }
     }
@@ -486,47 +696,70 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         throw new RpcException(Status.DefaultCancelled);
     }
 
-    /// <summary>
-    /// Handles requests from other nodes to get the list of files known locally.
-    /// </summary>
     public override async Task<GetNodeFileListReply> GetNodeFileList(
         GetNodeFileListRequest request, ServerCallContext context)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         _logger.LogInformation("Node {NodeId} received GetNodeFileList request from peer {Peer}",
             _nodeOptions.NodeId, context.Peer);
-    
+        
         var reply = new GetNodeFileListReply();
 
         try
         {
-            var localFiles = await _metadataManager.ListFilesAsync(context.CancellationToken);
+            // Apply a timeout to avoid blocking too long
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(10)); // Max 10 seconds
+            
+            var localFiles = await _metadataManager.ListFilesAsync(cts.Token);
 
             if (localFiles != null)
             {
+                int fileCount = 0;
+                int skippedCount = 0;
+                
                 foreach (var fileCore in localFiles)
                 {
                     // Skip files marked for deletion
                     if (fileCore.State == FileStateCore.Deleting || fileCore.State == FileStateCore.Deleted)
+                    {
+                        skippedCount++;
                         continue;
-                
+                    }
+                    
                     var fileProto = MapFileModelToProto(fileCore);
                     reply.Files.Add(fileProto);
+                    fileCount++;
+                    
+                    // Limit number of files returned for performance
+                    if (fileCount >= 1000) 
+                    {
+                        _logger.LogWarning("GetNodeFileList truncated to 1000 files for performance");
+                        break;
+                    }
                 }
             }
-        
-            _logger.LogInformation("Returning {Count} file metadata entries to peer {Peer}",
-                reply.Files.Count, context.Peer);
+            
+            sw.Stop();
+            _logger.LogInformation("Returning {Count} file metadata entries to peer {Peer} in {ElapsedMs}ms",
+                reply.Files.Count, context.Peer, sw.ElapsedMilliseconds);
+        }
+        catch (OperationCanceledException)
+        {
+            sw.Stop();
+            _logger.LogWarning("GetNodeFileList request timed out after {ElapsedMs}ms", sw.ElapsedMilliseconds);
+            throw new RpcException(new Status(StatusCode.DeadlineExceeded, "Operation timed out"));
         }
         catch (Exception ex)
         {
+            sw.Stop();
             _logger.LogError(ex, "Error processing GetNodeFileList request for peer {Peer}", context.Peer);
             throw new RpcException(new Status(StatusCode.Internal, 
                 $"Failed to retrieve local file list: {ex.Message}"));
         }
-    
+        
         return reply;
     }
-
     private FileMetadata MapFileModelToProto(FileModel fileCore)
     {
         return new FileMetadata
@@ -590,5 +823,22 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         }
 
         return new Empty();
+    }
+    
+    private T HandleGrpcException<T>(string operation, Exception ex, T errorResult) where T : class
+    {
+        if (ex is OperationCanceledException)
+        {
+            _logger.LogInformation("{Operation} was cancelled", operation);
+            throw new RpcException(new Status(StatusCode.Cancelled, "Operation was cancelled"));
+        }
+    
+        if (ex is RpcException rpcEx)
+        {
+            throw rpcEx;
+        }
+    
+        _logger.LogError(ex, "Error during {Operation}", operation);
+        return errorResult;
     }
 }

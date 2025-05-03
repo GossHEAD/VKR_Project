@@ -184,3 +184,6 @@ C:\Users\bagda\RiderProjects\VKR_Network\VKR_Node\obj\Debug\net8.0\refint\VKR_No
 C:\Users\bagda\RiderProjects\VKR_Network\VKR_Node\obj\Debug\net8.0\VKR_Node.pdb
 C:\Users\bagda\RiderProjects\VKR_Network\VKR_Node\obj\Debug\net8.0\VKR_Node.genruntimeconfig.cache
 C:\Users\bagda\RiderProjects\VKR_Network\VKR_Node\obj\Debug\net8.0\ref\VKR_Node.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Node\bin\Debug\net8.0\AutoMapper.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Node\bin\Debug\net8.0\ComputerInfo.dll
+C:\Users\bagda\RiderProjects\VKR_Network\VKR_Node\bin\Debug\net8.0\Microsoft.DotNet.PlatformAbstractions.dll

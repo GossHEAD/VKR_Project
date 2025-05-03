@@ -10,7 +10,6 @@ using VKR_Node.Services.NodeServices.NodeInterfaces;
 
 namespace VKR_Node.Services
 {
-    // Updated StorageServiceImpl.cs
     public class StorageServiceImpl : StorageService.StorageServiceBase
     {
         private readonly IFileStorageService _fileService;
@@ -39,7 +38,6 @@ namespace VKR_Node.Services
             _dhtOptions = dhtOptions;
         }
 
-        // Simply delegate to the appropriate service
         public override Task<ListFilesReply> ListFiles(
             ListFilesRequest request,
             ServerCallContext context)
@@ -106,7 +104,6 @@ namespace VKR_Node.Services
             
             try
             {
-                // Get the node info from metadata
                 var nodeStates = await _metadataManager.GetNodeStatesAsync(
                     new[] { request.NodeId }, context.CancellationToken);
                 
@@ -120,7 +117,6 @@ namespace VKR_Node.Services
                     };
                 }
                 
-                // Update the node state to Offline in metadata
                 nodeState = nodeState with { State = NodeStateCore.Offline };
                 nodeState = nodeState with { LastSeen = DateTime.UtcNow };
                 
@@ -128,9 +124,6 @@ namespace VKR_Node.Services
                 
                 _logger.LogInformation("Simulated failure of node {NodeId} by marking it as Offline", request.NodeId);
                 
-                // Trigger replication health check to respond to the node failure
-                // This would normally happen automatically through the ReplicationHealthService
-                // but we trigger it explicitly here to make the simulation immediate
                 await EnsureReplicationForAffectedChunksAsync(request.NodeId, context.CancellationToken);
                 
                 return new SimulateNodeFailureReply 
@@ -206,36 +199,29 @@ namespace VKR_Node.Services
             
             try
             {
-                // Get all files
                 var files = await _metadataManager.ListFilesAsync(context.CancellationToken);
                 
                 foreach (var file in files)
                 {
-                    // For each file, get its chunks and check availability
                     var chunks = await _metadataManager.GetChunksMetadataForFileAsync(file.FileId, context.CancellationToken);
                     bool isFileAvailable = true;
                     int currentReplication = int.MaxValue;
                     
                     foreach (var chunk in chunks)
                     {
-                        // Get nodes storing this chunk
                         var nodesForChunk = await _metadataManager.GetChunkStorageNodesAsync(
                             file.FileId, chunk.ChunkId, context.CancellationToken);
                         
-                        // Get online nodes
                         var onlineNodes = await GetOnlineNodesAsync(nodesForChunk.ToList(), context.CancellationToken);
                         
-                        // If no online nodes have this chunk, the file is unavailable
                         if (!onlineNodes.Any())
                         {
                             isFileAvailable = false;
                         }
                         
-                        // Track minimum replication level across all chunks
                         currentReplication = Math.Min(currentReplication, onlineNodes.Count);
                     }
                     
-                    // If no chunks, consider the file available but with 0 replication
                     if (!chunks.Any())
                     {
                         currentReplication = 0;
@@ -256,7 +242,6 @@ namespace VKR_Node.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting file statuses");
-                // Return partial results if available
                 return reply;
             }
         }
@@ -269,17 +254,14 @@ namespace VKR_Node.Services
             
             try
             {
-                // Get all files
                 var files = await _metadataManager.ListFilesAsync(context.CancellationToken);
                 
                 foreach (var file in files)
                 {
-                    // Get chunks for each file
                     var chunks = await _metadataManager.GetChunksMetadataForFileAsync(file.FileId, context.CancellationToken);
                     
                     foreach (var chunk in chunks)
                     {
-                        // Get node IDs storing this chunk
                         var nodeIds = await _metadataManager.GetChunkStorageNodesAsync(
                             file.FileId, chunk.ChunkId, context.CancellationToken);
                         
@@ -300,7 +282,6 @@ namespace VKR_Node.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting chunk distribution");
-                // Return partial results if available
                 return reply;
             }
         }
@@ -320,7 +301,6 @@ namespace VKR_Node.Services
         {
             try
             {
-                // Get all chunks stored on the failed node
                 var allChunks = await _metadataManager.GetChunksStoredLocallyAsync(cancellationToken);
                 var chunksOnFailedNode = allChunks
                     .Where(c => {
@@ -334,10 +314,8 @@ namespace VKR_Node.Services
                 _logger.LogInformation("Found {Count} chunks affected by failure of node {NodeId}", 
                     chunksOnFailedNode.Count, nodeId);
                 
-                // For each affected chunk, ensure replication
                 foreach (var chunk in chunksOnFailedNode)
                 {
-                    // Use the replication manager to restore replication level
                     await _replicationManager.EnsureChunkReplicationAsync(
                         chunk.FileId, chunk.ChunkId, cancellationToken);
                     

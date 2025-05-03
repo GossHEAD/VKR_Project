@@ -26,14 +26,13 @@ namespace VKR_Node.Services
             _logger = logger;
             _serviceProvider = serviceProvider;
 
-            // Configuration values
             int intervalSeconds = dhtOptions.Value?.ReplicationCheckIntervalSeconds > 5 
                 ? dhtOptions.Value.ReplicationCheckIntervalSeconds 
-                : 60; // Default 60s
+                : 60; 
             
             _maxParallelOperations = dhtOptions.Value?.ReplicationMaxParallelism > 0 
                 ? dhtOptions.Value.ReplicationMaxParallelism 
-                : 5; // Default 5 parallel operations
+                : 5; 
             
             _checkInterval = TimeSpan.FromSeconds(intervalSeconds);
             
@@ -45,7 +44,6 @@ namespace VKR_Node.Services
         {
             _logger.LogInformation("ReplicationHealthService starting execution loop");
 
-            // Add an initial delay to allow system to stabilize
             await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)
@@ -67,7 +65,6 @@ namespace VKR_Node.Services
                     _logger.LogError(ex, "Error during replication health check cycle");
                 }
 
-                // Wait until the next interval
                 try
                 {
                     await Task.Delay(_checkInterval, stoppingToken);
@@ -91,7 +88,6 @@ namespace VKR_Node.Services
             var metadataManager = scope.ServiceProvider.GetRequiredService<IMetadataManager>();
             var replicationManager = scope.ServiceProvider.GetRequiredService<IReplicationManager>();
 
-            // Get all chunks stored locally
             var localChunks = await metadataManager.GetChunksStoredLocallyAsync(cancellationToken);
             if (localChunks == null || !localChunks.Any())
             {
@@ -101,7 +97,6 @@ namespace VKR_Node.Services
 
             _logger.LogInformation("Found {Count} local chunks to check for replication health", localChunks.Count());
 
-            // Using SemaphoreSlim to limit parallelism
             using var semaphore = new SemaphoreSlim(_maxParallelOperations);
             var tasks = new List<Task>();
 
@@ -109,10 +104,8 @@ namespace VKR_Node.Services
             {
                 if (cancellationToken.IsCancellationRequested) break;
 
-                // Wait for a slot to become available
                 await semaphore.WaitAsync(cancellationToken);
 
-                // Process each chunk in a separate task
                 tasks.Add(Task.Run(async () => {
                     try
                     {
@@ -132,7 +125,6 @@ namespace VKR_Node.Services
                 }, cancellationToken));
             }
 
-            // Wait for all tasks to complete
             await Task.WhenAll(tasks);
         }
 

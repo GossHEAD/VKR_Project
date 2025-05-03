@@ -162,7 +162,6 @@ namespace VKR_Node.Services.FileService
 
                 if (pingReply?.Success != true) return;
 
-                // Get file list
                 using var ctsList = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 ctsList.CancelAfter(TimeSpan.FromSeconds(15));
 
@@ -988,16 +987,12 @@ namespace VKR_Node.Services.FileService
                     return new DeleteFileReply { Success = true, Message = $"File {fileId} deletion processed (no chunks)." };
                 }
                 
-                // Build a map of chunk locations
                 var chunkLocationMap = await BuildChunkLocationMapAsync(fileId, chunkInfos, context.CancellationToken);
                 
-                // Notify remote nodes to delete their copies
                 await NotifyRemoteNodesForDeletionAsync(fileId, chunkLocationMap, context.CancellationToken);
                 
-                // Delete local chunks
                 await DeleteLocalChunksAsync(fileId, chunkInfos, chunkLocationMap, context.CancellationToken);
                 
-                // Finally delete file metadata
                 await DeleteFileMetadataAsync(fileId, context.CancellationToken);
                 
                 _logger.LogInformation("DeleteFile process completed successfully for File ID: {Id}", fileId);

@@ -106,7 +106,7 @@ public class ChunkStreamingHelper
     /// <returns>True if successful, false otherwise</returns>
     public async Task<bool> TryStreamRemoteChunkAsync(
         ChunkModel chunkInfo,
-        ChunkStorageNode targetNodeInfo,
+        KnownNodeOptions targetNodeInfo,
         IServerStreamWriter<DownloadFileReply> responseStream,
         ServerCallContext context)
     {

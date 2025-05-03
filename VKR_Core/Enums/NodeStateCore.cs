@@ -38,10 +38,4 @@ public enum NodeStateCore
     /// Corresponds to Protobuf NODE_STATE_ERROR (5).
     /// </summary>
     Error = 5, // Matches Protobuf enum value
-
-    // --- Potential Internal States (Not in Proto) ---
-    // /// <summary>
-    // /// Node is suspected to be offline but not confirmed yet (e.g., missed heartbeats).
-    // /// </summary>
-    // Suspected = 6,
 }

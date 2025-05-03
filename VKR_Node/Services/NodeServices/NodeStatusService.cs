@@ -27,6 +27,7 @@ public class NodeStatusService : INodeStatusService
     {
         _logger = logger;
         _nodeIdentityOptions = nodeIdentityOptions.Value;
+        _networkOptions = networkOptions.Value;
         _nodeClient = nodeClient;
         _localNodeId = _nodeIdentityOptions.NodeId ?? throw new InvalidOperationException("NodeId is not configured.");
     }
@@ -49,7 +50,6 @@ public class NodeStatusService : INodeStatusService
 
             await GetPeerStatusesAsync(reply, context.CancellationToken);
 
-            // Sort nodes for consistent display
             var sortedNodes = reply.Nodes.ToList();
             sortedNodes.Sort((a, b) => string.Compare(a.NodeId, b.NodeId, StringComparison.OrdinalIgnoreCase));
             reply.Nodes.Clear();

@@ -2,8 +2,10 @@
 using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using VKR_Core.Models;
 using VKR_Core.Services;
+using VKR_Node.Services.Utilities;
 using VKR.Protos;
 
 namespace VKR_Node.Services
@@ -23,16 +25,62 @@ namespace VKR_Node.Services
         private bool _disposed;
         private readonly Task _cleanupTask;
         private readonly CancellationTokenSource _cleanupCts = new();
+        
+        private readonly ConcurrentDictionary<string, int> _channelFailureCount = new();
+        private readonly ConcurrentDictionary<string, DateTime> _channelCircuitBreakers = new();
+        private const int MaxFailuresBeforeCircuitBreak = 3;
+        private readonly TimeSpan _circuitBreakDuration = TimeSpan.FromMinutes(2);
 
         /// <summary>
         /// Initializes a new instance of the GrpcNodeClient.
         /// </summary>
-        public GrpcNodeClient(ILogger<GrpcNodeClient> logger, Microsoft.Extensions.Options.IOptions<Configuration.NodeIdentityOptions> nodeOptions)
+        public GrpcNodeClient(ILogger<GrpcNodeClient> logger, IOptions<Configuration.NodeIdentityOptions> nodeOptions)
         {
             _logger = logger;
             _callingNodeId = nodeOptions.Value?.NodeId ?? throw new InvalidOperationException("NodeId is not configured");
 
-            // Start cleanup task for idle channels
+            _cleanupTask = Task.Run(async () => {
+                try
+                {
+                    _ = Task.Run(LogMetricsAsync);
+                    while (!_cleanupCts.Token.IsCancellationRequested)
+                    {
+                        await Task.Delay(_cleanupInterval, _cleanupCts.Token);
+                        CleanupIdleChannels();
+                    }
+                }
+                catch (OperationCanceledException) {}
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error in channel cleanup background task");
+                }
+            });
+
+            _logger.LogInformation("GrpcNodeClient initialized for node {NodeId}", _callingNodeId);
+        }
+        
+        // Add to constructor
+        public GrpcNodeClient(
+            ILogger<GrpcNodeClient> logger,
+            IOptions<Configuration.NodeIdentityOptions> nodeOptions,
+            IOptions<Configuration.NetworkOptions> networkOptions)
+        {
+            _logger = logger;
+            _callingNodeId = nodeOptions.Value?.NodeId ?? throw new InvalidOperationException("NodeId is not configured");
+    
+            // Apply network configuration
+            var network = networkOptions.Value;
+            if (network != null)
+            {
+                // Set connection timeout based on configuration
+                _channelIdleTimeout = TimeSpan.FromSeconds(network.ConnectionTimeoutSeconds * 2);
+        
+                // Max connections can influence circuit breaker thresholds
+                _cleanupInterval = TimeSpan.FromMinutes(
+                    Math.Max(1, Math.Min(30, network.MaxConnections / 10)));
+            }
+
+            // Start cleanup task
             _cleanupTask = Task.Run(async () => {
                 try
                 {
@@ -52,17 +100,31 @@ namespace VKR_Node.Services
                 }
             });
 
-            _logger.LogInformation("GrpcNodeClient initialized for node {NodeId}", _callingNodeId);
+            _logger.LogInformation("GrpcNodeClient initialized for node {NodeId} with idle timeout {Timeout}s", 
+                _callingNodeId, _channelIdleTimeout.TotalSeconds);
         }
-
+        
         /// <summary>
-        /// Cleans up idle channels that haven't been used for the specified timeout.
+        /// Cleans up idle channels and expired circuit breakers.
         /// </summary>
         private void CleanupIdleChannels()
         {
             try
             {
                 var now = DateTime.UtcNow;
+        
+                // 1. Clean up expired circuit breakers
+                foreach (var key in _channelCircuitBreakers.Keys.ToList())
+                {
+                    if (_channelCircuitBreakers.TryGetValue(key, out var expiry) && now > expiry)
+                    {
+                        _channelCircuitBreakers.TryRemove(key, out _);
+                        _channelFailureCount.TryRemove(key, out _);
+                        _logger.LogDebug("Circuit breaker expired for {Address}", key);
+                    }
+                }
+        
+                // 2. Clean up idle channels
                 var keysToRemove = _channelLastUsed
                     .Where(kvp => (now - kvp.Value) > _channelIdleTimeout)
                     .Select(kvp => kvp.Key)
@@ -85,7 +147,7 @@ namespace VKR_Node.Services
                         }
                     }
                 }
-                
+        
                 _logger.LogTrace("Channel cleanup complete. Removed {Count} idle channels. Current channel count: {ChannelCount}", 
                     keysToRemove.Count, _channels.Count);
             }
@@ -96,16 +158,42 @@ namespace VKR_Node.Services
         }
 
         /// <summary>
-        /// Gets or creates a gRPC channel for the specified target address.
+        /// Gets or creates a gRPC channel for the specified target address with circuit breaking.
         /// </summary>
         private GrpcChannel GetOrCreateChannel(string targetNodeAddress)
         {
             // Normalize address
             string formattedAddress = NormalizeAddress(targetNodeAddress);
 
+            // Check if this address has an open circuit breaker
+            if (_channelCircuitBreakers.TryGetValue(formattedAddress, out var breakUntil) && 
+                DateTime.UtcNow < breakUntil)
+            {
+                _logger.LogWarning("Circuit breaker open for {Address} until {Time}", 
+                    formattedAddress, breakUntil.ToString("HH:mm:ss"));
+            
+                // Create a one-time channel that won't be cached
+                return GrpcChannel.ForAddress(formattedAddress, new GrpcChannelOptions
+                {
+                    HttpHandler = new SocketsHttpHandler
+                    {
+                        ConnectTimeout = TimeSpan.FromSeconds(5),
+                        EnableMultipleHttp2Connections = true
+                    }
+                });
+            }
+
+            // Use the existing channel if available
             var channel = _channels.GetOrAdd(formattedAddress, addr => {
                 _logger.LogDebug("Creating gRPC channel for address: {Address}", addr);
-                return GrpcChannel.ForAddress(addr);
+                return GrpcChannel.ForAddress(addr, new GrpcChannelOptions
+                {
+                    HttpHandler = new SocketsHttpHandler
+                    {
+                        ConnectTimeout = TimeSpan.FromSeconds(10),
+                        EnableMultipleHttp2Connections = true
+                    }
+                });
             });
 
             // Record channel usage time
@@ -137,15 +225,71 @@ namespace VKR_Node.Services
             Func<Task<T>> operation,
             CancellationToken cancellationToken) where T : class
         {
+            string formattedAddress = NormalizeAddress(targetAddress);
+            string metricKey = methodName;
+            _metrics.AddOrUpdate(
+                metricKey,
+                (1, 0, 0),
+                (_, current) => (current.Calls + 1, current.SuccessfulCalls, current.TotalMs)
+            );
+    
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            
             try
             {
-                return await operation();
+                var result = await operation();
+                sw.Stop();
+                
+                _channelFailureCount.TryRemove(formattedAddress, out _);
+                _metrics.AddOrUpdate(
+                    metricKey,
+                    (1, 1, sw.ElapsedMilliseconds),  
+                    (_, current) => (current.Calls, current.SuccessfulCalls + 1, current.TotalMs + sw.ElapsedMilliseconds)
+                );
+                
+                _logger.LogDebug("gRPC {Method} to {Target} completed in {ElapsedMs}ms", 
+                    methodName, targetAddress, sw.ElapsedMilliseconds);
+                    
+                return result;
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable || 
                                         ex.StatusCode == StatusCode.DeadlineExceeded)
             {
-                _logger.LogWarning("gRPC {Method} to {Target} failed with status {StatusCode}", 
-                    methodName, targetAddress, ex.StatusCode);
+                sw.Stop();
+                
+                // Increment failure count
+                int failures = _channelFailureCount.AddOrUpdate(
+                    formattedAddress, 
+                    1,  // Initial value if key doesn't exist
+                    (_, current) => current + 1  // Increment existing value
+                );
+                
+                // If too many failures, implement circuit breaker
+                if (failures >= MaxFailuresBeforeCircuitBreak)
+                {
+                    var breakUntil = DateTime.UtcNow + _circuitBreakDuration;
+                    _channelCircuitBreakers[formattedAddress] = breakUntil;
+                    
+                    _logger.LogWarning("Circuit breaker triggered for {Target} until {Time} after {Failures} failures", 
+                        targetAddress, breakUntil.ToString("HH:mm:ss"), failures);
+                        
+                    // Remove the failed channel to force recreation
+                    if (_channels.TryRemove(formattedAddress, out var failedChannel))
+                    {
+                        try
+                        {
+                            // Try to close gracefully
+                            failedChannel.ShutdownAsync().Wait(TimeSpan.FromSeconds(1));
+                        }
+                        catch
+                        {
+                            // Ignore shutdown errors
+                        }
+                    }
+                }
+                
+                _logger.LogWarning("gRPC {Method} to {Target} failed with status {StatusCode} (Failure {Count})", 
+                    methodName, targetAddress, ex.StatusCode, failures);
                 return null;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -155,7 +299,17 @@ namespace VKR_Node.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during gRPC {Method} to {Target}", methodName, targetAddress);
+                sw.Stop();
+                
+                // Increment failure count for any exception
+                int failures = _channelFailureCount.AddOrUpdate(
+                    formattedAddress, 
+                    1,  // Initial value if key doesn't exist
+                    (_, current) => current + 1  // Increment existing value
+                );
+                
+                _logger.LogError(ex, "Error during gRPC {Method} to {Target} (Failure {Count})", 
+                    methodName, targetAddress, failures);
                 return null;
             }
         }
@@ -387,6 +541,44 @@ namespace VKR_Node.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error sending AcknowledgeReplica request to {TargetAddress}", targetNodeAddress);
+            }
+        }
+        
+        private readonly ConcurrentDictionary<string, (long Calls, long SuccessfulCalls, long TotalMs)> _metrics = new();
+        private async Task LogMetricsAsync()
+        {
+            try
+            {
+                while (!_cleanupCts.IsCancellationRequested)
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(5), _cleanupCts.Token);
+            
+                    foreach (var kvp in _metrics.ToArray())
+                    {
+                        var (calls, successful, totalMs) = kvp.Value;
+                
+                        if (calls > 0)
+                        {
+                            double successRate = (double)successful / calls * 100;
+                            double avgLatency = successful > 0 ? (double)totalMs / successful : 0;
+                    
+                            _logger.LogInformation(
+                                "gRPC Method: {Method}, Calls: {Total}, Success Rate: {SuccessRate:F1}%, Avg Latency: {AvgLatency:F1}ms",
+                                kvp.Key, calls, successRate, avgLatency);
+                        }
+                    }
+            
+                    // Optionally reset metrics after logging
+                    _metrics.Clear();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during shutdown
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in metrics logging task");
             }
         }
 
