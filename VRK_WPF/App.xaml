@@ -4,6 +4,13 @@
              xmlns:local="clr-namespace:VRK_WPF"
              StartupUri="MVVM/View/MainWindow.xaml">
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/themes/materialdesigntheme.light.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/themes/materialdesign2.defaults.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignColors;component/themes/recommended/primary/materialdesigncolor.deeppurple.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignColors;component/themes/recommended/secondary/materialdesigncolor.lime.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

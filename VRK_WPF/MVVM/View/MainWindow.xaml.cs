@@ -1,13 +1,7 @@
-﻿using System.Text;
+﻿
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
+using Microsoft.Extensions.Logging;
 using VRK_WPF.MVVM.ViewModel;
 
 namespace VRK_WPF.MVVM.View;
@@ -19,10 +13,10 @@ public partial class MainWindow : Window
 {
     public MainWindow()
     {
+        ILogger<MainWindowViewModel>? logger = null;
         InitializeComponent();
-        DataContext = new MainWindowViewModel();
-        System.Diagnostics.Debug.WriteLine($"DataContext set to: {DataContext?.GetType().Name}"); // Add this line
-    
+        DataContext = new MainWindowViewModel(logger);
+        //System.Diagnostics.Debug.WriteLine($"DataContext set to: {DataContext?.GetType().Name}"); // Add this lin
     }
     
     private void OpenDocumentation_Click(object sender, RoutedEventArgs e)

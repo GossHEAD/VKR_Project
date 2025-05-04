@@ -8,47 +8,35 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using VKR.Protos;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
-
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace VRK_WPF.MVVM.ViewModel
 {
     public partial class MainWindowViewModel : ObservableObject
     {
-        private readonly ILogger<MainWindowViewModel> _logger; 
-        private StorageService.StorageServiceClient? _storageClient; 
+        private readonly ILogger<MainWindowViewModel> _logger;
+        private StorageService.StorageServiceClient? _storageClient;
         private GrpcChannel? _currentChannel;
         private CancellationTokenSource? _uploadCts;
         private CancellationTokenSource? _downloadCts;
-        private readonly ILoggerFactory? _loggerFactory;
         
         [ObservableProperty]
-        private bool _isSimulationTabEnabled = true;  // Now enabled
+        private ObservableCollection<FileViewModel> _files = new();
+
+        [ObservableProperty]
+        private ObservableCollection<NodeViewModel> _nodes = new();
+        
+        [ObservableProperty]
+        private bool _isSimulationTabEnabled = true; 
 
         [ObservableProperty]
         private string _simulationDuration = "30 секунд";
-
-        [ObservableProperty]
-        private bool _isGracefulFailure = true;
-
-        [ObservableProperty]
-        private string _simulationAvailableNodes = "N/A";
-
-        [ObservableProperty]
-        private string _simulationUnavailableNodes = "N/A";
-
-        [ObservableProperty]
-        private string _simulationFileAvailability = "N/A";
-
-        [ObservableProperty]
-        private string _simulationFailoverTime = "N/A";
-
-        [ObservableProperty]
-        private string _simulationRecoveryStatus = "Не запущено";
 
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
@@ -85,9 +73,11 @@ namespace VRK_WPF.MVVM.ViewModel
         private bool _isSimulationInProgress;
 
         [ObservableProperty]
+        [NotifyCanExecuteChangedFor(nameof(DisableSelectedNodesCommand))]
         private bool _canSimulateNodeFailure;
 
         [ObservableProperty]
+        [NotifyCanExecuteChangedFor(nameof(RestoreAllNodesCommand))]
         private bool _canRestoreNodes;
         
         [ObservableProperty]
@@ -151,16 +141,13 @@ namespace VRK_WPF.MVVM.ViewModel
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(RefreshNodeStatusCommand))]
         private bool _isNodeStatusRefreshing;
-
-        ObservableCollection<FileViewModel> StoredFiles { get; } = new();
-        ICollectionView FilesView { get; } 
-        ObservableCollection<NodeViewModel> NetworkNodes { get; } = new();
-        ICollectionView NodesView { get; } 
+        public ICollectionView FilesView { get; } 
+        public ICollectionView NodesView { get; } 
         
         #region Node Settings Properties
         
         [ObservableProperty]
-        private string _settingNodeId = "N/A"; // Default to N/A when not connected
+        private string _settingNodeId = "N/A"; 
 
         [ObservableProperty]
         private string _settingListenAddress = "N/A";
@@ -190,54 +177,57 @@ namespace VRK_WPF.MVVM.ViewModel
 
         #endregion
         
-        public MainWindowViewModel(ILogger<MainWindowViewModel> logger, ILoggerFactory? loggerFactory) 
+        public MainWindowViewModel(ILogger<MainWindowViewModel>? logger = null)
         {
-            _logger = logger;
-            _loggerFactory = loggerFactory; 
-            
-            FilesView = CollectionViewSource.GetDefaultView(StoredFiles);
+            _logger = logger ?? NullLogger<MainWindowViewModel>.Instance;
+
+            FilesView = CollectionViewSource.GetDefaultView(Files);
             FilesView.SortDescriptions.Add(new SortDescription(nameof(FileViewModel.FileName), ListSortDirection.Ascending));
-            
-            NodesView = CollectionViewSource.GetDefaultView(NetworkNodes);
+
+            NodesView = CollectionViewSource.GetDefaultView(Nodes);
             NodesView.SortDescriptions.Add(new SortDescription(nameof(NodeViewModel.NodeId), ListSortDirection.Ascending));
-            
+
             UpdateConnectionStatus("Disconnected", Brushes.OrangeRed);
             UpdateStatusBar("Ready. Enter node address and connect.");
-        }
-    
-        MainWindowViewModel(ILogger<MainWindowViewModel> logger) 
-        {
-            _logger = logger;
-            
-            FilesView = CollectionViewSource.GetDefaultView(StoredFiles);
-            FilesView.SortDescriptions.Add(new SortDescription(nameof(FileViewModel.FileName), ListSortDirection.Ascending));
-            
-            NodesView = CollectionViewSource.GetDefaultView(NetworkNodes);
-            NodesView.SortDescriptions.Add(new SortDescription(nameof(NodeViewModel.NodeId), ListSortDirection.Ascending));
-            
-            UpdateConnectionStatus("Disconnected", Brushes.OrangeRed);
-            UpdateStatusBar("Ready. Enter node address and connect.");
-        }    
-        
-        public MainWindowViewModel() : this(LoggerFactory.Create(builder => builder.AddDebug()).CreateLogger<MainWindowViewModel>())
-        {
+
             if (DesignerProperties.GetIsInDesignMode(new DependencyObject()))
             {
                 TargetNodeAddress = "http://design-time:5000";
                 ConnectionStatus = "Design Mode";
                 ConnectionStatusColor = Brushes.Gray;
-                StoredFiles.Add(new FileViewModel { FileId = "design-1", FileName = "DesignFile1.txt", FileSize = 1024, CreationTime = DateTime.Now, State = "Available" });
-                NetworkNodes.Add(new NodeViewModel { NodeId = "Node1-Design", Address = "localhost:5001", Status = "Online", StatusDetails="Design Mode"});
+                Files.Add(new FileViewModel { FileId = "design-1", FileName = "DesignFile1.txt", FileSize = 1024, CreationTime = DateTime.Now, State = "Available" });
+                Nodes.Add(new NodeViewModel { NodeId = "Node1-Design", Address = "localhost:5001", Status = "Online", StatusDetails = "Design Mode" });
             }
         }
-
         
+        public MainWindowViewModel()
+        {
+            FilesView = CollectionViewSource.GetDefaultView(Files);
+            FilesView.SortDescriptions.Add(new SortDescription(nameof(FileViewModel.FileName), ListSortDirection.Ascending));
+            
+            NodesView = CollectionViewSource.GetDefaultView(Nodes);
+            NodesView.SortDescriptions.Add(new SortDescription(nameof(NodeViewModel.NodeId), ListSortDirection.Ascending));
+            
+            UpdateConnectionStatus("Disconnected", Brushes.OrangeRed);
+            UpdateStatusBar("Ready. Enter node address and connect.");
+        }
         
         private void UpdateConnectionStatus(string status, Brush color)
         {
             ConnectionStatus = status;
             ConnectionStatusColor = color;
             StatusBarText = status; 
+        }
+        
+        private void UpdateSelectionStatus()
+        {
+            bool hasSelections = SimulationNodes.Any(n => n.IsSelected);
+            CanSimulateNodeFailure = hasSelections && _storageClient != null;
+        }
+        
+        public void OnNodeSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateSelectionStatus();
         }
         
         private bool ConnectToNode()
@@ -294,24 +284,33 @@ namespace VRK_WPF.MVVM.ViewModel
         private async Task ConnectAsync()
         {
             _logger.LogInformation("Attempting to connect to node: {Address}", TargetNodeAddress);
-            StoredFiles.Clear(); 
-            NetworkNodes.Clear();
+            Files.Clear(); 
+            Nodes.Clear();
 
             if (ConnectToNode()) 
             {
                 await RefreshFilesListAsync();
                 await RefreshNodeStatusAsync();
                 await LoadSettingsAsync();
+                await UpdateSimulationNodesAsync(); 
+                await UpdateFileAndChunkStatusAsync();
                 
+                CanRestoreNodes = true; 
                 UpdateStatusBar($"Connected to {TargetNodeAddress}. Configuration loaded.");
             }
             else
             {
-                NetworkNodes.Clear();
+                Nodes.Clear();
+                SimulationNodes.Clear();
+                SimulationFileStatuses.Clear();
+                SimulationChunkDistribution.Clear();
+                CanSimulateNodeFailure = false;
+                CanRestoreNodes = false;
             }
         }
         
-
+        
+        
         private async Task UpdateFileAndChunkStatusAsync()
         {
             SimulationFileStatuses.Clear();
@@ -319,7 +318,6 @@ namespace VRK_WPF.MVVM.ViewModel
             
             try
             {
-                // Get file statuses
                 var fileStatusRequest = new GetFileStatusesRequest();
                 var fileStatusReply = await _storageClient.GetFileStatusesAsync(fileStatusRequest);
                 
@@ -334,7 +332,6 @@ namespace VRK_WPF.MVVM.ViewModel
                     });
                 }
                 
-                // Get chunk distribution
                 var chunkRequest = new GetChunkDistributionRequest();
                 var chunkReply = await _storageClient.GetChunkDistributionAsync(chunkRequest);
                 
@@ -661,7 +658,7 @@ namespace VRK_WPF.MVVM.ViewModel
         {
             if (IsDownloading && _downloadCts != null && !_downloadCts.IsCancellationRequested)
             {
-                 _logger.LogInformation("Attempting to cancel download.");
+                _logger.LogInformation("Attempting to cancel download.");
                 _downloadCts.Cancel();
                 DownloadStatus = "Cancelling download...";
             }
@@ -731,53 +728,50 @@ namespace VRK_WPF.MVVM.ViewModel
             if (_storageClient == null)
             {
                 UpdateStatusBar("Cannot refresh files: gRPC client not ready.");
-                 MessageBox.Show("Cannot refresh file list because the connection to the server is not established.", "Connection Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                 MessageBox.Show("Cannot refresh file list because the connection to the server is not established.", "Connection Error", 
+                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             UpdateStatusBar("Refreshing file list...");
              _logger.LogInformation("Refreshing file list...");
-             // Consider showing a busy indicator
 
             try
             {
                 var request = new ListFilesRequest();
                 var reply = await _storageClient.ListFilesAsync(request, deadline: DateTime.UtcNow.AddSeconds(15));
 
-                StoredFiles.Clear(); // Clear existing list before adding new items
+                Files.Clear(); 
                 if (reply.Files != null)
                 {
                     foreach (var fileProto in reply.Files.OrderBy(f => f.FileName))
                     {
-                        // *** Corrected Mapping Here ***
-                        StoredFiles.Add(new FileViewModel
+                        Files.Add(new FileViewModel
                         {
                             FileId = fileProto.FileId,
                             FileName = fileProto.FileName,
                             FileSize = fileProto.FileSize,
-                            // Ensure Timestamp is converted correctly and handle null
                             CreationTime = fileProto.CreationTime?.ToDateTime().ToLocalTime() ?? DateTime.MinValue,
                             ContentType = fileProto.ContentType,
-                            // Convert the proto enum to a string for display
-                            State = fileProto.State.ToString().Replace("FILE_STATE_", "") // Nicer display string
+                            State = fileProto.State.ToString().Replace("FILE_STATE_", "") 
                         });
                     }
                 }
-                UpdateStatusBar($"File list refreshed. Found {StoredFiles.Count} files.");
+                UpdateStatusBar($"File list refreshed. Found {Files.Count} files.");
             }
             catch (RpcException ex)
             {
-                 _logger.LogError(ex, "gRPC Error refreshing file list");
+                _logger.LogError(ex, "gRPC Error refreshing file list");
                 UpdateStatusBar("Error refreshing file list (gRPC Error)");
                 MessageBox.Show($"Failed to refresh file list:\nStatus: {ex.StatusCode}\nDetail: {ex.Status.Detail}", "Refresh Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                 StoredFiles.Clear(); // Clear potentially partial list
+                Files.Clear(); // Clear potentially partial list
             }
             catch (Exception ex)
             {
-                 _logger.LogError(ex, "Unexpected error refreshing file list");
+                _logger.LogError(ex, "Unexpected error refreshing file list");
                 UpdateStatusBar("Error refreshing file list");
                 MessageBox.Show($"An unexpected error occurred while refreshing the file list:\n{ex.Message}", "Refresh Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                 StoredFiles.Clear(); // Clear potentially partial list
+                Files.Clear(); // Clear potentially partial list
             }
             finally
             {
@@ -800,44 +794,43 @@ namespace VRK_WPF.MVVM.ViewModel
             UpdateStatusBar("Refreshing node statuses...");
             _logger.LogInformation("Refreshing node statuses...");
 
-            NetworkNodes.Clear();
-            NetworkNodes.Add(new NodeViewModel { NodeId = "Refreshing...", Status = "Busy"});
+            Nodes.Clear();
+            Nodes.Add(new NodeViewModel { NodeId = "Refreshing...", Status = "Busy"});
 
             try
             {
                 var request = new GetNodeStatusesRequest();
                 var reply = await _storageClient.GetNodeStatusesAsync(request, deadline: DateTime.UtcNow.AddSeconds(15));
 
-                NetworkNodes.Clear(); 
+                Nodes.Clear(); 
                 if (reply.Nodes != null)
                 {
                     foreach (var nodeProto in reply.Nodes.OrderBy(n => n.NodeId))
                     {
-                        NetworkNodes.Add(new NodeViewModel
+                        Nodes.Add(new NodeViewModel
                         {
                             NodeId = nodeProto.NodeId,
                             Address = nodeProto.Address,
-                            // Convert proto enum to string, potentially make it nicer
                             Status = nodeProto.Status.ToString().Replace("NODE_STATE_", ""),
                             StatusDetails = nodeProto.Details
                         });
                     }
                 }
-                UpdateStatusBar($"Node status refreshed. Found {NetworkNodes.Count} nodes.");
+                UpdateStatusBar($"Node status refreshed. Found {Nodes.Count} nodes.");
             }
             catch (RpcException ex)
             {
                  _logger.LogError(ex, "gRPC Error refreshing node statuses");
-                 NetworkNodes.Clear();
-                 NetworkNodes.Add(new NodeViewModel { NodeId = "Error", Status = "Failed", StatusDetails = $"gRPC: {ex.StatusCode}"});
+                 Nodes.Clear();
+                 Nodes.Add(new NodeViewModel { NodeId = "Error", Status = "Failed", StatusDetails = $"gRPC: {ex.StatusCode}"});
                 UpdateStatusBar("Error refreshing node statuses (gRPC Error)");
                 MessageBox.Show($"Failed to refresh node statuses:\nStatus: {ex.StatusCode}\nDetail: {ex.Status.Detail}", "Refresh Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch (Exception ex)
             {
                  _logger.LogError(ex, "Unexpected error refreshing node statuses");
-                 NetworkNodes.Clear();
-                 NetworkNodes.Add(new NodeViewModel { NodeId = "Error", Status = "Failed", StatusDetails = $"Error: {ex.Message}"});
+                 Nodes.Clear();
+                 Nodes.Add(new NodeViewModel { NodeId = "Error", Status = "Failed", StatusDetails = $"Error: {ex.Message}"});
                 UpdateStatusBar("Error refreshing node statuses");
                 MessageBox.Show($"An unexpected error occurred while refreshing node statuses:\n{ex.Message}", "Refresh Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -847,6 +840,49 @@ namespace VRK_WPF.MVVM.ViewModel
             }
         }
 
+        private async Task UpdateSimulationNodesAsync()
+        {
+            if (_storageClient == null) return;
+            
+            try
+            {
+                // Reuse the same node status data for simulation tab
+                var request = new GetNodeStatusesRequest();
+                var reply = await _storageClient.GetNodeStatusesAsync(request);
+                
+                SimulationNodes.Clear();
+                if (reply.Nodes != null)
+                {
+                    foreach (var nodeProto in reply.Nodes)
+                    {
+                        SimulationNodes.Add(new NodeViewModel
+                        {
+                            NodeId = nodeProto.NodeId,
+                            Address = nodeProto.Address,
+                            Status = nodeProto.Status.ToString().Replace("NODE_STATE_", ""),
+                            IsSelected = false
+                        });
+                    }
+                }
+                
+                CanSimulateNodeFailure = SimulationNodes.Count > 0;
+                CanRestoreNodes = _storageClient != null;
+        
+                DisableSelectedNodesCommand.NotifyCanExecuteChanged();
+                RestoreAllNodesCommand.NotifyCanExecuteChanged();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating simulation nodes");
+                SimulationNodes.Clear();
+                CanSimulateNodeFailure = false;
+                CanRestoreNodes = false;
+        
+                DisableSelectedNodesCommand.NotifyCanExecuteChanged();
+                RestoreAllNodesCommand.NotifyCanExecuteChanged();
+            }
+        }
+        
         #region Node Settings Loading Logic
 
         /// <summary>
@@ -987,6 +1023,122 @@ namespace VRK_WPF.MVVM.ViewModel
         private void ShowAbout()
         {
             MessageBox.Show("VKR Distributed Storage Client v0.1.1\n\nDeveloped for testing purposes.", "About", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        
+        [RelayCommand]
+        private async Task DisableSelectedNodesAsync()
+        {
+            if (_storageClient == null || !SimulationNodes.Any() || !CanSimulateNodeFailure) return;
+            
+            var selectedNodes = SimulationNodes.Where(n => n.IsSelected).ToList();
+            
+            if (!selectedNodes.Any())
+            {
+                MessageBox.Show("Please select at least one node to disable.", 
+                    "Node Selection", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            
+            IsSimulationInProgress = true;
+            SimulationStatus = "Disabling selected nodes...";
+            SimulationStatusColor = Brushes.Orange;
+            SimulationProgress = 0;
+            AppendToSimulationLog($"Starting simulation: disabling {selectedNodes.Count} nodes...");
+            
+            try
+            {
+                var progressIncrement = 100.0 / selectedNodes.Count;
+                foreach (var node in selectedNodes)
+                {
+                    var request = new SimulateNodeFailureRequest { NodeId = node.NodeId };
+                    var reply = await _storageClient.SimulateNodeFailureAsync(request);
+                    
+                    if (reply.Success)
+                    {
+                        AppendToSimulationLog($"Node {request.NodeId} successfully disabled: {reply.Message}");
+                    }
+                    else
+                    {
+                        AppendToSimulationLog($"Failed to disable node {request.NodeId}: {reply.Message}");
+                    }
+                    
+                    SimulationProgress += progressIncrement;
+                }
+                
+                // Update UI with new statuses
+                await RefreshNodeStatusAsync();
+                await UpdateSimulationNodesAsync();
+                await UpdateFileAndChunkStatusAsync();
+                
+                SimulationStatus = "Node failure simulation complete";
+                SimulationStatusColor = Brushes.Green;
+                AppendToSimulationLog("Simulation completed. Check file availability and chunk distribution.");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error during node failure simulation");
+                SimulationStatus = $"Error: {ex.Message}";
+                SimulationStatusColor = Brushes.Red;
+                AppendToSimulationLog($"Simulation error: {ex.Message}");
+            }
+            finally
+            {
+                IsSimulationInProgress = false;
+                SimulationProgress = 100;
+            }
+        }
+
+        [RelayCommand]
+        private async Task RestoreAllNodesAsync()
+        {
+            if (_storageClient == null || !CanRestoreNodes) return;
+            
+            IsSimulationInProgress = true;
+            SimulationStatus = "Restoring all nodes...";
+            SimulationStatusColor = Brushes.Orange;
+            SimulationProgress = 50;
+            AppendToSimulationLog("Restoring all nodes to online state...");
+            
+            try
+            {
+                var request = new RestoreAllNodesRequest();
+                var reply = await _storageClient.RestoreAllNodesAsync(request);
+                
+                if (reply.Success)
+                {
+                    AppendToSimulationLog($"All nodes restored: {reply.Message}");
+                    
+                    await RefreshNodeStatusAsync();
+                    await UpdateSimulationNodesAsync();
+                    await UpdateFileAndChunkStatusAsync();
+                    
+                    SimulationStatus = "All nodes restored successfully";
+                    SimulationStatusColor = Brushes.Green;
+                }
+                else
+                {
+                    AppendToSimulationLog($"Failed to restore nodes: {reply.Message}");
+                    SimulationStatus = $"Restore failed: {reply.Message}";
+                    SimulationStatusColor = Brushes.Red;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error during node restoration");
+                SimulationStatus = $"Error: {ex.Message}";
+                SimulationStatusColor = Brushes.Red;
+                AppendToSimulationLog($"Restoration error: {ex.Message}");
+            }
+            finally
+            {
+                IsSimulationInProgress = false;
+                SimulationProgress = 100;
+            }
+        }
+        
+        private void AppendToSimulationLog(string message)
+        {
+            SimulationLog += $"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}";
         }
 
     }

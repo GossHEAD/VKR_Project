@@ -32,29 +32,26 @@ namespace VRK_WPF.MVVM.ViewModel;
         // Constructor (optional, properties can be set directly)
         public FileViewModel() { }
 
-        // You might have a constructor accepting FileMetadataCore or the proto message
-        // public FileViewModel(VKR.Core.Models.FileMetadataCore coreData)
-        // {
-        //     FileId = coreData.FileId;
-        //     FileName = coreData.FileName;
-        //     FileSize = coreData.FileSize;
-        //     CreationTime = coreData.CreationTime.ToLocalTime(); // Convert to local time for display
-        //     ContentType = coreData.ContentType;
-        //     State = coreData.State.ToString(); // Convert enum to string
-        // }
+        public FileViewModel(VKR_Core.Models.FileModel coreData)
+        {
+            FileId = coreData.FileId;
+            FileName = coreData.FileName;
+            FileSize = coreData.FileSize;
+            CreationTime = coreData.CreationTime.ToLocalTime(); // Convert to local time for display
+            ContentType = coreData.ContentType;
+            State = coreData.State.ToString(); // Convert enum to string
+        }
 
-        // public FileViewModel(VKR.Protos.FileMetadata protoData)
-        // {
-        //     FileId = protoData.FileId;
-        //     FileName = protoData.FileName;
-        //     FileSize = protoData.FileSize;
-        //     CreationTime = protoData.CreationTime?.ToDateTime().ToLocalTime() ?? DateTime.MinValue;
-        //     ContentType = protoData.ContentType;
-        //     State = protoData.State.ToString(); // Convert proto enum to string
-        // }
+        public FileViewModel(VKR.Protos.FileMetadata protoData)
+        {
+            FileId = protoData.FileId;
+            FileName = protoData.FileName;
+            FileSize = protoData.FileSize;
+            CreationTime = protoData.CreationTime?.ToDateTime().ToLocalTime() ?? DateTime.MinValue;
+            ContentType = protoData.ContentType;
+            State = protoData.State.ToString(); 
+        }
 
-
-        // Override ToString for easier debugging
         public override string ToString()
         {
             return $"{FileName ?? "N/A"} ({FileSize} bytes) - {State ?? "N/A"}";

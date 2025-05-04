@@ -111,7 +111,7 @@
                     </DockPanel>
 
                     <ListView Grid.Row="1" Margin="0,0,0,5"
-                              ItemsSource="{Binding FilesView}"
+                              ItemsSource="{Binding Files}"
                               SelectedItem="{Binding SelectedFile, Mode=TwoWay}"
                               x:Name="FilesListView"
                               SelectionMode="Single"
@@ -172,7 +172,7 @@
                                 IsEnabled="False"/>
                     </StackPanel>
                     <ListView Grid.Row="1"
-                              ItemsSource="{Binding NodesView}"
+                              ItemsSource="{Binding Nodes}"
                               SelectionMode="Single"
                               HorizontalContentAlignment="Stretch"
                               AlternationCount="2">
@@ -307,6 +307,11 @@
                                       SelectionMode="Multiple" 
                                       Height="150" 
                                       Margin="0,0,0,10">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Type ListViewItem}}">
+                                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                    </Style>
+                                </ListView.ItemContainerStyle>
                                 <ListView.View>
                                     <GridView>
                                         <GridViewColumn Header="ID узла" DisplayMemberBinding="{Binding NodeId}" Width="150"/>

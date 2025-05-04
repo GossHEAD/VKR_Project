@@ -18,6 +18,9 @@ public partial class NodeViewModel : ObservableObject // Inherit from Observable
 
     [ObservableProperty]
     private string? _statusDetails; // Backing field for more details about the status (e.g., error message)
+    
+    [ObservableProperty]
+    private bool _isSelected;
 
     // Constructor (optional, properties can be set directly)
     public NodeViewModel(string nodeId, string address, string status = "Unknown", string statusDetails = "")
@@ -40,5 +43,11 @@ public partial class NodeViewModel : ObservableObject // Inherit from Observable
     public override string ToString()
     {
         return $"Node: {NodeId ?? "N/A"} ({Address ?? "N/A"}) - Status: {Status ?? "N/A"}";
+    }
+    
+    partial void OnIsSelectedChanged(bool value)
+    {
+        // This will be called when IsSelected changes
+        // We need to notify the parent view model
     }
 }
