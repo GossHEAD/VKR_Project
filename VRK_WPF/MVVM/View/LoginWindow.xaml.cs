@@ -1,20 +1,42 @@
-﻿using System.Windows;
+﻿using System;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using VRK_WPF.MVVM.ViewModel;
 
-namespace VRK_WPF.MVVM.View;
-
-public partial class LoginWindow : Window
+namespace VRK_WPF.MVVM.View
 {
-    private readonly LoginWindowModel _viewModel;
-    public LoginWindow()
+    /// <summary>
+    /// Interaction logic for LoginWindow.xaml
+    /// </summary>
+    public partial class LoginWindow : Window
     {
-        InitializeComponent();
-        _viewModel = new LoginWindowModel();
-        DataContext = _viewModel;
-    }
-    private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
-    {
-        _viewModel.Password = ((PasswordBox)sender).Password;
+        private readonly LoginWindowViewModel _viewModel;
+        
+        public LoginWindow()
+        {
+            InitializeComponent();
+            _viewModel = new LoginWindowViewModel();
+            
+            _viewModel.LoginSucceeded += OnLoginSucceeded;
+            
+            DataContext = _viewModel;
+            
+            Loaded += (s, e) => {
+                UsernameTextBox.Focus();
+            };
+        }
+        
+        private void OnLoginSucceeded(object sender, EventArgs e)
+        {
+            this.DialogResult = true;
+        }
+        
+        protected override void OnClosed(EventArgs e)
+        {
+            _viewModel.LoginSucceeded -= OnLoginSucceeded;
+            
+            base.OnClosed(e);
+        }
     }
 }

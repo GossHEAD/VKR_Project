@@ -1,46 +1,76 @@
-﻿using System.ComponentModel;
-using System.Windows;
-using System.Windows.Input;
+﻿using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VRK_WPF.Services;
 
 namespace VRK_WPF.MVVM.ViewModel
 {
-    public partial class LoginWindowModel : ObservableObject
+    public partial class LoginWindowViewModel : ObservableObject
     {
         [ObservableProperty]
-        private string username = string.Empty;
+        private string _username = string.Empty;
 
         [ObservableProperty]
-        private string password = string.Empty;
+        private string _errorMessage = string.Empty;
 
         [ObservableProperty]
-        private string errorMessage = string.Empty;
-
+        private bool _isErrorVisible = false;
+        
         [ObservableProperty]
-        private bool isErrorVisible = false;
+        private bool _isLoggingIn = false;
+        
+        public bool LoginSuccessful { get; private set; } = false;
 
-        public LoginWindowModel()
+        public event EventHandler LoginSucceeded;
+
+        public LoginWindowViewModel()
         {
             LoginCommand = new RelayCommand(ExecuteLogin, CanExecuteLogin);
         }
 
         public RelayCommand LoginCommand { get; }
 
-        private bool CanExecuteLogin() => !string.IsNullOrWhiteSpace(Username) && !string.IsNullOrWhiteSpace(Password);
+        private bool CanExecuteLogin() => 
+            !string.IsNullOrWhiteSpace(Username) && 
+            !IsLoggingIn;
 
         private void ExecuteLogin()
         {
-            // Простая проверка (замени на проверку через БД)
-            if (Username == "admin" && Password == "12345")
+            IsLoggingIn = true;
+            IsErrorVisible = false;
+            ErrorMessage = string.Empty;
+            
+            try
             {
-                MessageBox.Show("Вход выполнен успешно!", "Авторизация", MessageBoxButton.OK, MessageBoxImage.Information);
-                Application.Current.Windows[0]?.Close();
+                if (AuthService.Login(Username, out string errorMsg))
+                {
+                    LoginSuccessful = true;
+                    
+                    var currentUser = AuthService.CurrentUser;
+                    if (currentUser != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"User logged in: {currentUser.Username} (Role: {currentUser.Role})");
+                    }
+                    
+                    LoginSucceeded?.Invoke(this, EventArgs.Empty);
+                }
+                else
+                {
+                    ErrorMessage = string.IsNullOrEmpty(errorMsg) ? "Неверное имя пользователя" : errorMsg;
+                    IsErrorVisible = true;
+                    LoginSuccessful = false;
+                }
             }
-            else
+            catch (System.Exception ex)
             {
-                ErrorMessage = "Неверный логин или пароль!";
+                ErrorMessage = $"Ошибка авторизации: {ex.Message}";
                 IsErrorVisible = true;
+                LoginSuccessful = false;
+            }
+            finally
+            {
+                IsLoggingIn = false;
+                LoginCommand.NotifyCanExecuteChanged();
             }
         }
     }

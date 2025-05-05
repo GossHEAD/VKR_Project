@@ -15,6 +15,7 @@ using VKR.Protos;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging.Abstractions;
+using VRK_WPF.MVVM.View;
 
 namespace VRK_WPF.MVVM.ViewModel
 {
@@ -130,6 +131,12 @@ namespace VRK_WPF.MVVM.ViewModel
         }
         
         [ObservableProperty]
+        private string _currentUserName = string.Empty;
+
+        [ObservableProperty]
+        private string _currentUserRole = string.Empty;
+        
+        [ObservableProperty]
         private double _settingCpuUsage;
 
         [ObservableProperty]
@@ -197,6 +204,26 @@ namespace VRK_WPF.MVVM.ViewModel
                 ConnectionStatusColor = Brushes.Gray;
                 Files.Add(new FileViewModel { FileId = "design-1", FileName = "DesignFile1.txt", FileSize = 1024, CreationTime = DateTime.Now, State = "Available" });
                 Nodes.Add(new NodeViewModel { NodeId = "Node1-Design", Address = "localhost:5001", Status = "Online", StatusDetails = "Design Mode" });
+            }
+        }
+        
+        private void UpdateStatusBarWithUserInfo()
+        {
+            if (!string.IsNullOrEmpty(CurrentUserName))
+            {
+                StatusBarText = $"Пользователь: {CurrentUserName} | Роль: {CurrentUserRole} | Готов к работе";
+            }
+            else
+            {
+                StatusBarText = "Ready";
+            }
+        }
+        
+        partial void OnCurrentUserNameChanged(string value)
+        {
+            if (!string.IsNullOrEmpty(value))
+            {
+                UpdateStatusBarWithUserInfo();
             }
         }
         
@@ -513,18 +540,11 @@ namespace VRK_WPF.MVVM.ViewModel
             {
                 IsUploading = false;
                 UploadProgress = 0;
-                // Clear selection only on success? Or always? User preference.
-                // SelectedFilePath = null;
-                // SelectedFileName = null;
                 _uploadCts?.Dispose();
                 _uploadCts = null;
-                // Note: The 'call' object (AsyncClientStreamingCall) doesn't need explicit disposal typically,
-                // as completing/awaiting the response handles resource cleanup.
                 _logger.LogInformation("Upload operation finished.");
             }
         }
-
-        
         
         [RelayCommand]
         private void CancelUpload()
@@ -536,8 +556,7 @@ namespace VRK_WPF.MVVM.ViewModel
                 UploadStatus = "Cancelling upload...";
             }
         }
-
-
+        
         [RelayCommand(CanExecute = nameof(CanExecuteDownload))]
         private async Task DownloadFileAsync()
         {
@@ -969,7 +988,6 @@ namespace VRK_WPF.MVVM.ViewModel
             finally
             {
                 IsSettingsLoading = false;
-                // Notify UI about state change
                 RefreshSettingsCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(IsSettingsInteractionEnabled));
             }
@@ -1020,11 +1038,22 @@ namespace VRK_WPF.MVVM.ViewModel
         }
 
         [RelayCommand]
-        private void ShowAbout()
+        private void OpenDocumentation()
         {
-            MessageBox.Show("VKR Distributed Storage Client v0.1.1\n\nDeveloped for testing purposes.", "About", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (Application.Current.MainWindow is MainWindow mainWindow)
+            {
+                mainWindow.ShowDocumentation();
+            }
         }
-        
+
+        [RelayCommand]
+        private void OpenAbout()
+        {
+            if (Application.Current.MainWindow is MainWindow mainWindow)
+            {
+                mainWindow.ShowAbout();
+            }
+        }
         [RelayCommand]
         private async Task DisableSelectedNodesAsync()
         {

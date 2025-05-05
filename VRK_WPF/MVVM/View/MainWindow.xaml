@@ -7,7 +7,7 @@
         xmlns:viewModel="clr-namespace:VRK_WPF.MVVM.ViewModel"
         xmlns:converters="clr-namespace:VRK_WPF.MVVM.Converters"
         mc:Ignorable="d"
-        Title="Программный комплекс" Height="800" Width="850" WindowStartupLocation="CenterScreen"
+        Title="Программный комплекс" Height="800" Width="1000" WindowStartupLocation="CenterScreen"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         TextElement.FontWeight="Regular"
         TextElement.FontSize="13"
@@ -88,7 +88,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl Grid.Row="0" Margin="5" Background="White">
+        <TabControl x:Name="MainTabControl" Grid.Row="0" Margin="5" Background="White">
 
             <TabItem Header="Файлы">
                 <Grid Margin="5">
@@ -399,10 +399,14 @@
             <TabItem Header="Журнал событий" IsEnabled="False">
                  <TextBlock Text="Просмотр журнала событий не реализован." Margin="20" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Gray"/>
             </TabItem>
+            
+            <TabItem Header="Документация" x:Name="DocumentationTab">
+                <Frame x:Name="DocumentationFrame" NavigationUIVisibility="Hidden"/>
+            </TabItem>
 
-             <TabItem Header="О программе" IsEnabled="False">
-                 <TextBlock Text="Справка о программе не реализована." Margin="20" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Gray"/>
-                 </TabItem>
+            <TabItem Header="О программе" x:Name="AboutTab">
+                <Frame x:Name="AboutFrame" NavigationUIVisibility="Hidden"/>
+            </TabItem>
 
         </TabControl>
 

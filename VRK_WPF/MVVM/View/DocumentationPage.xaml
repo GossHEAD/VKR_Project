@@ -5,18 +5,175 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:local="clr-namespace:VRK_WPF.MVVM.View"
       mc:Ignorable="d"
-      Title="DocumentationPage" Height="450" Width="800">
+      Title="Документация" Height="650" Width="800">
     <Grid>
-        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="20,20,20,0">
+            <TextBlock Text="Документация пользователя" FontSize="24" FontWeight="Bold"/>
+            <Separator Margin="0,5,0,0"/>
+        </StackPanel>
+        
+        <!-- Content -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="20,10,20,20">
             <StackPanel>
-                <TextBlock Text="Документация" FontSize="20" FontWeight="Bold" />
-                <Separator />
-                <TextBlock Text="Здесь представлено руководство пользователя и описание функциональности системы." TextWrapping="Wrap" Margin="0,10,0,0"/>
-                <TextBlock Text="1. Запуск системы и авторизация." FontWeight="Bold" Margin="0,10,0,0"/>
-                <TextBlock Text="2. Основные функции и интерфейс пользователя." FontWeight="Bold" Margin="0,5,0,0"/>
-                <TextBlock Text="3. Имитация нештатных ситуаций и анализ узлов." FontWeight="Bold" Margin="0,5,0,0"/>
-                <TextBlock Text="4. Экспорт и импорт данных." FontWeight="Bold" Margin="0,5,0,0"/>
-                <TextBlock Text="Подробное руководство см. в полной документации." Margin="0,10,0,0"/>
+                <!-- Section 1 -->
+                <Expander Header="1. Запуск системы и авторизация" IsExpanded="True" Margin="0,5,0,5">
+                    <StackPanel Margin="10,10,10,0">
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            <Run FontWeight="Bold">Запуск приложения:</Run> Запустите файл VRK_WPF.exe из установочной папки программы.
+                            При первом запуске будет показано окно авторизации.
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            <Run FontWeight="Bold">Авторизация:</Run> В окне авторизации введите следующие учетные данные:
+                        </TextBlock>
+                        
+                        <Border BorderBrush="LightGray" BorderThickness="1" Padding="10" Background="#F5F5F5" Margin="10,0,10,10">
+                            <StackPanel>
+                                <TextBlock Text="Администратор системы:" FontWeight="Bold"/>
+                                <TextBlock Text="Логин: admin" Margin="20,5,0,0"/>
+                                <TextBlock Text="Пароль: 12345" Margin="20,0,0,10"/>
+                                
+                                <TextBlock Text="ИТ-специалист:" FontWeight="Bold"/>
+                                <TextBlock Text="Логин: user" Margin="20,5,0,0"/>
+                                <TextBlock Text="Пароль: user" Margin="20,0,0,5"/>
+                            </StackPanel>
+                        </Border>
+                        
+                        <TextBlock TextWrapping="Wrap">
+                            После успешной авторизации система откроет главное окно приложения с доступными вкладками в 
+                            соответствии с правами вашей учетной записи.
+                        </TextBlock>
+                    </StackPanel>
+                </Expander>
+                
+                <!-- Section 2 -->
+                <Expander Header="2. Основные функции и интерфейс пользователя" Margin="0,5,0,5">
+                    <StackPanel Margin="10,10,10,0">
+                        <TextBlock FontWeight="Bold" Text="Интерфейс пользователя разделен на несколько основных вкладок:" Margin="0,0,0,10"/>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            <Run FontWeight="Bold">Файлы:</Run> Позволяет управлять файлами в распределенном хранилище. Здесь вы можете 
+                            загружать новые файлы, просматривать список имеющихся файлов, скачивать их и удалять.
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            <Run FontWeight="Bold">Сеть:</Run> Отображает информацию о доступных узлах сети, их статусе и параметрах. 
+                            Позволяет отслеживать доступность узлов в реальном времени.
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            <Run FontWeight="Bold">Настройки:</Run> Предоставляет возможность настройки подключения к узлам сети 
+                            и просмотра системной конфигурации. Здесь вы можете указать адрес целевого узла для подключения 
+                            и увидеть его характеристики.
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            <Run FontWeight="Bold">Симуляция:</Run> Главный инструмент обучения, позволяющий имитировать отказы 
+                            узлов сети и наблюдать за процессом автоматического перераспределения данных. Вы можете выбрать 
+                            узлы для отключения и отслеживать доступность данных.
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap">
+                            <Run FontWeight="Bold">Журнал событий:</Run> Отображает системные события, ошибки и информационные 
+                            сообщения, помогая отслеживать состояние системы и диагностировать возможные проблемы.
+                        </TextBlock>
+                    </StackPanel>
+                </Expander>
+                
+                <!-- Section 3 -->
+                <Expander Header="3. Имитация нештатных ситуаций и анализ узлов" Margin="0,5,0,5">
+                    <StackPanel Margin="10,10,10,0">
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            Вкладка "Симуляция" позволяет проводить различные сценарии сбоев и наблюдать за процессом 
+                            восстановления доступности данных:
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            <Run FontWeight="Bold">1. Выбор узлов для отключения:</Run> В списке узлов отметьте те, которые 
+                            хотите отключить для симуляции сбоя. Можно выбрать один или несколько узлов одновременно.
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            <Run FontWeight="Bold">2. Запуск симуляции:</Run> Нажмите кнопку "Отключить выбранные узлы" для 
+                            начала симуляции. Система переведет выбранные узлы в состояние "Offline" и запустит процесс 
+                            перераспределения данных.
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            <Run FontWeight="Bold">3. Анализ результатов:</Run> В панелях "Статус файлов" и "Распределение чанков" 
+                            можно наблюдать изменения в доступности данных и их распределение по оставшимся узлам.
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            <Run FontWeight="Bold">4. Журнал активности:</Run> Отслеживайте процесс перераспределения в реальном 
+                            времени через текстовое поле журнала активности.
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            <Run FontWeight="Bold">5. Восстановление узлов:</Run> По завершении анализа нажмите "Восстановить все узлы" 
+                            для возвращения системы в нормальное состояние.
+                        </TextBlock>
+                        
+                        <Border BorderBrush="DarkOrange" BorderThickness="1" Background="#FFFFE0" Padding="10" Margin="0,5,0,5">
+                            <TextBlock TextWrapping="Wrap">
+                                <Run FontWeight="Bold">Внимание:</Run> Симуляция может временно ограничить доступность некоторых файлов, 
+                                пока система перераспределяет данные. Это является частью учебного процесса и демонстрирует работу 
+                                механизмов обеспечения отказоустойчивости.
+                            </TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+                
+                <!-- Section 4 -->
+                <Expander Header="4. Экспорт и импорт данных" Margin="0,5,0,5">
+                    <StackPanel Margin="10,10,10,0">
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                            <Run FontWeight="Bold">Загрузка файлов в хранилище:</Run>
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            1. На вкладке "Файлы" нажмите кнопку "Выбрать файл..."
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            2. В появившемся диалоговом окне выберите файл для загрузки и нажмите "Открыть"
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            3. Нажмите кнопку "Загрузить файл" для начала процесса передачи
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            4. Отслеживайте прогресс загрузки по индикатору внизу панели
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="0,10,0,10">
+                            <Run FontWeight="Bold">Скачивание файлов из хранилища:</Run>
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            1. На вкладке "Файлы" выберите необходимый файл из списка
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            2. Нажмите кнопку "Скачать файл"
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            3. В диалоговом окне выберите место для сохранения и нажмите "Сохранить"
+                        </TextBlock>
+                        
+                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,10">
+                            4. Отслеживайте прогресс скачивания по индикатору внизу панели
+                        </TextBlock>
+                    </StackPanel>
+                </Expander>
             </StackPanel>
         </ScrollViewer>
     </Grid>

@@ -7,12 +7,49 @@
       mc:Ignorable="d"
       Title="О программе">
     <Grid>
-    <StackPanel Margin="20">
-        <TextBlock Text="О программе" FontSize="20" FontWeight="Bold" />
-        <Separator />
-        <TextBlock Text="Программный комплекс для обучения распределению производственных данных по узлам промышленной вычислительной сети в нештатной ситуации." TextWrapping="Wrap" Margin="0,10,0,0"/>
-        <TextBlock Text="Версия: 1.0.0" FontWeight="Bold" Margin="0,5,0,0" />
-        <TextBlock Text="Разработчик: [Название компании / ФИО разработчика]" Margin="0,5,0,0" />
-    </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="20">
+                <TextBlock Text="О программе" FontSize="24" FontWeight="Bold" Margin="0,0,0,10"/>
+                <Separator />
+                
+                <TextBlock TextWrapping="Wrap" Margin="0,15,0,10" FontSize="14">
+                    Программный комплекс для обучения распределению производственных данных 
+                    по узлам промышленной вычислительной сети в нештатной ситуации.
+                </TextBlock>
+                
+                <StackPanel Margin="0,10,0,0">
+                    <TextBlock Text="Версия:" FontWeight="Bold" />
+                    <TextBlock Text="1.0.0 (сборка от 04.05.2025)" Margin="15,0,0,5"/>
+                    
+                    <TextBlock Text="Разработчик:" FontWeight="Bold" />
+                    <TextBlock Text="Студент кафедры САПРиУ" Margin="15,0,0,5"/>
+                    <TextBlock Text="Богданов Александр Евгеньевич, группа 413" Margin="15,0,0,5"/>
+                    
+                    <TextBlock Text="Контакты:" FontWeight="Bold" />
+                    <TextBlock Text="bagdachov@gmail.com" Margin="15,0,0,5"/>
+                    <TextBlock Text="+7 (000) 000-00-00" Margin="15,0,0,5"/>
+                </StackPanel>
+                
+                <TextBlock Text="Назначение:" FontWeight="Bold" Margin="0,15,0,5"/>
+                <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                    Данный программный комплекс предназначен для обучения специалистов по информационной 
+                    безопасности методам обеспечения отказоустойчивости хранения данных в распределенных 
+                    вычислительных сетях промышленных предприятий. Комплекс позволяет симулировать сценарии 
+                    отказа узлов сети и отрабатывать решения по оперативному восстановлению доступа к критически 
+                    важным данным.
+                </TextBlock>
+                
+                <TextBlock Text="Системные требования:" FontWeight="Bold" Margin="0,5,0,5"/>
+                <StackPanel Margin="15,0,0,10">
+                    <TextBlock Text="• Windows 10/11 или Linux с установленным .NET 8.0"/>
+                    <TextBlock Text="• 4 ГБ оперативной памяти"/>
+                    <TextBlock Text="• 500 МБ свободного дискового пространства"/>
+                    <TextBlock Text="• Сетевое подключение (для многоузловой конфигурации)"/>
+                </StackPanel>
+                
+                <TextBlock Text="Лицензия:" FontWeight="Bold" Margin="0,5,0,5"/>
+                <TextBlock Text="© 2025 Кафедра САПРиУ. Все права защищены." TextWrapping="Wrap" />
+            </StackPanel>
+        </ScrollViewer>
     </Grid>
 </Page>

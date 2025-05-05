@@ -9,10 +9,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Folder Include="MVVM\Model\" />
-    </ItemGroup>
-
-    <ItemGroup>
       <Page Update="MVVM\View\MainWindow.xaml">
         <Generator>MSBuild:Compile</Generator>
         <XamlRuntime>Wpf</XamlRuntime>
