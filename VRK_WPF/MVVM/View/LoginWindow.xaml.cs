@@ -12,13 +12,16 @@ namespace VRK_WPF.MVVM.View
     public partial class LoginWindow : Window
     {
         private readonly LoginWindowViewModel _viewModel;
+        public event EventHandler LoginSucceeded;
         
         public LoginWindow()
         {
             InitializeComponent();
             _viewModel = new LoginWindowViewModel();
             
-            _viewModel.LoginSucceeded += OnLoginSucceeded;
+            _viewModel.LoginSucceeded += (s, e) => {
+                LoginSucceeded?.Invoke(this, EventArgs.Empty);
+            };
             
             DataContext = _viewModel;
             
@@ -29,7 +32,7 @@ namespace VRK_WPF.MVVM.View
         
         private void OnLoginSucceeded(object sender, EventArgs e)
         {
-            this.DialogResult = true;
+            LoginSucceeded?.Invoke(this, EventArgs.Empty);
         }
         
         protected override void OnClosed(EventArgs e)

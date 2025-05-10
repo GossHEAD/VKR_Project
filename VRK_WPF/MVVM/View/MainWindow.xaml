@@ -396,7 +396,7 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Журнал событий" IsEnabled="False">
+            <TabItem Header="Журнал событий" IsEnabled="True" x:Name="LogEventsTab">
                 <local:LogViewer />
             </TabItem>
             

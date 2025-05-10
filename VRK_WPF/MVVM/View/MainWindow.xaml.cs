@@ -15,6 +15,10 @@ namespace VRK_WPF.MVVM.View
         public MainWindow()
         {
             InitializeComponent();
+            if (LogEventsTab != null)
+            {
+                LogEventsTab.IsEnabled = true;
+            }
             try
             {
                 InitializeFrames();
@@ -124,6 +128,11 @@ namespace VRK_WPF.MVVM.View
                 {
                     logsTab.Visibility = AuthService.CanAccessModule("Logs") 
                         ? Visibility.Visible : Visibility.Collapsed;
+            
+                    if (logsTab.Visibility == Visibility.Visible)
+                    {
+                        logsTab.IsEnabled = true;
+                    }
                 }
                 
                 UpdateStatusBarWithUserInfo();

@@ -22,15 +22,27 @@ namespace VRK_WPF.MVVM.View
         
         public LogViewer()
         {
-            InitializeComponent();
-            
             _logManager = new LogManager(Dispatcher);
-            
             _viewSource = new CollectionViewSource { Source = _logManager.Logs };
+    
+            InitializeComponent();
+    
             lvLogs.ItemsSource = _viewSource.View;
-            
-            ApplyFilters();
-            
+    
+            this.Loaded += (s, e) => 
+            {
+                ApplyFilters();
+        
+                _logScrollViewer = FindScrollViewer(lvLogs);
+        
+                if (_logScrollViewer != null)
+                {
+                    _logScrollViewer.ScrollChanged += LogScrollViewer_ScrollChanged;
+                }
+        
+                StartMonitoring();
+            };
+    
             ((ICollectionView)_viewSource.View).CollectionChanged += (s, e) =>
             {
                 if (_autoScroll && e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
@@ -38,24 +50,11 @@ namespace VRK_WPF.MVVM.View
                     lvLogs.ScrollIntoView(lvLogs.Items[lvLogs.Items.Count - 1]);
                 }
             };
-            
-            this.Loaded += (s, e) => 
-            {
-                _logScrollViewer = FindScrollViewer(lvLogs);
-                
-                if (_logScrollViewer != null)
-                {
-                    _logScrollViewer.ScrollChanged += LogScrollViewer_ScrollChanged;
-                }
-                
-                StartMonitoring();
-            };
-            
-            Loaded += (s, e) => StartMonitoring();
+
             this.Unloaded += (s, e) => 
             {
                 StopMonitoring();
-                
+        
                 if (_logScrollViewer != null)
                 {
                     _logScrollViewer.ScrollChanged -= LogScrollViewer_ScrollChanged;
@@ -93,7 +92,6 @@ namespace VRK_WPF.MVVM.View
                 _autoScroll = false;
             }
             
-            // Re-enable auto-scroll when scrolled to bottom
             if (e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 1)
             {
                 _autoScroll = true;
@@ -112,7 +110,10 @@ namespace VRK_WPF.MVVM.View
         
         private void FilterLogs(object sender, RoutedEventArgs e)
         {
-            ApplyFilters();
+            if (IsLoaded)
+            {
+                ApplyFilters();
+            }
         }
         
         private void TxtSearch_TextChanged(object sender, TextChangedEventArgs e)
@@ -140,12 +141,18 @@ namespace VRK_WPF.MVVM.View
         
         private void ApplyFilters()
         {
-            string searchText = txtSearch.Text;
-            bool includeInfo = cbInfo.IsChecked == true;
-            bool includeWarning = cbWarning.IsChecked == true;
-            bool includeError = cbError.IsChecked == true;
-            bool includeDebug = cbDebug.IsChecked == true;
-            
+            if (_viewSource == null || _viewSource.View == null)
+            {
+                return;
+            }
+
+            string searchText = txtSearch?.Text ?? string.Empty;
+    
+            bool includeInfo = cbInfo?.IsChecked == true;
+            bool includeWarning = cbWarning?.IsChecked == true;
+            bool includeError = cbError?.IsChecked == true;
+            bool includeDebug = cbDebug?.IsChecked == true;
+    
             _viewSource.View.Filter = item =>
             {
                 if (item is Model.LogEntry log)
@@ -158,7 +165,7 @@ namespace VRK_WPF.MVVM.View
                             (includeError && log.IsError) ||
                             (includeDebug && log.IsDebug));
                 }
-                
+        
                 return false;
             };
         }
