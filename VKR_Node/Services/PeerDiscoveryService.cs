@@ -134,20 +134,17 @@ namespace VKR_Node.Services
             
             _logger.LogDebug("Found {Count} peer nodes to ping", peerNodes.Count);
 
-            // Use semaphore to limit concurrency
             using var semaphore = new SemaphoreSlim(_maxConcurrentPings);
             var pingTasks = new List<Task>();
 
             foreach (var node in peerNodes)
             {
-                // Skip nodes with missing info
                 if (string.IsNullOrEmpty(node.Address) || string.IsNullOrEmpty(node.NodeId))
                 {
                     _logger.LogWarning("Skipping node with missing ID or address: {NodeId}", node.NodeId ?? "Unknown");
                     continue;
                 }
 
-                // Wait for a slot to become available
                 await semaphore.WaitAsync(cancellationToken);
 
                 pingTasks.Add(Task.Run(async () => {
@@ -165,8 +162,7 @@ namespace VKR_Node.Services
                     }
                 }, cancellationToken));
             }
-
-            // Wait for all ping tasks to complete or cancellation
+            
             try
             {
                 await Task.WhenAll(pingTasks);

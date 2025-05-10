@@ -17,7 +17,6 @@
 
     <Grid>
         <StackPanel Margin="40">
-            <!-- Header -->
             <TextBlock Text="Система распределенного хранения данных" 
                        HorizontalAlignment="Center" 
                        FontSize="16" 
@@ -29,7 +28,6 @@
                        Margin="0,0,0,20"/>
             <Separator Margin="0,0,0,20"/>
             
-            <!-- Login Form -->
             <TextBlock Text="Имя пользователя:" Margin="0,0,0,5"/>
             <TextBox x:Name="UsernameTextBox"
                      Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" 
@@ -40,7 +38,6 @@
                 </TextBox.InputBindings>
             </TextBox>
             
-            <!-- Error Message -->
             <TextBlock Foreground="Red" 
                        Visibility="{Binding IsErrorVisible, Converter={StaticResource BoolToVisibilityConverter}}" 
                        Text="{Binding ErrorMessage}" 
@@ -48,14 +45,12 @@
                        Margin="0,0,0,15"
                        HorizontalAlignment="Center"/>
             
-            <!-- Help Text -->
-            <TextBlock Text="Доступные пользователи: admin, specialist" 
+            <TextBlock Text="Доступные пользователи: admin, specialist, user" 
                        HorizontalAlignment="Center"
                        FontStyle="Italic"
                        Margin="0,0,0,15"
                        Foreground="Gray"/>
             
-            <!-- Buttons -->
             <Button Content="Войти" 
                     Command="{Binding LoginCommand}" 
                     Padding="20,8" 

@@ -49,27 +49,6 @@ namespace VKR_Node.Services.Utilities
         }
 
         /// <summary>
-        /// Maps a core metadata object to a protocol buffer metadata object
-        /// </summary>
-        public static FileMetadata? MapCoreToProtoMetadata(FileModel? core)
-        {
-            if (core == null) return null;
-
-            return new FileMetadata
-            {
-                FileId = core.FileId,
-                FileName = core.FileName ?? string.Empty,
-                FileSize = core.FileSize,
-                CreationTime = Timestamp.FromDateTime(core.CreationTime.ToUniversalTime()),
-                ModificationTime = Timestamp.FromDateTime(core.ModificationTime.ToUniversalTime()),
-                ContentType = core.ContentType ?? string.Empty,
-                ChunkSize = core.ChunkSize,
-                TotalChunks = core.TotalChunks,
-                State = (FileState)core.State
-            };
-        }
-
-        /// <summary>
         /// Checks if a node is online by pinging it
         /// </summary>
         public static async Task<bool> IsNodeOnlineAsync(

@@ -10,6 +10,8 @@ using Microsoft.Extensions.Options;
 using System.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Serilog;
+using Serilog.Events;
 using VKR_Core.Services;
 using VKR_Node.Configuration;
 using VKR_Node.Mapping;
@@ -20,7 +22,7 @@ using VKR_Node.Services.FileService.FileInterface;
 using VKR_Node.Services.NodeServices;
 using VKR_Node.Services.NodeServices.NodeInterfaces;
 using VKR_Node.Services.Utilities;
-using VKR.Node;
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace VKR_Node
 {
@@ -28,6 +30,7 @@ namespace VKR_Node
     {
         public static async Task Main(string[] args)
         {
+            ConfigureSerilog(args);
             Console.WriteLine($"[Main] Application started with args: {string.Join(" ", args)}");
 
             try
@@ -39,8 +42,46 @@ namespace VKR_Node
             {
                 Console.WriteLine($"[Main] Fatal error during application startup: {ex.Message}");
                 Console.WriteLine(ex.ToString());
+                Log.Fatal(ex, "Fatal error during application startup");
                 Environment.ExitCode = 1;
             }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
+        }
+        
+        private static void ConfigureSerilog(string[] args)
+        {
+            string logsDirectory = Path.Combine(AppContext.BaseDirectory, "Logs");
+            Directory.CreateDirectory(logsDirectory); 
+        
+            string nodeId = "node";
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i].Equals("--NodeId", StringComparison.OrdinalIgnoreCase) || 
+                    args[i].Equals("--Identity:NodeId", StringComparison.OrdinalIgnoreCase))
+                {
+                    nodeId = args[i + 1];
+                    break;
+                }
+            }
+        
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+                .Enrich.FromLogContext()
+                .Enrich.WithProperty("NodeId", nodeId)
+                .WriteTo.Console()
+                .WriteTo.File(
+                    Path.Combine(logsDirectory, $"{nodeId}-log-.txt"),
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 31,
+                    fileSizeLimitBytes: 10 * 1024 * 1024, 
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                .CreateLogger();
+        
+            Log.Information("Logging initialized. Log files will be saved to: {LogDirectory}", logsDirectory);
         }
 
         private static async Task RunWithConfigurationValidation(IHost host, string[] args)
@@ -52,17 +93,10 @@ namespace VKR_Node
 
                 try
                 {
-                    // Validate configuration first
-                    var configValidator = scope.ServiceProvider.GetRequiredService<IConfigurationValidator>();
-                    configValidator.ValidateConfiguration();
-
-                    // Log configuration details for diagnostics
                     await LogConfigurationDetails(scope.ServiceProvider, logger);
 
-                    // Proceed with database migrations and service initialization
                     await InitializeDatabaseAndServices(scope.ServiceProvider, logger);
 
-                    // Run the application
                     logger.LogInformation("Starting application host...");
                     await host.RunAsync();
                     logger.LogInformation("Application host stopped.");
@@ -70,7 +104,7 @@ namespace VKR_Node
                 catch (Exception ex)
                 {
                     logger.LogCritical(ex, "Fatal error during application initialization.");
-                    throw; // Let the outer catch handle it
+                    throw; 
                 }
             }
         }
@@ -162,7 +196,6 @@ namespace VKR_Node
 
             try
             {
-                // Apply database migrations
                 logger.LogInformation("Applying database migrations...");
                 var dbContextFactory = services.GetRequiredService<IDbContextFactory<NodeDbContext>>();
                 await using (var dbContext = await dbContextFactory.CreateDbContextAsync())
@@ -171,7 +204,6 @@ namespace VKR_Node
                 }
                 logger.LogInformation("Database migrations applied successfully.");
 
-                // Initialize services that implement IAsyncInitializable
                 var initializables = services.GetServices<IAsyncInitializable>();
                 if (initializables != null && initializables.Any())
                 {
@@ -225,12 +257,13 @@ namespace VKR_Node
                     config.AddEnvironmentVariables();
                     config.AddCommandLine(args);
                 })
-                .ConfigureLogging(logging =>
-                {
-                    logging.ClearProviders();
-                    logging.AddConsole();
-                    logging.AddDebug();
-                })
+                .UseSerilog()
+                // .ConfigureLogging(logging =>
+                // {
+                //     logging.ClearProviders();
+                //     logging.AddConsole();
+                //     logging.AddDebug();
+                // })
                 .ConfigureServices((hostContext, services) =>
                 {
                     // Register AutoMapper
@@ -249,7 +282,28 @@ namespace VKR_Node
                     ConfigureHealthChecks(services);
                     
                     // Database Services
-                    services.AddDbContextFactory<NodeDbContext>();
+                    services.AddDbContextFactory<NodeDbContext>(options =>
+                    {
+                        var dbOptions = services.BuildServiceProvider().GetRequiredService<IOptions<DatabaseOptions>>().Value;
+    
+                        string connectionString = dbOptions.HasExplicitConnectionString
+                            ? dbOptions.ConnectionString
+                            : $"Data Source={dbOptions.DatabasePath}";
+        
+                        var optionsBuilder = options.UseSqlite(connectionString);
+    
+                        if (dbOptions.EnableSqlLogging)
+                        {
+                            optionsBuilder.EnableSensitiveDataLogging()
+                                .LogTo(Console.WriteLine, LogLevel.Information);
+                        }
+    
+                        if (dbOptions.CommandTimeoutSeconds > 0)
+                        {
+                            TimeSpan timeout = TimeSpan.FromSeconds(dbOptions.CommandTimeoutSeconds);
+                            optionsBuilder.ConfigureLoggingCacheTime(timeout);
+                        }
+                    });
                     
                     // Storage and Node Services
                     RegisterStorageServices(services);
@@ -332,43 +386,49 @@ namespace VKR_Node
 
         private static void RegisterConfigurationOptions(HostBuilderContext hostContext, IServiceCollection services)
         {
-            // Register the root configuration
+            var loggerFactory = LoggerFactory.Create(builder =>
+            {
+                builder.AddConsole();
+                builder.AddDebug();
+            });
+            var logger = loggerFactory.CreateLogger<Program>();
+            var configuration = hostContext.Configuration;
+            
             services.Configure<DistributedStorageConfiguration>(
                 hostContext.Configuration.GetSection("DistributedStorage"));
             
-            // Register individual option sections
-            services.Configure<NodeIdentityOptions>(
-                hostContext.Configuration.GetSection("DistributedStorage:Identity"));
-            services.Configure<NetworkOptions>(
-                hostContext.Configuration.GetSection("DistributedStorage:Network"));
-            services.Configure<StorageOptions>(
-                hostContext.Configuration.GetSection("DistributedStorage:Storage"));
-            services.Configure<DatabaseOptions>(
-                hostContext.Configuration.GetSection("DistributedStorage:Database"));
-            services.Configure<DhtOptions>(
-                hostContext.Configuration.GetSection("DistributedStorage:Dht"));
+            services.AddValidatedOptions<NodeIdentityOptions>(
+                configuration, "DistributedStorage:Identity", logger);
+                    
+            services.AddValidatedOptions<NetworkOptions>(
+                configuration, "DistributedStorage:Network", logger);
+                    
+            services.AddValidatedOptions<StorageOptions>(
+                configuration, "DistributedStorage:Storage", logger);
+                    
+            services.AddValidatedOptions<DatabaseOptions>(
+                configuration, "DistributedStorage:Database", logger);
+                    
+            services.AddValidatedOptions<DhtOptions>(
+                configuration, "DistributedStorage:Dht", logger);
+                
+            services.AddCrossValidatedConfiguration(configuration, logger);
             
-            // Also register resolved options as concrete types for services that need them directly
             services.AddSingleton(provider => 
                 provider.GetRequiredService<IOptions<DhtOptions>>().Value);
                 
-            // Configuration validator
-            services.AddTransient<IConfigurationValidator, ConfigurationValidator>();
         }
 
         private static void RegisterCoreServices(IServiceCollection services)
         {
-            // Node services
             services.AddSingleton<INodeClient, GrpcNodeClient>();
             services.AddSingleton<INodeStatusService, NodeStatusService>();
             services.AddSingleton<INodeConfigService, NodeConfigService>();
             
-            // Data services
             services.AddSingleton<IDataManager, FileSystemDataManager>();
             services.AddSingleton<IMetadataManager, SqliteMetadataManager>();
             services.AddSingleton<IReplicationManager, BackgroundReplicationManager>();
             
-            // Register async initializable services
             services.AddSingleton<IAsyncInitializable>(sp => 
                 sp.GetRequiredService<IDataManager>() as FileSystemDataManager ?? 
                 throw new InvalidOperationException("IDataManager is not FileSystemDataManager"));
@@ -380,11 +440,9 @@ namespace VKR_Node
 
         private static void RegisterStorageServices(IServiceCollection services)
         {
-            // Storage services
             services.AddSingleton<IFileStorageService, FileStorageService>();
             services.AddSingleton<ChunkStreamingHelper>();
             
-            // Register API implementations explicitly
             services.AddSingleton<StorageServiceImpl>();
             services.AddSingleton<NodeInternalServiceImpl>();
         }

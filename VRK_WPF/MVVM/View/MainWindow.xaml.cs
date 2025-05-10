@@ -1,12 +1,9 @@
-﻿using System;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using Microsoft.Extensions.Logging;
 using VKR_Core.Enums;
-using VRK_WPF.MVVM.Model;
+using VRK_WPF.MVVM.Services;
 using VRK_WPF.MVVM.ViewModel;
-using VRK_WPF.Services;
 
 namespace VRK_WPF.MVVM.View
 {
@@ -17,53 +14,54 @@ namespace VRK_WPF.MVVM.View
     {
         public MainWindow()
         {
+            InitializeComponent();
             try
             {
-                var loginWindow = new LoginWindow();
-                bool? loginResult = loginWindow.ShowDialog();
-                
-                if (loginResult != true)
-                {
-                    Application.Current.Shutdown();
-                    return;
-                }
-                
-                if (AuthService.CurrentUser == null)
-                {
-                    MessageBox.Show("Ошибка авторизации. Приложение будет закрыто.", 
-                                    "Ошибка авторизации", 
-                                    MessageBoxButton.OK, 
-                                    MessageBoxImage.Error);
-                    Application.Current.Shutdown();
-                    return;
-                }
-                
-                InitializeComponent();
-                
                 InitializeFrames();
-                
+        
                 string roleName = AuthService.CurrentUser.Role.ToString();
                 MessageBox.Show($"Добро пожаловать, {AuthService.CurrentUser.FullName}!\nРоль: {roleName}", 
-                                "Успешная авторизация", 
-                                MessageBoxButton.OK, 
-                                MessageBoxImage.Information);
-                
+                    "Успешная авторизация", 
+                    MessageBoxButton.OK, 
+                    MessageBoxImage.Information);
+        
                 ILogger<MainWindowViewModel>? logger = null;
-                
+        
                 DataContext = new MainWindowViewModel(logger)
                 {
                     CurrentUserName = AuthService.CurrentUser.FullName,
                     CurrentUserRole = AuthService.CurrentUser.Role.ToString()
                 };
-                
+        
                 ConfigureUIBasedOnUserRole();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка при запуске приложения: {ex.Message}", 
-                                "Ошибка", 
-                                MessageBoxButton.OK, 
-                                MessageBoxImage.Error);
+                    "Ошибка", 
+                    MessageBoxButton.OK, 
+                    MessageBoxImage.Error);
+                Application.Current.Shutdown();
+            }
+        }
+        
+        private void HandleLogin()
+        {
+            var loginWindow = new LoginWindow();
+            bool? loginResult = loginWindow.ShowDialog();
+            
+            if (loginResult != true)
+            {
+                Application.Current.Shutdown();
+                return;
+            }
+            
+            if (AuthService.CurrentUser == null)
+            {
+                MessageBox.Show("Ошибка авторизации. Приложение будет закрыто.", 
+                    "Ошибка авторизации", 
+                    MessageBoxButton.OK, 
+                    MessageBoxImage.Error);
                 Application.Current.Shutdown();
             }
         }

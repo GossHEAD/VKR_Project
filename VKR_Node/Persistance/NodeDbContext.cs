@@ -1,4 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VKR_Node.Configuration; // Required for DatabaseOptions
 using VKR_Node.Persistance.Entities;
@@ -52,13 +55,31 @@ namespace VKR_Node.Persistance
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
+            var dbOptions = optionsBuilder.Options.FindExtension<CoreOptionsExtension>()
+                ?.ApplicationServiceProvider
+                ?.GetService<IOptions<DatabaseOptions>>();
+            
+            bool enableLogging = dbOptions?.Value?.EnableSqlLogging ?? false;
             // Configure the database provider (SQLite) and connection string (_dbPath)
             // ONLY if it hasn't already been configured externally (e.g., by AddDbContextFactory).
             if (!optionsBuilder.IsConfigured)
             {
                 if (!string.IsNullOrEmpty(_dbPath))
                 {
-                     optionsBuilder.UseSqlite($"Data Source={_dbPath}");
+                     var connectionString = $"Data Source={_dbPath}";
+                     if (enableLogging)
+                     {
+                         optionsBuilder.UseSqlite(connectionString)
+                             .EnableSensitiveDataLogging()
+                             .LogTo(Console.WriteLine, LogLevel.Information);
+                         Console.WriteLine($"[NodeDbContext - OnConfiguring] SQL logging is enabled");
+                     }
+                     else
+                     {
+                         optionsBuilder.UseSqlite(connectionString);
+                         // Only log DbContext creation, not queries
+                         Console.WriteLine($"[NodeDbContext - OnConfiguring] Configuring SQLite with path: {_dbPath}");
+                     }
                      Console.WriteLine($"[NodeDbContext - OnConfiguring] (Not externally configured) Configuring SQLite with path: {_dbPath}");
                 } else {
                      // This case should ideally not happen if the constructor logic is sound

@@ -5,7 +5,7 @@ namespace VKR_Node.Configuration
     /// <summary>
     /// Uniquely identifies this node in the network.
     /// </summary>
-    public class NodeIdentityOptions
+    public class NodeIdentityOptions : IValidatableConfiguration
     {
         /// <summary>
         /// Unique identifier for this node. Must be unique across the entire network.
@@ -22,6 +22,11 @@ namespace VKR_Node.Configuration
         /// <summary>
         /// Validate this configuration section.
         /// </summary>
+        // public void Validate()
+        // {
+        //     var context = new ValidationContext(this);
+        //     Validator.ValidateObject(this, context, true);
+        // }
         public void Validate()
         {
             var context = new ValidationContext(this);

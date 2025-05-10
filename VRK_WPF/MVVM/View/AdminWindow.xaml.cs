@@ -2,9 +2,9 @@
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.Logging;
+using VRK_WPF.MVVM.Services;
 using VRK_WPF.MVVM.View.AdminPages;
 using VRK_WPF.MVVM.ViewModel;
-using VRK_WPF.Services;
 
 namespace VRK_WPF.MVVM.View
 {
@@ -16,18 +16,17 @@ namespace VRK_WPF.MVVM.View
         private readonly AdminWindowViewModel _viewModel;
         
         // Pages for navigation
-        private readonly NodeStatusPage _nodeStatusPage;
+        //private readonly NodeStatusPage _nodeStatusPage;
         private readonly DatabaseManagementPage _databaseManagementPage;
         private readonly NodeConfigPage _nodeConfigPage;
         private readonly LogViewerPage _logViewerPage;
-        private readonly SimulationPage _simulationPage;
         
         public AdminWindow()
         {
             InitializeComponent();
             
             // Check if user is authorized as admin
-            if (AuthService.CurrentUser == null || !AuthService.HasRole(Model.UserRole.Administrator))
+            //if (AuthService.CurrentUser == null || !AuthService.HasRole(Model.UserRole.Administrator))
             {
                 MessageBox.Show("Для доступа к административной панели необходимы права администратора.",
                                 "Доступ запрещен", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -36,18 +35,17 @@ namespace VRK_WPF.MVVM.View
             }
             
             // Create and store pages
-            _nodeStatusPage = new NodeStatusPage();
+            //_nodeStatusPage = new NodeStatusPage();
             _databaseManagementPage = new DatabaseManagementPage();
             _nodeConfigPage = new NodeConfigPage();
             _logViewerPage = new LogViewerPage();
-            _simulationPage = new SimulationPage();
             
             // Initialize ViewModel
             _viewModel = new AdminWindowViewModel();
             DataContext = _viewModel;
             
             // Set initial page
-            AdminContentFrame.Content = _nodeStatusPage;
+            //AdminContentFrame.Content = _nodeStatusPage;
             
             // Subscribe to window events
             Loaded += AdminWindow_Loaded;
@@ -73,7 +71,7 @@ namespace VRK_WPF.MVVM.View
             switch (NavMenu.SelectedIndex)
             {
                 case 0:
-                    AdminContentFrame.Content = _nodeStatusPage;
+                    //AdminContentFrame.Content = _nodeStatusPage;
                     break;
                 case 1:
                     AdminContentFrame.Content = _databaseManagementPage;
@@ -83,9 +81,6 @@ namespace VRK_WPF.MVVM.View
                     break;
                 case 3:
                     AdminContentFrame.Content = _logViewerPage;
-                    break;
-                case 4:
-                    AdminContentFrame.Content = _simulationPage;
                     break;
                 default:
                     break;

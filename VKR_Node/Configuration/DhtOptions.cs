@@ -5,7 +5,7 @@ namespace VKR_Node.Configuration
     /// <summary>
     /// Configuration for the Distributed Hash Table (DHT).
     /// </summary>
-    public class DhtOptions
+    public class DhtOptions : IValidatableConfiguration
     {
         /// <summary>
         /// Address of a bootstrap node for joining the network.

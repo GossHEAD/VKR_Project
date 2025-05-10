@@ -5,7 +5,7 @@ namespace VKR_Node.Configuration
     /// <summary>
     /// Configuration for metadata database.
     /// </summary>
-    public class DatabaseOptions
+    public class DatabaseOptions : IValidatableConfiguration
     {
         /// <summary>
         /// Path to the database file.

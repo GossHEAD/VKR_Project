@@ -8,8 +8,8 @@ using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
 using VKR.Protos;
+using VRK_WPF.MVVM.Services;
 using VRK_WPF.MVVM.View;
-using VRK_WPF.Services;
 
 namespace VRK_WPF.MVVM.ViewModel
 {

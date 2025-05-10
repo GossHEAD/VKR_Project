@@ -5,7 +5,7 @@ namespace VKR_Node.Configuration
     /// <summary>
     /// Configuration for data storage.
     /// </summary>
-    public class StorageOptions
+    public class StorageOptions : IValidatableConfiguration
     {
         /// <summary>
         /// Base directory for all storage.

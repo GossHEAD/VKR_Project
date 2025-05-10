@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Data.Sqlite;
 using System.Collections.Concurrent;
+using AutoMapper;
 using VKR_Core.Enums; 
 using VKR_Core.Models;
 using VKR_Core.Services;
@@ -21,6 +22,7 @@ namespace VKR_Node.Services
         private readonly ILogger<SqliteMetadataManager> _logger;
         private readonly string _localNodeId;
         private readonly DatabaseOptions _databaseOptions;
+        private readonly IMapper _mapper;
         
         private readonly ConcurrentDictionary<string, (object Value, DateTime Expiry)> _cacheItems = new();
         private readonly TimeSpan _defaultCacheExpiry = TimeSpan.FromMinutes(1);
@@ -33,12 +35,14 @@ namespace VKR_Node.Services
             IDbContextFactory<NodeDbContext> contextFactory,
             ILogger<SqliteMetadataManager> logger,
             IOptions<NodeIdentityOptions> nodeOptions,
-            IOptions<DatabaseOptions> databaseOptions)
+            IOptions<DatabaseOptions> databaseOptions,
+            IMapper mapper)
         {
             _contextFactory = contextFactory;
             _logger = logger;
             _localNodeId = nodeOptions.Value?.NodeId ?? throw new ArgumentException("NodeId is not configured", nameof(nodeOptions));
             _databaseOptions = databaseOptions.Value;
+            _mapper = mapper;
             
             _logger.LogInformation("SqliteMetadataManager initialized for Node {NodeId} using database path: {Path}", 
                 _localNodeId, _databaseOptions.DatabasePath);
@@ -109,60 +113,7 @@ namespace VKR_Node.Services
                 throw;
             }
         }
-
-        /// <summary>
-        /// Maps a FileEntity to a FileModel object.
-        /// </summary>
-        private FileModel MapFileEntityToCore(FileEntity entity)
-        {
-            return new FileModel
-            {
-                FileId = entity.FileId,
-                FileName = entity.FileName,
-                FileSize = entity.FileSize,
-                CreationTime = entity.CreationTime,
-                ModificationTime = entity.ModificationTime,
-                ContentType = entity.ContentType,
-                ChunkSize = (int)entity.ChunkSize,
-                TotalChunks = entity.TotalChunks,
-                State = (FileStateCore)entity.State
-            };
-        }
-
-        /// <summary>
-        /// Maps a ChunkEntity to a ChunkModel object.
-        /// </summary>
-        private ChunkModel MapChunkEntityToCore(ChunkEntity entity, string storedNodeId = "")
-        {
-            return new ChunkModel
-            {
-                FileId = entity.FileId,
-                ChunkId = entity.ChunkId,
-                ChunkIndex = entity.ChunkIndex,
-                Size = entity.Size,
-                ChunkHash = entity.ChunkHash,
-                StoredNodeId = storedNodeId
-            };
-        }
-
-        /// <summary>
-        /// Maps a NodeEntity to a NodeModel object.
-        /// </summary>
-        private NodeModel MapNodeEntityToCore(NodeEntity entity)
-        {
-            return new NodeModel
-            {
-                Id = entity.NodeId,
-                Address = entity.Address,
-                State = (NodeStateCore)entity.State,
-                LastSeen = entity.LastSeen,
-                LastSuccessfulPingTimestamp = entity.LastSuccessfulPingTimestamp,
-                DiskSpaceAvailableBytes = entity.DiskSpaceAvailableBytes,
-                DiskSpaceTotalBytes = entity.DiskSpaceTotalBytes,
-                StoredChunkCount = entity.StoredChunkCount
-            };
-        }
-
+        
         /// <summary>
         /// Updates fields of a FileEntity from a FileModel object.
         /// </summary>
@@ -386,7 +337,7 @@ namespace VKR_Node.Services
                     return null;
                 }
 
-                var result = MapFileEntityToCore(entity);
+                var result = _mapper.Map<FileModel>(entity);
                 
                 // Store in cache
                 AddToCache(cacheKey, result);
@@ -427,12 +378,13 @@ namespace VKR_Node.Services
                     .OrderBy(f => f.FileName)
                     .ToListAsync(cancellationToken);
 
-                var result = entities.Select(MapFileEntityToCore).ToList();
-                
+                //var result = entities.Select(MapFileEntityToCore).ToList();
+                //var result = _mapper.Map<FileModel>(entities);
+                var result = _mapper.Map<IEnumerable<FileModel>>(entities);
                 // Store in cache with shorter expiry (files might change more frequently)
                 AddToCache(cacheKey, result, TimeSpan.FromSeconds(30));
                 
-                _logger.LogDebug("Retrieved {Count} files", result.Count);
+                _logger.LogDebug("Retrieved {Count} files", result.Count());
                 return result;
             }
             catch (Exception ex)
@@ -709,7 +661,8 @@ namespace VKR_Node.Services
                     return null;
                 }
 
-                var result = MapChunkEntityToCore(entity);
+                //var result = MapChunkEntityToCore(entity);
+                var result = _mapper.Map<ChunkModel>(entity);
                 
                 // Store in cache
                 AddToCache(cacheKey, result);
@@ -750,12 +703,13 @@ namespace VKR_Node.Services
                     .OrderBy(c => c.ChunkIndex)
                     .ToListAsync(cancellationToken);
 
-                var result = entities.Select(entity => MapChunkEntityToCore(entity)).ToList();
+                //var result = entities.Select(entity => MapChunkEntityToCore(entity)).ToList();
+                var result = _mapper.Map<IEnumerable<ChunkModel>>(entities);
                 
                 // Store in cache
                 AddToCache(cacheKey, result);
                 
-                _logger.LogDebug("Retrieved {Count} chunks for File ID: {FileId}", result.Count, fileId);
+                _logger.LogDebug("Retrieved {Count} chunks for File ID: {FileId}", result.Count(), fileId);
                 return result;
             }
             catch (Exception ex)
@@ -797,13 +751,14 @@ namespace VKR_Node.Services
                     .Select(x => x.Chunk)
                     .ToListAsync(cancellationToken);
 
-                var result = localChunks.Select(entity => 
-                    MapChunkEntityToCore(entity, _localNodeId)).ToList();
+                //var result = localChunks.Select(entity => 
+                 //   MapChunkEntityToCore(entity, _localNodeId)).ToList();
+                var result = _mapper.Map<IEnumerable<ChunkModel>>(localChunks);
                 
                 // Store in cache with shorter expiry (local chunks change more frequently)
                 AddToCache(cacheKey, result, TimeSpan.FromSeconds(30));
                 
-                _logger.LogDebug("Found {Count} chunks stored locally on node {NodeId}", result.Count, _localNodeId);
+                _logger.LogDebug("Found {Count} chunks stored locally on node {NodeId}", result.Count(), _localNodeId);
                 return result;
             }
             catch (Exception ex)
@@ -1209,10 +1164,11 @@ namespace VKR_Node.Services
                     .Where(n => nodeIdsList.Contains(n.NodeId))
                     .ToListAsync(cancellationToken);
 
-                var result = entities.Select(MapNodeEntityToCore).ToList();
+                //var result = entities.Select(MapNodeEntityToCore).ToList();
+                var result = _mapper.Map<IEnumerable<NodeModel>>(entities);
                 
                 _logger.LogDebug("Retrieved {Count} node states of {Requested} requested", 
-                    result.Count, nodeIdsList.Count);
+                    result.Count(), nodeIdsList.Count);
                     
                 return result;
             }
@@ -1247,12 +1203,13 @@ namespace VKR_Node.Services
                     .OrderBy(n => n.NodeId)
                     .ToListAsync(cancellationToken);
 
-                var result = entities.Select(MapNodeEntityToCore).ToList();
+                //var result = entities.Select(MapNodeEntityToCore).ToList();
+                var result = _mapper.Map<IEnumerable<NodeModel>>(entities);
                 
                 // Store in cache with short expiry (node states change frequently)
                 AddToCache(cacheKey, result, TimeSpan.FromSeconds(15));
                 
-                _logger.LogDebug("Retrieved {Count} node states", result.Count);
+                _logger.LogDebug("Retrieved {Count} node states", result.Count());
                 return result;
             }
             catch (Exception ex)

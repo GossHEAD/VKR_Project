@@ -1,7 +1,6 @@
-﻿using System.Windows;
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using VRK_WPF.Services;
+using VRK_WPF.MVVM.Services;
 
 namespace VRK_WPF.MVVM.ViewModel
 {
@@ -61,7 +60,7 @@ namespace VRK_WPF.MVVM.ViewModel
                     LoginSuccessful = false;
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 ErrorMessage = $"Ошибка авторизации: {ex.Message}";
                 IsErrorVisible = true;

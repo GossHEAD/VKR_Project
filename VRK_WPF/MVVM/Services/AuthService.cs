@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using VKR_Core.Enums;
+﻿using VKR_Core.Enums;
 using VRK_WPF.MVVM.Model;
 
-namespace VRK_WPF.Services
+namespace VRK_WPF.MVVM.Services
 {
     /// <summary>
     /// Service to handle authentication and user management

@@ -397,7 +397,7 @@
             </TabItem>
 
             <TabItem Header="Журнал событий" IsEnabled="False">
-                 <TextBlock Text="Просмотр журнала событий не реализован." Margin="20" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Gray"/>
+                <local:LogViewer />
             </TabItem>
             
             <TabItem Header="Документация" x:Name="DocumentationTab">

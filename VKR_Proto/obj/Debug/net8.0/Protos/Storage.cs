@@ -219,9 +219,6 @@ namespace VKR.Protos {
 
   }
   #region Enums
-  /// <summary>
-  /// Enum defining possible states for a file.
-  /// </summary>
   public enum FileState {
     [pbr::OriginalName("FILE_STATE_UNKNOWN")] Unknown = 0,
     [pbr::OriginalName("FILE_STATE_UPLOADING")] Uploading = 1,
@@ -229,15 +226,9 @@ namespace VKR.Protos {
     [pbr::OriginalName("FILE_STATE_DELETING")] Deleting = 3,
     [pbr::OriginalName("FILE_STATE_DELETED")] Deleted = 4,
     [pbr::OriginalName("FILE_STATE_ERROR")] Error = 5,
-    /// <summary>
-    /// Added for potential future recovery state
-    /// </summary>
     [pbr::OriginalName("FILE_STATE_RECOVERING")] Recovering = 6,
   }
 
-  /// <summary>
-  /// Enum defining possible states for a node.
-  /// </summary>
   public enum NodeState {
     [pbr::OriginalName("NODE_STATE_UNKNOWN")] Unknown = 0,
     [pbr::OriginalName("NODE_STATE_OFFLINE")] Offline = 1,
@@ -2494,9 +2485,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "replica_node_id" field.</summary>
     public const int ReplicaNodeIdFieldNumber = 3;
     private string replicaNodeId_ = "";
-    /// <summary>
-    /// The ID of the node that successfully stored the replica
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string ReplicaNodeId {
@@ -2509,9 +2497,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "original_sender_node_id" field.</summary>
     public const int OriginalSenderNodeIdFieldNumber = 4;
     private string originalSenderNodeId_ = "";
-    /// <summary>
-    /// Optional: ID of the node that sent the original ReplicateChunk request
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string OriginalSenderNodeId {
@@ -2734,9 +2719,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for UploadFile RPC. Can contain metadata or chunk data.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class UploadFileRequest : pb::IMessage<UploadFileRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -2792,9 +2774,6 @@ namespace VKR.Protos {
 
     /// <summary>Field number for the "metadata" field.</summary>
     public const int MetadataFieldNumber = 1;
-    /// <summary>
-    /// File metadata (sent first)
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::VKR.Protos.FileMetadata Metadata {
@@ -2807,9 +2786,6 @@ namespace VKR.Protos {
 
     /// <summary>Field number for the "chunk" field.</summary>
     public const int ChunkFieldNumber = 2;
-    /// <summary>
-    /// File chunk data
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::VKR.Protos.FileChunk Chunk {
@@ -3037,9 +3013,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for UploadFile RPC. Indicates success or failure.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class UploadFileReply : pb::IMessage<UploadFileReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -3114,9 +3087,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "file_id" field.</summary>
     public const int FileIdFieldNumber = 3;
     private string fileId_ = "";
-    /// <summary>
-    /// ID assigned to the uploaded file
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string FileId {
@@ -3315,9 +3285,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for DownloadFile RPC. Specifies the file ID to download.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class DownloadFileRequest : pb::IMessage<DownloadFileRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -3516,9 +3483,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for DownloadFile RPC. Can contain metadata or chunk data.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class DownloadFileReply : pb::IMessage<DownloadFileReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -3574,9 +3538,6 @@ namespace VKR.Protos {
 
     /// <summary>Field number for the "metadata" field.</summary>
     public const int MetadataFieldNumber = 1;
-    /// <summary>
-    /// File metadata (sent first)
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::VKR.Protos.FileMetadata Metadata {
@@ -3589,9 +3550,6 @@ namespace VKR.Protos {
 
     /// <summary>Field number for the "chunk" field.</summary>
     public const int ChunkFieldNumber = 2;
-    /// <summary>
-    /// File chunk data
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::VKR.Protos.FileChunk Chunk {
@@ -3819,9 +3777,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for DeleteFile RPC. Specifies the file ID to delete.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class DeleteFileRequest : pb::IMessage<DeleteFileRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -4020,9 +3975,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for DeleteFile RPC. Indicates success or failure.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class DeleteFileReply : pb::IMessage<DeleteFileReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -4258,9 +4210,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for ListFiles RPC (currently empty, might add filters later).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class ListFilesRequest : pb::IMessage<ListFilesRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -4422,9 +4371,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for ListFiles RPC. Contains a list of file metadata.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class ListFilesReply : pb::IMessage<ListFilesReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -4612,9 +4558,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for GetFileStatus RPC (placeholder).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class GetFileStatusRequest : pb::IMessage<GetFileStatusRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -4813,9 +4756,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for GetFileStatus RPC (placeholder).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class GetFileStatusReply : pb::IMessage<GetFileStatusReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -5114,9 +5054,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for GetNodeStatuses RPC (currently empty).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class GetNodeStatusesRequest : pb::IMessage<GetNodeStatusesRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -5278,9 +5215,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for GetNodeStatuses RPC. Contains a list of node statuses.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class GetNodeStatusesReply : pb::IMessage<GetNodeStatusesReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -5468,9 +5402,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for ReplicateChunk RPC. Contains chunk data and metadata.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class ReplicateChunkRequest : pb::IMessage<ReplicateChunkRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -5524,9 +5455,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "file_id" field.</summary>
     public const int FileIdFieldNumber = 1;
     private string fileId_ = "";
-    /// <summary>
-    /// ID of the parent file
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string FileId {
@@ -5539,9 +5467,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "chunk_id" field.</summary>
     public const int ChunkIdFieldNumber = 2;
     private string chunkId_ = "";
-    /// <summary>
-    /// ID of the chunk
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string ChunkId {
@@ -5554,9 +5479,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "chunk_index" field.</summary>
     public const int ChunkIndexFieldNumber = 3;
     private int chunkIndex_;
-    /// <summary>
-    /// Order/index of the chunk within the file
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int ChunkIndex {
@@ -5569,9 +5491,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "data" field.</summary>
     public const int DataFieldNumber = 4;
     private pb::ByteString data_ = pb::ByteString.Empty;
-    /// <summary>
-    /// The actual chunk data
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public pb::ByteString Data {
@@ -5584,9 +5503,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "original_node_id" field.</summary>
     public const int OriginalNodeIdFieldNumber = 5;
     private string originalNodeId_ = "";
-    /// <summary>
-    /// ID of the node initiating replication
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string OriginalNodeId {
@@ -5878,9 +5794,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for ReplicateChunk RPC. Indicates success or failure.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class ReplicateChunkReply : pb::IMessage<ReplicateChunkReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -6116,9 +6029,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for RequestChunk RPC (placeholder).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class RequestChunkRequest : pb::IMessage<RequestChunkRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -6354,9 +6264,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for RequestChunk RPC (placeholder).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class RequestChunkReply : pb::IMessage<RequestChunkReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -6629,9 +6536,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for DeleteChunk RPC. Specifies the chunk ID to delete.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class DeleteChunkRequest : pb::IMessage<DeleteChunkRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -6681,9 +6585,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "file_id" field.</summary>
     public const int FileIdFieldNumber = 1;
     private string fileId_ = "";
-    /// <summary>
-    /// Include file_id to help locate/verify chunk metadata
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string FileId {
@@ -6870,9 +6771,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for DeleteChunk RPC. Indicates success or failure.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class DeleteChunkReply : pb::IMessage<DeleteChunkReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -7108,9 +7006,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for Ping RPC. Can be empty or include sender info.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class PingRequest : pb::IMessage<PingRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -7159,9 +7054,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "sender_node_id" field.</summary>
     public const int SenderNodeIdFieldNumber = 1;
     private string senderNodeId_ = "";
-    /// <summary>
-    /// Optional: ID of the node sending the ping
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string SenderNodeId {
@@ -7312,9 +7204,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for Ping RPC. Acknowledges the ping, can include receiver info.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class PingReply : pb::IMessage<PingReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -7364,9 +7253,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "responder_node_id" field.</summary>
     public const int ResponderNodeIdFieldNumber = 1;
     private string responderNodeId_ = "";
-    /// <summary>
-    /// ID of the node responding to the ping
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string ResponderNodeId {
@@ -7379,9 +7265,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "success" field.</summary>
     public const int SuccessFieldNumber = 2;
     private bool success_;
-    /// <summary>
-    /// Indicates successful ping processing
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public bool Success {
@@ -7556,9 +7439,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for FindSuccessor RPC (placeholder for DHT).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class FindSuccessorRequest : pb::IMessage<FindSuccessorRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -7607,9 +7487,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "key" field.</summary>
     public const int KeyFieldNumber = 1;
     private string key_ = "";
-    /// <summary>
-    /// The key (e.g., hashed file ID or chunk ID) to find the successor for.
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string Key {
@@ -7760,9 +7637,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for FindSuccessor RPC (placeholder for DHT).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class FindSuccessorReply : pb::IMessage<FindSuccessorReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -7811,9 +7685,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "successor_node" field.</summary>
     public const int SuccessorNodeFieldNumber = 1;
     private global::VKR.Protos.NodeInfo successorNode_;
-    /// <summary>
-    /// Information about the successor node.
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::VKR.Protos.NodeInfo SuccessorNode {
@@ -7973,9 +7844,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for GetPredecessor RPC (placeholder for DHT).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class GetPredecessorRequest : pb::IMessage<GetPredecessorRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -8137,9 +8005,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for GetPredecessor RPC (placeholder for DHT).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class GetPredecessorReply : pb::IMessage<GetPredecessorReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -8188,9 +8053,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "predecessor_node" field.</summary>
     public const int PredecessorNodeFieldNumber = 1;
     private global::VKR.Protos.NodeInfo predecessorNode_;
-    /// <summary>
-    /// Information about the predecessor node. Can be null if no predecessor.
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::VKR.Protos.NodeInfo PredecessorNode {
@@ -8350,9 +8212,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Request message for Notify RPC (placeholder for DHT). Used when a node thinks it might be the predecessor of another.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class NotifyRequest : pb::IMessage<NotifyRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -8401,9 +8260,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "potential_predecessor" field.</summary>
     public const int PotentialPredecessorFieldNumber = 1;
     private global::VKR.Protos.NodeInfo potentialPredecessor_;
-    /// <summary>
-    /// Information about the notifying node.
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::VKR.Protos.NodeInfo PotentialPredecessor {
@@ -8563,9 +8419,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Reply message for Notify RPC (placeholder for DHT).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class NotifyReply : pb::IMessage<NotifyReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -8975,9 +8828,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "number_of_nodes_online" field.</summary>
     public const int NumberOfNodesOnlineFieldNumber = 4;
     private int numberOfNodesOnline_;
-    /// <summary>
-    /// Add more stats as needed
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int NumberOfNodesOnline {
@@ -9248,9 +9098,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "task_name" field.</summary>
     public const int TaskNameFieldNumber = 1;
     private string taskName_ = "";
-    /// <summary>
-    /// e.g., "consistency_check", "cleanup_orphans"
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string TaskName {
@@ -9636,9 +9483,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Represents metadata for a file.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class FileMetadata : pb::IMessage<FileMetadata>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -9696,9 +9540,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "file_id" field.</summary>
     public const int FileIdFieldNumber = 1;
     private string fileId_ = "";
-    /// <summary>
-    /// Unique identifier for the file (e.g., hash of content or UUID)
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string FileId {
@@ -9711,9 +9552,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "file_name" field.</summary>
     public const int FileNameFieldNumber = 2;
     private string fileName_ = "";
-    /// <summary>
-    /// Original name of the file
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string FileName {
@@ -9726,9 +9564,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "file_size" field.</summary>
     public const int FileSizeFieldNumber = 3;
     private long fileSize_;
-    /// <summary>
-    /// Total size of the file in bytes
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public long FileSize {
@@ -9741,9 +9576,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "creation_time" field.</summary>
     public const int CreationTimeFieldNumber = 4;
     private global::Google.Protobuf.WellKnownTypes.Timestamp creationTime_;
-    /// <summary>
-    /// Timestamp when the file was added
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::Google.Protobuf.WellKnownTypes.Timestamp CreationTime {
@@ -9756,9 +9588,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "modification_time" field.</summary>
     public const int ModificationTimeFieldNumber = 5;
     private global::Google.Protobuf.WellKnownTypes.Timestamp modificationTime_;
-    /// <summary>
-    /// Timestamp of last modification
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::Google.Protobuf.WellKnownTypes.Timestamp ModificationTime {
@@ -9771,9 +9600,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "content_type" field.</summary>
     public const int ContentTypeFieldNumber = 6;
     private string contentType_ = "";
-    /// <summary>
-    /// MIME type of the file
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string ContentType {
@@ -9786,9 +9612,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "chunk_size" field.</summary>
     public const int ChunkSizeFieldNumber = 7;
     private int chunkSize_;
-    /// <summary>
-    /// Size of each chunk in bytes
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int ChunkSize {
@@ -9801,9 +9624,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "total_chunks" field.</summary>
     public const int TotalChunksFieldNumber = 8;
     private int totalChunks_;
-    /// <summary>
-    /// Total number of chunks for this file
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int TotalChunks {
@@ -9816,9 +9636,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "state" field.</summary>
     public const int StateFieldNumber = 9;
     private global::VKR.Protos.FileState state_ = global::VKR.Protos.FileState.Unknown;
-    /// <summary>
-    /// Current state of the file (e.g., Available, Deleting)
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::VKR.Protos.FileState State {
@@ -9831,9 +9648,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "expected_file_size" field.</summary>
     public const int ExpectedFileSizeFieldNumber = 10;
     private long expectedFileSize_;
-    /// <summary>
-    /// Add other relevant metadata like owner, permissions, checksum, etc.
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public long ExpectedFileSize {
@@ -10218,9 +10032,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Represents a chunk of a file.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class FileChunk : pb::IMessage<FileChunk>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -10273,9 +10084,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "file_id" field.</summary>
     public const int FileIdFieldNumber = 1;
     private string fileId_ = "";
-    /// <summary>
-    /// ID of the parent file
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string FileId {
@@ -10288,9 +10096,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "chunk_id" field.</summary>
     public const int ChunkIdFieldNumber = 2;
     private string chunkId_ = "";
-    /// <summary>
-    /// Unique ID for this chunk (e.g., hash of chunk content)
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string ChunkId {
@@ -10303,9 +10108,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "chunk_index" field.</summary>
     public const int ChunkIndexFieldNumber = 3;
     private int chunkIndex_;
-    /// <summary>
-    /// Order/index of the chunk within the file
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int ChunkIndex {
@@ -10318,9 +10120,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "data" field.</summary>
     public const int DataFieldNumber = 4;
     private pb::ByteString data_ = pb::ByteString.Empty;
-    /// <summary>
-    /// The actual chunk data
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public pb::ByteString Data {
@@ -10333,9 +10132,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "size" field.</summary>
     public const int SizeFieldNumber = 5;
     private int size_;
-    /// <summary>
-    /// Size of this specific chunk (might differ for the last chunk)
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int Size {
@@ -10582,9 +10378,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Represents information about a node in the network.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class NodeInfo : pb::IMessage<NodeInfo>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -10636,9 +10429,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "node_id" field.</summary>
     public const int NodeIdFieldNumber = 1;
     private string nodeId_ = "";
-    /// <summary>
-    /// Unique identifier for the node
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string NodeId {
@@ -10651,9 +10441,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "address" field.</summary>
     public const int AddressFieldNumber = 2;
     private string address_ = "";
-    /// <summary>
-    /// Network address (e.g., "hostname:port" or "ip:port")
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string Address {
@@ -10666,9 +10453,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "state" field.</summary>
     public const int StateFieldNumber = 3;
     private global::VKR.Protos.NodeState state_ = global::VKR.Protos.NodeState.Unknown;
-    /// <summary>
-    /// Current state of the node (e.g., Online, Offline, Joining)
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::VKR.Protos.NodeState State {
@@ -10681,9 +10465,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "last_seen" field.</summary>
     public const int LastSeenFieldNumber = 4;
     private long lastSeen_;
-    /// <summary>
-    /// Timestamp of the last successful contact (e.g., Unix epoch seconds)
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public long LastSeen {
@@ -10906,9 +10687,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Represents the status of a specific chunk (placeholder).
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class ChunkStatusInfo : pb::IMessage<ChunkStatusInfo>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -10985,9 +10763,6 @@ namespace VKR.Protos {
     private static readonly pb::FieldCodec<global::VKR.Protos.NodeInfo> _repeated_locations_codec
         = pb::FieldCodec.ForMessage(26, global::VKR.Protos.NodeInfo.Parser);
     private readonly pbc::RepeatedField<global::VKR.Protos.NodeInfo> locations_ = new pbc::RepeatedField<global::VKR.Protos.NodeInfo>();
-    /// <summary>
-    /// Nodes currently storing this chunk
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public pbc::RepeatedField<global::VKR.Protos.NodeInfo> Locations {
@@ -11173,9 +10948,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Represents the status of a node for the GetNodeStatuses RPC.
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class NodeStatusInfo : pb::IMessage<NodeStatusInfo>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -11251,9 +11023,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "status" field.</summary>
     public const int StatusFieldNumber = 3;
     private global::VKR.Protos.NodeState status_ = global::VKR.Protos.NodeState.Unknown;
-    /// <summary>
-    /// Simplified status for this specific RPC
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::VKR.Protos.NodeState Status {
@@ -11266,9 +11035,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "details" field.</summary>
     public const int DetailsFieldNumber = 4;
     private string details_ = "";
-    /// <summary>
-    /// e.g., "Online", "Ping failed: Timeout", "Unreachable"
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public string Details {
@@ -11771,9 +11537,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "cpu_usage_percent" field.</summary>
     public const int CpuUsagePercentFieldNumber = 6;
     private double cpuUsagePercent_;
-    /// <summary>
-    /// Added CPU usage
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public double CpuUsagePercent {
@@ -11786,9 +11549,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "memory_used_bytes" field.</summary>
     public const int MemoryUsedBytesFieldNumber = 7;
     private long memoryUsedBytes_;
-    /// <summary>
-    /// Added memory used
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public long MemoryUsedBytes {
@@ -11801,9 +11561,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "memory_total_bytes" field.</summary>
     public const int MemoryTotalBytesFieldNumber = 8;
     private long memoryTotalBytes_;
-    /// <summary>
-    /// Added total memory
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public long MemoryTotalBytes {
@@ -11816,9 +11573,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "disk_space_available_bytes" field.</summary>
     public const int DiskSpaceAvailableBytesFieldNumber = 9;
     private long diskSpaceAvailableBytes_;
-    /// <summary>
-    /// Already exists but moved
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public long DiskSpaceAvailableBytes {
@@ -11831,9 +11585,6 @@ namespace VKR.Protos {
     /// <summary>Field number for the "disk_space_total_bytes" field.</summary>
     public const int DiskSpaceTotalBytesFieldNumber = 10;
     private long diskSpaceTotalBytes_;
-    /// <summary>
-    /// Already exists but moved
-    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public long DiskSpaceTotalBytes {
@@ -12272,9 +12023,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Could add filtering options later if needed
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class GetNodeFileListRequest : pb::IMessage<GetNodeFileListRequest>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -12436,9 +12184,6 @@ namespace VKR.Protos {
 
   }
 
-  /// <summary>
-  /// Assuming VKR.Protos.FileMetadata is defined elsewhere and suitable
-  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class GetNodeFileListReply : pb::IMessage<GetNodeFileListReply>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE

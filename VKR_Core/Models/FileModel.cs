@@ -8,7 +8,7 @@ namespace VKR_Core.Models;
 /// </summary>
 public record class FileModel : IFile
 {
-    public required string FileId { get; init; }
+    public required string FileId { get; set; }
     public required string FileName { get; init; }
     public long FileSize { get; init; }
     public DateTime CreationTime { get; init; }

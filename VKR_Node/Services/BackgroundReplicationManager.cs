@@ -8,6 +8,7 @@ using VKR_Node.Services.Utilities;
 using VKR.Protos;
 using Google.Protobuf;
 using System.Diagnostics;
+using AutoMapper;
 
 namespace VKR_Node.Services
 {
@@ -29,6 +30,7 @@ namespace VKR_Node.Services
         private readonly TimeSpan _nodeStatusCacheTtl = TimeSpan.FromSeconds(30);
         
         private readonly SemaphoreSlim _replicationSemaphore;
+        private readonly IMapper _mapper;
         
         private readonly ConcurrentDictionary<string, Task> _activeReplicationTasks = new();
 
@@ -40,7 +42,8 @@ namespace VKR_Node.Services
             IOptions<NodeIdentityOptions> nodeIdentityOptions,
             IOptions<NetworkOptions> networkOptions,
             IOptions<StorageOptions> storageOptions,
-            IOptions<DhtOptions> dhtOptions)
+            IOptions<DhtOptions> dhtOptions,
+            IMapper mapper)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _metadataManager = metadataManager ?? throw new ArgumentNullException(nameof(metadataManager));
@@ -57,6 +60,7 @@ namespace VKR_Node.Services
             int maxParallelism = _dhtOptions.ReplicationMaxParallelism > 0 ? 
                 _dhtOptions.ReplicationMaxParallelism : 10;
             _replicationSemaphore = new SemaphoreSlim(maxParallelism);
+            _mapper = mapper;
             
             _logger.LogInformation("BackgroundReplicationManager initialized for Node {NodeId} with max parallelism {MaxParallelism}", 
                 _localNodeId, maxParallelism);
@@ -190,12 +194,10 @@ namespace VKR_Node.Services
             
             try
             {
-                // Acquire semaphore to limit concurrent operations
                 await _replicationSemaphore.WaitAsync(cancellationToken);
                 
                 try
                 {
-                    // Step 1: Check existing replicas
                     var existingNodeIds = await GetChunkStorageNodesAsync(
                         chunkInfo.FileId, chunkInfo.ChunkId, cancellationToken);
                     
@@ -206,7 +208,6 @@ namespace VKR_Node.Services
                         return;
                     }
                     
-                    // Step 2: Find online nodes that don't already have the chunk
                     var allOnlineNodes = await FindAllOnlineNodesAsync(cancellationToken);
                     var availableNodes = allOnlineNodes
                         .Where(n => !existingNodeIds.Contains(n.NodeId))
@@ -218,14 +219,12 @@ namespace VKR_Node.Services
                         return;
                     }
                     
-                    // Step 3: Determine how many new replicas we need
                     int replicasToAdd = Math.Min(
                         effectiveReplicationFactor - existingNodeIds.Count,
                         availableNodes.Count);
                     
                     if (replicasToAdd <= 0) return;
                     
-                    // Step 4: Get the chunk data
                     byte[] chunkData;
                     using (var dataStream = await sourceDataStreamFactory())
                     {
@@ -242,21 +241,17 @@ namespace VKR_Node.Services
                         }
                     }
                     
-                    // Step 5: Get parent file metadata to send with replicas
                     var fileMetadata = await _metadataManager.GetFileMetadataAsync(
                         chunkInfo.FileId, cancellationToken);
                     
-                    // Step 6: Select target nodes and replicate
                     var targetNodes = ReplicationUtility.SelectReplicaTargets(
                         availableNodes, chunkInfo.ChunkId, replicasToAdd);
                     
                     _logger.LogInformation("Replicating Chunk {ChunkId} to {Count} additional node(s): {Nodes}",
                         chunkInfo.ChunkId, targetNodes.Count, string.Join(", ", targetNodes.Select(n => n.NodeId)));
                     
-                    // Create a list to track successful replications
                     var successfulReplicationNodes = new ConcurrentBag<string>();
                     
-                    // Use a list of tasks for parallel replication
                     var replicationTasks = targetNodes.Select(async node => 
                     {
                         bool success = await ReplicateToNodeAsync(
@@ -272,10 +267,8 @@ namespace VKR_Node.Services
                         }
                     }).ToList();
                     
-                    // Wait for all replication attempts to complete
                     await Task.WhenAll(replicationTasks);
                     
-                    // Update metadata with successful replications
                     if (successfulReplicationNodes.Any())
                     {
                         var allStorageNodes = existingNodeIds.Concat(successfulReplicationNodes).Distinct().ToList();
@@ -295,7 +288,6 @@ namespace VKR_Node.Services
                 }
                 finally
                 {
-                    // Always release semaphore
                     _replicationSemaphore.Release();
                 }
             }
@@ -327,11 +319,9 @@ namespace VKR_Node.Services
                 
                 _logger.LogDebug("Found {Count} chunks for File {FileId}", chunks.Count(), fileId);
                 
-                // Create a list to track all tasks
                 var replicationTasks = new List<Task>();
                 var sw = Stopwatch.StartNew();
                 
-                // Process chunks in batches to avoid overwhelming the system
                 int maxConcurrentChunks = _dhtOptions.ReplicationMaxParallelism;
                 var semaphore = new SemaphoreSlim(maxConcurrentChunks);
                 
@@ -761,7 +751,8 @@ namespace VKR_Node.Services
                     ChunkIndex = chunkInfo.ChunkIndex,
                     Data = ByteString.CopyFrom(chunkData),
                     OriginalNodeId = _localNodeId,
-                    ParentFileMetadata = ReplicationUtility.MapCoreToProtoMetadata(fileMetadata)
+                    //ParentFileMetadata = ReplicationUtility.MapCoreToProtoMetadata(fileMetadata)
+                    ParentFileMetadata = fileMetadata != null ? _mapper.Map<FileMetadata>(fileMetadata) : null
                 };
                 
                 // Send to target node

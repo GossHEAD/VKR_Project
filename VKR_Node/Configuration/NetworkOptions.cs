@@ -6,7 +6,7 @@ namespace VKR_Node.Configuration
     /// <summary>
     /// Network-related configuration.
     /// </summary>
-    public class NetworkOptions
+    public class NetworkOptions : IValidatableConfiguration
     {
         /// <summary>
         /// Host on which to listen for incoming connections.
@@ -50,7 +50,7 @@ namespace VKR_Node.Configuration
         {
             var context = new ValidationContext(this);
             Validator.ValidateObject(this, context, true);
-            
+        
             // Additional validations
             if (KnownNodes != null)
             {
@@ -59,7 +59,7 @@ namespace VKR_Node.Configuration
                     node.Validate();
                 }
             }
-            
+        
             // Validate ListenAddress is a valid hostname or IP
             try
             {
@@ -80,7 +80,7 @@ namespace VKR_Node.Configuration
     /// <summary>
     /// Configuration for a known peer node.
     /// </summary>
-    public class KnownNodeOptions
+    public class KnownNodeOptions : IValidatableConfiguration
     {
         /// <summary>
         /// Unique identifier of the node.

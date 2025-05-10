@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using AutoMapper;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
@@ -22,6 +23,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
     private readonly IDataManager _dataManager;
     private readonly INodeClient _nodeClient;
     private readonly NodeIdentityOptions _nodeOptions;
+    private readonly IMapper _mapper;
 
     private readonly ConcurrentDictionary<string, (long Count, long TotalMs)> _methodMetrics = new();
     public NodeInternalServiceImpl(
@@ -29,13 +31,15 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         IMetadataManager metadataManager,
         IDataManager dataManager,
         INodeClient nodeClient,
-        IOptions<NodeIdentityOptions> nodeOptions)
+        IOptions<NodeIdentityOptions> nodeOptions,
+        IMapper mapper)
     {
         _logger = logger;
         _metadataManager = metadataManager;
         _dataManager = dataManager;
         _nodeClient = nodeClient;
         _nodeOptions = nodeOptions.Value;
+        _mapper = mapper;
     }
    
     private void RecordMetric(string methodName, long elapsedMs)
@@ -226,7 +230,8 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
 
             if (shouldSaveMetadata)
             {
-                var coreMetadata = MapProtoToFileModel(fileId, protoMetadata);
+                var coreMetadata = _mapper.Map<FileModel>(protoMetadata);
+                coreMetadata.FileId = fileId;
                 await _metadataManager.SaveFileMetadataAsync(coreMetadata, cancellationToken);
                 _logger.LogDebug("Saved/updated FileMetadata for {FileId} based on replica request", fileId);
             }
@@ -316,22 +321,6 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         // }
 
         return false;
-    }
-
-    private FileModel MapProtoToFileModel(string fileId, FileMetadata proto)
-    {
-        return new FileModel
-        {
-            FileId = fileId,
-            FileName = proto.FileName,
-            FileSize = proto.FileSize,
-            CreationTime = proto.CreationTime?.ToDateTime() ?? DateTime.UtcNow,
-            ModificationTime = proto.ModificationTime?.ToDateTime() ?? DateTime.UtcNow,
-            ContentType = proto.ContentType,
-            ChunkSize = proto.ChunkSize,
-            TotalChunks = proto.TotalChunks,
-            State = (FileStateCore)proto.State
-        };
     }
 
     public override async Task<DeleteChunkReply> DeleteChunk(DeleteChunkRequest request, ServerCallContext context)
@@ -727,7 +716,10 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
                         continue;
                     }
                     
-                    var fileProto = MapFileModelToProto(fileCore);
+                    //var fileProto = MapFileModelToProto(fileCore);
+                    
+                    //TODO: Добавить маппер для model to proto
+                    var fileProto = _mapper.Map<FileMetadata>(fileCore);
                     reply.Files.Add(fileProto);
                     fileCount++;
                     
@@ -759,23 +751,6 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         }
         
         return reply;
-    }
-    private FileMetadata MapFileModelToProto(FileModel fileCore)
-    {
-        return new FileMetadata
-        {
-            FileId = fileCore.FileId,
-            FileName = fileCore.FileName,
-            FileSize = fileCore.FileSize,
-            CreationTime = Timestamp.FromDateTime(
-                fileCore.CreationTime.ToUniversalTime()),
-            ModificationTime = Timestamp.FromDateTime(
-                fileCore.ModificationTime.ToUniversalTime()),
-            ContentType = fileCore.ContentType ?? "",
-            ChunkSize = fileCore.ChunkSize,
-            TotalChunks = fileCore.TotalChunks,
-            State = (FileState)fileCore.State
-        };
     }
 
     /// <summary>

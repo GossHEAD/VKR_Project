@@ -5,7 +5,7 @@ namespace VKR_Node.Configuration
     /// <summary>
     /// Root configuration class for the distributed storage node.
     /// </summary>
-    public class DistributedStorageConfiguration
+    public class DistributedStorageConfiguration : IValidatableConfiguration
     {
         /// <summary>
         /// Unique information about this node.

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using AutoMapper;
 using Google.Protobuf;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
@@ -10,7 +11,6 @@ using VKR_Node.Configuration;
 using VKR_Node.Services.FileService.FileInterface;
 using VKR_Node.Services.Utilities;
 using VKR.Protos;
-using FileMetadataMapper = VKR_Core.Extensions.FileMetadataMapper;
 
 namespace VKR_Node.Services.FileService
 {
@@ -27,6 +27,7 @@ namespace VKR_Node.Services.FileService
         private readonly StorageOptions _storageOptions;
         private readonly DhtOptions _dhtOptions;
         private readonly ChunkStreamingHelper _streamingHelper;
+        private readonly IMapper _mapper;
 
         public FileStorageService(
             ILogger<FileStorageService> logger,
@@ -37,7 +38,8 @@ namespace VKR_Node.Services.FileService
             IReplicationManager replicationManager,
             IOptions<NodeIdentityOptions> nodeIdentityOptions,
             IOptions<StorageOptions> storageOptions,
-            IOptions<DhtOptions> dhtOptions)
+            IOptions<DhtOptions> dhtOptions,
+            IMapper mapper)
         {
             _logger = logger;
             _metadataManager = metadataManager;
@@ -50,6 +52,7 @@ namespace VKR_Node.Services.FileService
             _networkOptions = networkOptions.Value;
             _localNodeId = _nodeIdentityOptions.NodeId ?? throw new InvalidOperationException("NodeId is not configured.");
             _streamingHelper = new ChunkStreamingHelper(logger, dataManager, nodeClient, _localNodeId);
+            _mapper = mapper;
         }
 
         public async Task<ListFilesReply> ListFiles(ListFilesRequest request, ServerCallContext context)
@@ -97,8 +100,11 @@ namespace VKR_Node.Services.FileService
                             _logger.LogWarning("Skipping local file with empty FileId.");
                             continue;
                         }
-
-                        MergeFile(aggregatedFiles, FileMetadataMapper.MapCoreToProto(fileCore));
+                        //TODO: Map for core to proto FileMetadata from FileModel
+                        var fileMetadata = _mapper.Map<FileMetadata>(fileCore);
+                        
+                        //MergeFile(aggregatedFiles, FileMetadataMapper.MapCoreToProto(fileCore));
+                        MergeFile(aggregatedFiles, fileMetadata);
                     }
                 }
             }
@@ -449,7 +455,8 @@ namespace VKR_Node.Services.FileService
                     ChunkIndex = chunkInfo.ChunkIndex,
                     Data = chunkProto.Data,
                     OriginalNodeId = _localNodeId,
-                    ParentFileMetadata = FileMetadataMapper.MapCoreToProto(partialFileModel)
+                    //ParentFileMetadata = FileMetadataMapper.MapCoreToProto(partialFileModel)
+                    ParentFileMetadata = _mapper.Map<FileMetadata>(partialFileModel)
                 };
 
                 // Fire-and-forget task
@@ -668,7 +675,8 @@ namespace VKR_Node.Services.FileService
         {
             await responseStream.WriteAsync(new DownloadFileReply
             {
-                Metadata = FileMetadataMapper.MapCoreToProto(FileModel)
+                //Metadata = FileMetadataMapper.MapCoreToProto(FileModel)
+                Metadata = _mapper.Map<FileMetadata>(FileModel),
             });
 
             _logger.LogDebug("Sent metadata reply for File ID: {FileId}", FileModel.FileId);

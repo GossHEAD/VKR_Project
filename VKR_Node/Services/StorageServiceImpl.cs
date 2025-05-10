@@ -1,4 +1,5 @@
-﻿using Grpc.Core;
+﻿using AutoMapper;
+using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VKR_Core.Enums;
@@ -20,6 +21,7 @@ namespace VKR_Node.Services
         private readonly IMetadataManager _metadataManager;
         private readonly IReplicationManager _replicationManager;
         private readonly DhtOptions  _dhtOptions;
+        private readonly IMapper _mapper;
         
         public StorageServiceImpl(
             IFileStorageService fileService,
@@ -28,7 +30,8 @@ namespace VKR_Node.Services
             ILogger<StorageServiceImpl> logger,
             IMetadataManager metadataManager,
             IReplicationManager replicationManager,
-            IOptions<DhtOptions> dhtOptions)
+            IOptions<DhtOptions> dhtOptions,
+            IMapper mapper)
         {
             _fileService = fileService;
             _nodeStatusService = nodeStatusService;
@@ -37,6 +40,7 @@ namespace VKR_Node.Services
             _metadataManager = metadataManager;
             _replicationManager = replicationManager;
             _dhtOptions = dhtOptions.Value;
+            _mapper = mapper;
         }
 
         public override Task<ListFilesReply> ListFiles(
@@ -204,6 +208,7 @@ namespace VKR_Node.Services
                 
                 foreach (var file in files)
                 {
+                    var fileStatusInfo = _mapper.Map<FileStatusInfo>(file);
                     var chunks = await _metadataManager.GetChunksMetadataForFileAsync(file.FileId, context.CancellationToken);
                     bool isFileAvailable = true;
                     int currentReplication = int.MaxValue;
@@ -228,14 +233,21 @@ namespace VKR_Node.Services
                         currentReplication = 0;
                     }
                     
-                    reply.FileStatuses.Add(new FileStatusInfo
-                    {
-                        FileId = file.FileId,
-                        FileName = file.FileName,
-                        IsAvailable = isFileAvailable,
-                        CurrentReplicationFactor = currentReplication == int.MaxValue ? 0 : currentReplication,
-                        DesiredReplicationFactor = _dhtOptions.ReplicationFactor
-                    });
+                    fileStatusInfo.CurrentReplicationFactor = currentReplication == int.MaxValue ? 0 : currentReplication;
+                    fileStatusInfo.DesiredReplicationFactor = _dhtOptions.ReplicationFactor;
+                    fileStatusInfo.FileId = file.FileId;
+                    fileStatusInfo.FileName = file.FileName;
+                    fileStatusInfo.IsAvailable = isFileAvailable;
+                    reply.FileStatuses.Add(fileStatusInfo);
+                    
+                    // reply.FileStatuses.Add(new FileStatusInfo
+                    // {
+                    //     FileId = file.FileId,
+                    //     FileName = file.FileName,
+                    //     IsAvailable = isFileAvailable,
+                    //     CurrentReplicationFactor = currentReplication == int.MaxValue ? 0 : currentReplication,
+                    //     DesiredReplicationFactor = _dhtOptions.ReplicationFactor
+                    // });
                 }
                 
                 return reply;
