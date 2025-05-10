@@ -20,9 +20,7 @@ public class UserEntity
     public required string PasswordHash { get; set; } 
 
     [Required]
-    public UserRole Role { get; set; } = UserRole.ITSpecialist; 
-
+    public UserRole Role { get; set; } = UserRole.ITSpecialist;
     public DateTime CreationTime { get; set; }
-
     public bool IsActive { get; set; } = true;
 }

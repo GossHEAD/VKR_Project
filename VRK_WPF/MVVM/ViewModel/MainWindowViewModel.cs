@@ -411,43 +411,37 @@ namespace VRK_WPF.MVVM.ViewModel
             UploadStatus = "Starting upload...";
             _uploadCts = new CancellationTokenSource();
             UpdateStatusBar($"Uploading {SelectedFileName}...");
-            _logger.LogInformation("Upload started for file: {FilePath}", SelectedFilePath); // Added log
+            _logger.LogInformation("Upload started for file: {FilePath}", SelectedFilePath); 
 
-            AsyncClientStreamingCall<UploadFileRequest, UploadFileReply>? call = null; // Declare call object outside try
+            AsyncClientStreamingCall<UploadFileRequest, UploadFileReply>? call = null; 
 
             try
             {
                 var fileInfo = new FileInfo(SelectedFilePath);
                 long fileSize = fileInfo.Length;
 
-                // Prepare metadata (ensure your proto has ExpectedFileSize field)
                 var metadata = new FileMetadata
                 {
                     FileName = fileInfo.Name,
-                    ExpectedFileSize = fileSize, // Send actual file size
-                    ContentType = MimeMapping.MimeUtility.GetMimeMapping(fileInfo.Name), // Requires MimeMapping nuget or alternative
+                    ExpectedFileSize = fileSize, 
+                    ContentType = MimeMapping.MimeUtility.GetMimeMapping(fileInfo.Name), 
                     CreationTime = Timestamp.FromDateTime(DateTime.UtcNow)
-                    // ChunkSize determined by server
                 };
                 _logger.LogInformation("Prepared metadata. Expected Size: {FileSize}", fileSize);
-
-
-                // Start the call
+                
                 call = _storageClient.UploadFile(cancellationToken: _uploadCts.Token);
                 _logger.LogInformation("gRPC UploadFile call initiated.");
-
-                // 1. Send Metadata FIRST
+                
                 _logger.LogDebug("Sending metadata...");
                 await call.RequestStream.WriteAsync(new UploadFileRequest { Metadata = metadata });
                 UploadStatus = "Sent metadata, sending chunks...";
                  _logger.LogDebug("Metadata sent.");
-
-                // 2. Send Chunks IN A LOOP
+                 
                  _logger.LogDebug("Starting chunk sending loop...");
                 long totalBytesSent = 0;
                 int chunkIndex = 0;
-                // Chunk size for buffer reading - can be different from server's internal chunking if needed, but using a reasonable size like 1MB is fine.
-                int bufferSize = 1 * 1024 * 1024; // 1MB read buffer
+                
+                int bufferSize = 1 * 1024 * 1024; 
 
                 await using (var fileStream = File.OpenRead(SelectedFilePath))
                 {
@@ -455,18 +449,17 @@ namespace VRK_WPF.MVVM.ViewModel
                     int bytesRead;
                     while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length, _uploadCts.Token)) > 0)
                     {
-                        // Check for cancellation within the loop
                          _uploadCts.Token.ThrowIfCancellationRequested();
 
                         var chunkData = ByteString.CopyFrom(buffer, 0, bytesRead);
-                        // Let server generate ChunkId? Or generate client-side? Assuming client-side for now.
+                        
                         var chunkId = $"chunk_{Guid.NewGuid()}_{chunkIndex}";
                         var chunk = new FileChunk
                         {
                             ChunkId = chunkId,
                             ChunkIndex = chunkIndex,
                             Data = chunkData,
-                            Size = bytesRead // Important: Send the actual size read
+                            Size = bytesRead 
                         };
 
                         _logger.LogTrace("Sending Chunk Index: {Index}, Size: {Size}", chunkIndex, bytesRead);
@@ -475,39 +468,34 @@ namespace VRK_WPF.MVVM.ViewModel
 
 
                         totalBytesSent += bytesRead;
-                        chunkIndex++; // Increment chunk index
+                        chunkIndex++; 
 
                         if (fileSize > 0)
                         {
                              UploadProgress = (double)totalBytesSent / fileSize * 100;
                              UploadStatus = $"Uploading chunk {chunkIndex}... ({UploadProgress:F1}%)";
                         } else {
-                             // Handle empty file case immediately
                              UploadProgress = 100;
                              UploadStatus = $"Uploading empty file...";
-                             // Break loop after sending 0-byte chunk if necessary, or let CompleteAsync handle it
                         }
                     }
-                } // FileStream disposed here
+                } 
                 _logger.LogInformation("Finished sending {ChunkCount} chunks. Total bytes sent: {TotalBytes}", chunkIndex, totalBytesSent);
-
-                // 3. Complete Request Stream **AFTER** the loop finishes
-                 _logger.LogDebug("Completing request stream...");
-                await call.RequestStream.CompleteAsync(); // CRITICAL: This must be called only ONCE and AFTER all chunks are written
-                 _logger.LogInformation("Request stream completed.");
+                
+                _logger.LogDebug("Completing request stream...");
+                await call.RequestStream.CompleteAsync(); 
+                _logger.LogInformation("Request stream completed.");
 
                 UploadStatus = "Waiting for server confirmation...";
-
-                // 4. Get Response
+                
                 var response = await call.ResponseAsync;
                 _logger.LogInformation("Received final response from server. Success: {Success}, Message: {Message}", response.Success, response.Message);
-
 
                 if (response.Success)
                 {
                     UploadStatus = $"Upload complete! File ID: {response.FileId}";
                     UpdateStatusBar($"Successfully uploaded {SelectedFileName}");
-                    await RefreshFilesListAsync(); // Refresh UI
+                    await RefreshFilesListAsync(); 
                 }
                 else
                 {
@@ -566,7 +554,7 @@ namespace VRK_WPF.MVVM.ViewModel
                 return;
             }
 
-            var fileToDownload = SelectedFile; // Capture selection
+            var fileToDownload = SelectedFile; 
             var saveFileDialog = new SaveFileDialog
             {
                 Title = "Save Downloaded File As",
@@ -576,13 +564,13 @@ namespace VRK_WPF.MVVM.ViewModel
             if (saveFileDialog.ShowDialog() != true) return;
 
             string savePath = saveFileDialog.FileName;
-            IsDownloading = true; // Triggers CanExecute changes
+            IsDownloading = true; 
             DownloadProgress = 0;
             DownloadStatus = "Starting download...";
             _downloadCts = new CancellationTokenSource();
             UpdateStatusBar($"Downloading {fileToDownload.FileName}...");
 
-            string tempDownloadPath = savePath + ".tmp"; // Download to temp file first
+            string tempDownloadPath = savePath + ".tmp";
 
             try
             {
@@ -594,7 +582,8 @@ namespace VRK_WPF.MVVM.ViewModel
                 long expectedFileSize = 0;
                 int chunksReceived = 0;
 
-                await using (var fileStream = new FileStream(tempDownloadPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
+                await using (var fileStream = new FileStream(tempDownloadPath, FileMode.Create, FileAccess.Write,
+                                 FileShare.None, 4096, useAsync: true))
                 {
                     await foreach (var reply in call.ResponseStream.ReadAllAsync(_downloadCts.Token))
                     {
@@ -602,40 +591,43 @@ namespace VRK_WPF.MVVM.ViewModel
                         {
                             fileMetadata = reply.Metadata;
                             expectedFileSize = fileMetadata.FileSize;
-                            DownloadStatus = $"Received metadata, downloading chunks... (Expected size: {expectedFileSize} bytes)";
+                            DownloadStatus =
+                                $"Received metadata, downloading chunks... (Expected size: {expectedFileSize} bytes)";
                         }
                         else if (reply.PayloadCase == DownloadFileReply.PayloadOneofCase.Chunk)
                         {
-                            if (fileMetadata == null) throw new InvalidOperationException("Chunk data received before file metadata.");
+                            if (fileMetadata == null)
+                                throw new InvalidOperationException("Chunk data received before file metadata.");
 
                             var chunk = reply.Chunk;
                             await fileStream.WriteAsync(chunk.Data.Memory, _downloadCts.Token);
                             totalBytesReceived += chunk.Size;
                             chunksReceived++;
 
-                            if (expectedFileSize > 0) {
+                            if (expectedFileSize > 0)
+                            {
                                 DownloadProgress = (double)totalBytesReceived / expectedFileSize * 100;
-                                DownloadStatus = $"Downloading chunk {chunksReceived}/{fileMetadata.TotalChunks}... ({DownloadProgress:F1}%)";
-                            } else {
-                                DownloadStatus = $"Downloading chunk {chunksReceived}... ({totalBytesReceived} bytes received)";
+                                DownloadStatus =
+                                    $"Downloading chunk {chunksReceived}/{fileMetadata.TotalChunks}... ({DownloadProgress:F1}%)";
+                            }
+                            else
+                            {
+                                DownloadStatus =
+                                    $"Downloading chunk {chunksReceived}... ({totalBytesReceived} bytes received)";
                             }
                         }
                     }
-                } // FileStream disposed here, flushing writes
+                }
 
-                // Verify size and rename temp file
                 if (expectedFileSize > 0 && totalBytesReceived != expectedFileSize)
                 {
                     DownloadStatus = $"Download complete, but size mismatch! Expected {expectedFileSize}, Got {totalBytesReceived}";
                     UpdateStatusBar($"Download completed with size mismatch for {fileToDownload.FileName}");
                      MessageBox.Show($"Download completed, but the received file size ({totalBytesReceived} bytes) does not match the expected size ({expectedFileSize} bytes).\nThe file might be incomplete or corrupted.", "Download Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
-                     // Keep the .tmp file for inspection? Or delete? Decide policy.
-                     // if (File.Exists(tempDownloadPath)) File.Delete(tempDownloadPath);
                 }
                 else
                 {
-                     // Rename temp file to final name
-                     if (File.Exists(savePath)) File.Delete(savePath); // Delete if exists
+                     if (File.Exists(savePath)) File.Delete(savePath); 
                      File.Move(tempDownloadPath, savePath);
 
                     DownloadStatus = "Download complete!";
@@ -664,7 +656,7 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             finally
             {
-                IsDownloading = false; // Triggers CanExecute changes
+                IsDownloading = false; 
                 DownloadProgress = 0;
                 _downloadCts?.Dispose();
                 _downloadCts = null;
@@ -686,13 +678,13 @@ namespace VRK_WPF.MVVM.ViewModel
         [RelayCommand(CanExecute = nameof(CanExecuteDelete))]
         private async Task DeleteFileAsync()
         {
-             if (_storageClient == null || SelectedFile == null)
+            if (_storageClient == null || SelectedFile == null)
             {
                  MessageBox.Show("gRPC client not initialized or no file selected for deletion.", "Delete Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            var fileToDelete = SelectedFile; // Capture selected file
+            var fileToDelete = SelectedFile; 
             var result = MessageBox.Show($"Are you sure you want to delete '{fileToDelete.FileName}' (ID: {fileToDelete.FileId})?\nThis action attempts to remove the file from all nodes and cannot be easily undone.",
                                          "Confirm Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
 
@@ -701,20 +693,17 @@ namespace VRK_WPF.MVVM.ViewModel
              UpdateStatusBar($"Deleting {fileToDelete.FileName}...");
              _logger.LogInformation("Initiating delete request for File ID: {FileId}", fileToDelete.FileId);
 
-             // Optionally disable interaction while deleting
-             // IsDeleting = true; // Need IsDeleting property if used
-
             try
             {
                 var request = new DeleteFileRequest { FileId = fileToDelete.FileId };
-                var reply = await _storageClient.DeleteFileAsync(request, deadline: DateTime.UtcNow.AddSeconds(30)); // Add timeout
+                var reply = await _storageClient.DeleteFileAsync(request, deadline: DateTime.UtcNow.AddSeconds(30)); 
 
 
                 if (reply.Success)
                 {
                     UpdateStatusBar($"Successfully deleted {fileToDelete.FileName}. {reply.Message}");
                      MessageBox.Show($"File '{fileToDelete.FileName}' delete process initiated.\nServer message: {reply.Message}", "Delete Successful", MessageBoxButton.OK, MessageBoxImage.Information);
-                    await RefreshFilesListAsync(); // Refresh list
+                    await RefreshFilesListAsync();
                 }
                 else
                 {
@@ -722,7 +711,7 @@ namespace VRK_WPF.MVVM.ViewModel
                      MessageBox.Show($"Server reported an error during deletion of '{fileToDelete.FileName}':\n{reply.Message}", "Delete Failed", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
-             catch (RpcException ex)
+            catch (RpcException ex)
             {
                 UpdateStatusBar($"Delete failed for {fileToDelete.FileName} (gRPC Error)");
                 MessageBox.Show($"An error occurred during deletion:\nStatus: {ex.StatusCode}\nDetail: {ex.Status.Detail}", "Delete Error", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -783,18 +772,14 @@ namespace VRK_WPF.MVVM.ViewModel
                 _logger.LogError(ex, "gRPC Error refreshing file list");
                 UpdateStatusBar("Error refreshing file list (gRPC Error)");
                 MessageBox.Show($"Failed to refresh file list:\nStatus: {ex.StatusCode}\nDetail: {ex.Status.Detail}", "Refresh Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                Files.Clear(); // Clear potentially partial list
+                Files.Clear(); 
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error refreshing file list");
                 UpdateStatusBar("Error refreshing file list");
                 MessageBox.Show($"An unexpected error occurred while refreshing the file list:\n{ex.Message}", "Refresh Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                Files.Clear(); // Clear potentially partial list
-            }
-            finally
-            {
-                 // Hide busy indicator
+                Files.Clear(); 
             }
         }
 
@@ -855,7 +840,7 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             finally
             {
-                IsNodeStatusRefreshing = false; // Triggers CanExecute changes
+                IsNodeStatusRefreshing = false; 
             }
         }
 
@@ -865,7 +850,6 @@ namespace VRK_WPF.MVVM.ViewModel
             
             try
             {
-                // Reuse the same node status data for simulation tab
                 var request = new GetNodeStatusesRequest();
                 var reply = await _storageClient.GetNodeStatusesAsync(request);
                 
@@ -903,11 +887,6 @@ namespace VRK_WPF.MVVM.ViewModel
         }
         
         #region Node Settings Loading Logic
-
-        /// <summary>
-        /// Asynchronously loads the node settings from the connected gRPC server.
-        /// Should be called after a successful connection or manually via Refresh.
-        /// </summary>
         private async Task LoadSettingsAsync()
         {
             if (_storageClient == null)
@@ -1010,7 +989,6 @@ namespace VRK_WPF.MVVM.ViewModel
             return $"{size:F2} {suffixes[suffixIndex]}";
         }
         
-        // Command to manually refresh settings
         [RelayCommand(CanExecute = nameof(CanRefreshSettings))]
         private async Task RefreshSettingsAsync()
         {
@@ -1019,7 +997,6 @@ namespace VRK_WPF.MVVM.ViewModel
 
         private bool CanRefreshSettings()
         {
-            // Can refresh if connected and not already loading
             return _storageClient != null && !IsSettingsLoading;
         }
 
@@ -1094,7 +1071,6 @@ namespace VRK_WPF.MVVM.ViewModel
                     SimulationProgress += progressIncrement;
                 }
                 
-                // Update UI with new statuses
                 await RefreshNodeStatusAsync();
                 await UpdateSimulationNodesAsync();
                 await UpdateFileAndChunkStatusAsync();

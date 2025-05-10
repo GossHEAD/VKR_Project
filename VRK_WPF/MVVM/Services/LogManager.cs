@@ -1,250 +1,273 @@
 ﻿
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Text.RegularExpressions;
 using System.Windows.Threading;
-using VRK_WPF.MVVM.Model;
 
 namespace VRK_WPF.MVVM.Services
 {
     public class LogManager
+{
+    private readonly Dispatcher _dispatcher;
+    private readonly ObservableCollection<Model.LogEntry> _logs = new();
+    private string? _currentLogPath;
+    private long _lastPosition = 0;
+    private FileSystemWatcher? _fileWatcher;
+    private string _currentNodeId = string.Empty;
+    
+    public ObservableCollection<Model.LogEntry> Logs => _logs;
+    
+    public LogManager(Dispatcher dispatcher)
     {
-        private static readonly Regex LogRegex = new Regex(
-            @"^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s\[(\w+)\]\s(.*?)(?:\r\n|\n|$)",
-            RegexOptions.Compiled | RegexOptions.Multiline);
-            
-        private readonly ObservableCollection<LogEntry> _logs = new ObservableCollection<LogEntry>();
-        private readonly Dispatcher _dispatcher;
-        private readonly string _logsDirectory;
-        private FileSystemWatcher _fileWatcher;
-        private readonly Dictionary<string, long> _filePositions = new Dictionary<string, long>();
-        private CancellationTokenSource _cts;
-        
-        public ObservableCollection<LogEntry> Logs => _logs;
-        
-        public LogManager(Dispatcher dispatcher)
+        _dispatcher = dispatcher;
+    }
+    
+    public void SetCurrentNodeId(string nodeId)
+    {
+        _currentNodeId = nodeId;
+    }
+    
+    public async Task StartMonitoringAsync()
+    {
+        if (string.IsNullOrEmpty(_currentLogPath))
         {
-            _dispatcher = dispatcher;
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string logsDir = FindLogsDirectory(baseDir);
             
-            // Determine log directory path - same as in Node application
-            string appDataPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "VKR_Node");
-                
-            _logsDirectory = Path.Combine(appDataPath, "Logs");
-            
-            // Default to a relative Logs directory if the AppData one doesn't exist
-            if (!Directory.Exists(_logsDirectory))
+            if (!string.IsNullOrEmpty(logsDir) && Directory.Exists(logsDir))
             {
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                _logsDirectory = Path.Combine(baseDir, "..", "..", "VKR_Node", "Logs");
-            }
-            
-            // Try to find logs in the executable directory if all else fails
-            if (!Directory.Exists(_logsDirectory))
-            {
-                _logsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs");
-            }
-            
-            // Create if it doesn't exist
-            Directory.CreateDirectory(_logsDirectory);
-        }
-        
-        public async Task StartMonitoringAsync()
-        {
-            StopMonitoring();
-            _cts = new CancellationTokenSource();
-            await LoadInitialLogsAsync(_cts.Token);
-            SetupFileWatcher();
-        }
-        
-        public void StopMonitoring()
-        {
-            _cts?.Cancel();
-            _cts?.Dispose();
-            _cts = null;
-            
-            if (_fileWatcher != null)
-            {
-                _fileWatcher.EnableRaisingEvents = false;
-                _fileWatcher.Changed -= OnLogFileChanged;
-                _fileWatcher.Created -= OnLogFileCreated;
-                _fileWatcher.Dispose();
-                _fileWatcher = null;
-            }
-        }
-        
-        private void SetupFileWatcher()
-        {
-            _fileWatcher = new FileSystemWatcher(_logsDirectory)
-            {
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.CreationTime | NotifyFilters.FileName,
-                Filter = "*.txt",
-                EnableRaisingEvents = true
-            };
-            
-            _fileWatcher.Changed += OnLogFileChanged;
-            _fileWatcher.Created += OnLogFileCreated;
-        }
-        
-        private async void OnLogFileChanged(object sender, FileSystemEventArgs e)
-        {
-            await ReadLogFileChangesAsync(e.FullPath, _cts?.Token ?? CancellationToken.None);
-        }
-        
-        private async void OnLogFileCreated(object sender, FileSystemEventArgs e)
-        {
-            _filePositions[e.FullPath] = 0;
-            await ReadLogFileChangesAsync(e.FullPath, _cts?.Token ?? CancellationToken.None);
-        }
-        
-        private async Task LoadInitialLogsAsync(CancellationToken cancellationToken)
-        {
-            try
-            {
-                _dispatcher.Invoke(() => _logs.Clear());
-                _filePositions.Clear();
-                
-                var logFiles = Directory.GetFiles(_logsDirectory, "*.txt")
+                var logFiles = Directory.GetFiles(logsDir, "*-log-*.txt")
                     .OrderByDescending(f => new FileInfo(f).LastWriteTime)
                     .ToList();
-                
-                if (!logFiles.Any())
+                    
+                if (logFiles.Any())
                 {
-                    return;
+                    _currentLogPath = logFiles.First();
                 }
-                
-                string mostRecentFile = logFiles.First();
-                await ReadLogFileChangesAsync(mostRecentFile, cancellationToken, initialLoad: true);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error loading initial logs: {ex.Message}");
             }
         }
         
-        private async Task ReadLogFileChangesAsync(string filePath, CancellationToken cancellationToken, bool initialLoad = false)
+        if (!string.IsNullOrEmpty(_currentLogPath) && File.Exists(_currentLogPath))
         {
-            try
-            {
-                await Task.Delay(100, cancellationToken);
-                
-                if (!_filePositions.TryGetValue(filePath, out long position))
-                {
-                    position = 0;
-                }
-                
-                using (var fileStream = new FileStream(
-                    filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                {
-                    if (initialLoad && fileStream.Length > 50000) // ~50KB
-                    {
-                        position = Math.Max(0, fileStream.Length - 50000);
-                    }
-                    
-                    if (position > fileStream.Length)
-                    {
-                        position = 0;
-                    }
-                    
-                    if (fileStream.Length > position)
-                    {
-                        fileStream.Seek(position, SeekOrigin.Begin);
-                        
-                        using (var reader = new StreamReader(fileStream))
-                        {
-                            string newContent = await reader.ReadToEndAsync();
-                            ParseAndAddLogEntries(newContent, Path.GetFileNameWithoutExtension(filePath));
-                            
-                            _filePositions[filePath] = fileStream.Position;
-                        }
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error reading log file {filePath}: {ex.Message}");
-            }
-        }
-        
-        private void ParseAndAddLogEntries(string content, string sourceFile)
-        {
-            var matches = LogRegex.Matches(content);
-            var newEntries = new List<LogEntry>();
+            await LoadInitialLogsAsync();
             
-            foreach (Match match in matches)
+            string? directory = Path.GetDirectoryName(_currentLogPath);
+            if (!string.IsNullOrEmpty(directory))
             {
-                if (match.Groups.Count >= 4)
-                {
-                    var entry = new LogEntry
-                    {
-                        Timestamp = DateTime.Parse(match.Groups[1].Value),
-                        Level = match.Groups[2].Value,
-                        Message = match.Groups[3].Value,
-                        NodeId = ExtractNodeId(sourceFile),
-                        FullText = match.Value
-                    };
-                    
-                    newEntries.Add(entry);
-                }
+                SetupFileWatcher(directory);
             }
-            
-            if (newEntries.Any())
-            {
-                _dispatcher.Invoke(() =>
-                {
-                    foreach (var entry in newEntries)
-                    {
-                        _logs.Add(entry);
-                    }
-                    
-                    while (_logs.Count > 5000)
-                    {
-                        _logs.RemoveAt(0);
-                    }
-                });
-            }
-        }
-        
-        private string ExtractNodeId(string fileName)
-        {
-            // Attempt to extract node ID from filename (e.g., "node1-log-20220101.txt")
-            int dashIndex = fileName.IndexOf('-');
-            if (dashIndex > 0)
-            {
-                return fileName.Substring(0, dashIndex);
-            }
-            
-            return fileName;
-        }
-        
-        public void ClearLogs()
-        {
-            _dispatcher.Invoke(() => _logs.Clear());
-        }
-        
-        public IEnumerable<LogEntry> FilterLogs(
-            string searchText = null,
-            DateTime? startDate = null,
-            DateTime? endDate = null,
-            bool includeInfo = true,
-            bool includeWarning = true,
-            bool includeError = true,
-            bool includeDebug = false)
-        {
-            return _logs.Where(log =>
-                (string.IsNullOrWhiteSpace(searchText) || 
-                 log.Message.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                 log.FullText.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
-                (!startDate.HasValue || log.Timestamp >= startDate.Value) &&
-                (!endDate.HasValue || log.Timestamp <= endDate.Value) &&
-                ((includeInfo && log.IsInfo) ||
-                 (includeWarning && log.IsWarning) ||
-                 (includeError && log.IsError) ||
-                 (includeDebug && log.IsDebug)));
         }
     }
+    
+    private string FindLogsDirectory(string startDir)
+    {
+        string logsDir = Path.Combine(startDir, "Logs");
+        
+        if (Directory.Exists(logsDir))
+            return logsDir;
+            
+        DirectoryInfo? dir = new DirectoryInfo(startDir);
+        while (dir != null)
+        {
+            logsDir = Path.Combine(dir.FullName, "Logs");
+            if (Directory.Exists(logsDir))
+                return logsDir;
+                
+            dir = dir.Parent;
+        }
+        
+        return string.Empty;
+    }
+    
+    private async Task LoadInitialLogsAsync()
+    {
+        if (string.IsNullOrEmpty(_currentLogPath) || !File.Exists(_currentLogPath))
+            return;
+            
+        try
+        {
+            string nodeId = ExtractNodeIdFromFileName(_currentLogPath);
+            _currentNodeId = nodeId;
+            
+            var lines = await ReadLastLinesAsync(_currentLogPath, 500);
+            
+            foreach (var line in lines)
+            {
+                var logEntry = ParseLogLine(line, nodeId);
+                if (logEntry != null)
+                {
+                    _dispatcher.Invoke(() => _logs.Add(logEntry));
+                }
+            }
+            
+            _lastPosition = new FileInfo(_currentLogPath).Length;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error loading logs: {ex.Message}");
+        }
+    }
+    
+    
+    private string ExtractNodeIdFromFileName(string filePath)
+    {
+        string fileName = Path.GetFileNameWithoutExtension(filePath);
+        string[] parts = fileName.Split('-');
+        
+        if (parts.Length >= 3 && parts[1] == "log")
+        {
+            return parts[0];
+        }
+        
+        return string.Empty;
+    }
+    
+    private void SetupFileWatcher(string logsDirectory)
+    {
+        if (string.IsNullOrEmpty(logsDirectory) || !Directory.Exists(logsDirectory))
+            return;
+            
+        
+        _fileWatcher?.Dispose();
+        
+        
+        _fileWatcher = new FileSystemWatcher(logsDirectory)
+        {
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size,
+            Filter = "*.txt",
+            EnableRaisingEvents = true
+        };
+        
+        _fileWatcher.Changed += async (sender, e) => 
+        {
+            if (e.FullPath == _currentLogPath)
+            {
+                await ReadNewLogEntriesAsync();
+            }
+        };
+    }
+    
+    private async Task ReadNewLogEntriesAsync()
+    {
+        if (string.IsNullOrEmpty(_currentLogPath))
+            return;
+            
+        try
+        {
+            await Task.Delay(100);
+            
+            long currentSize = new FileInfo(_currentLogPath).Length;
+            if (currentSize <= _lastPosition)
+                return;
+                
+            using (var fs = new FileStream(_currentLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                fs.Seek(_lastPosition, SeekOrigin.Begin);
+                using (var reader = new StreamReader(fs))
+                {
+                    string? line;
+                    while ((line = await reader.ReadLineAsync()) != null)
+                    {
+                        var logEntry = ParseLogLine(line, _currentNodeId);
+                        if (logEntry != null)
+                        {
+                            _dispatcher.Invoke(() => _logs.Add(logEntry));
+                        }
+                    }
+                    
+                    _lastPosition = fs.Position;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error reading new log entries: {ex.Message}");
+        }
+    }
+    
+    private Model.LogEntry? ParseLogLine(string line, string nodeId)
+    {
+        try
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(line, 
+                @"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[([^\]]+)\] (.+)$");
+                
+            if (match.Success)
+            {
+                var timestamp = DateTime.Parse(match.Groups[1].Value);
+                var level = match.Groups[2].Value;
+                var message = match.Groups[3].Value;
+                
+                var nodeIdMatch = System.Text.RegularExpressions.Regex.Match(message, @"NodeId: (\w+)");
+                if (nodeIdMatch.Success)
+                {
+                    nodeId = nodeIdMatch.Groups[1].Value;
+                }
+                else if (string.IsNullOrEmpty(nodeId))
+                {
+                    nodeId = Path.GetFileNameWithoutExtension(_currentLogPath)?.Split('-')[0] ?? "Unknown";
+                }
+                
+                return new Model.LogEntry
+                {
+                    Timestamp = timestamp,
+                    Level = level,
+                    Message = message,
+                    NodeId = nodeId
+                };
+            }
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+    
+    private async Task<List<string>> ReadLastLinesAsync(string filePath, int lineCount)
+    {
+        var result = new List<string>();
+        
+        await using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        using (var reader = new StreamReader(fs))
+        {
+            var allLines = new List<string>();
+            string? line;
+            while ((line = await reader.ReadLineAsync()) != null)
+            {
+                allLines.Add(line);
+            }
+            
+            return allLines.Skip(Math.Max(0, allLines.Count - lineCount)).ToList();
+        }
+    }
+    
+    public void StopMonitoring()
+    {
+        _fileWatcher?.Dispose();
+        _fileWatcher = null;
+    }
+    
+    public void ClearLogs()
+    {
+        _dispatcher.Invoke(() => _logs.Clear());
+    }
+    
+    public async Task SwitchLogFileAsync(string logFilePath)
+    {
+        if (string.IsNullOrEmpty(logFilePath) || !File.Exists(logFilePath))
+            return;
+            
+        _currentLogPath = logFilePath;
+        _lastPosition = 0;
+        _dispatcher.Invoke(() => _logs.Clear());
+        await LoadInitialLogsAsync();
+        
+        
+        string? directory = Path.GetDirectoryName(logFilePath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            SetupFileWatcher(directory);
+        }
+    }
+}
 }

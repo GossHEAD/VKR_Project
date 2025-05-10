@@ -8,14 +8,10 @@ using VKR.Protos;
 
 namespace VKR_Node.Mapping
 {
-    /// <summary>
-    /// AutoMapper profile for all mappings in the application.
-    /// </summary>
     public class MappingProfile : Profile
     {
         public MappingProfile()
         {
-            // Core Model <-> Entity (Direct mappings)
             CreateMap<ChunkModel, ChunkEntity>()
                 .ForMember(dest => dest.File, opt => opt.Ignore())
                 .ForMember(dest => dest.Locations, opt => opt.Ignore())
@@ -45,17 +41,14 @@ namespace VKR_Node.Mapping
                 .ReverseMap()
                 .ForMember(dest => dest.NodeId, opt => opt.MapFrom(src => src.StoredNodeId));
                 
-            // Mapping for LogEntryEntity
             CreateMap<LogEntryModel, LogEntryEntity>()
                 .ForMember(dest => dest.Level, opt => opt.MapFrom(src => (int)src.LogLevel))
                 .ReverseMap()
                 .ForMember(dest => dest.LogLevel, opt => opt.MapFrom(src => (LogLevelEnum)src.Level));
                 
-            // Mapping for UserEntity
             CreateMap<UserModel, UserEntity>()
                 .ReverseMap();
                 
-            // Core Model <-> Protobuf
             CreateMap<ChunkModel, FileChunk>()
                 .ForMember(dest => dest.Data, opt => opt.Ignore()) // Data must be set manually
                 .ReverseMap()
@@ -93,7 +86,6 @@ namespace VKR_Node.Mapping
                 .ForMember(dest => dest.MemoryUsedBytes, opt => opt.Ignore())
                 .ForMember(dest => dest.MemoryTotalBytes, opt => opt.Ignore());
             
-            // In MappingProfile.cs, ensure this mapping is properly defined:
             CreateMap<FileModel, FileMetadata>()
                 .ForMember(dest => dest.CreationTime, opt => opt.MapFrom(src => 
                     Timestamp.FromDateTime(src.CreationTime.ToUniversalTime())))
@@ -109,7 +101,7 @@ namespace VKR_Node.Mapping
                 .ForMember(dest => dest.ModificationTime, opt => opt.MapFrom(src => 
                     src.ModificationTime.ToDateTime().ToLocalTime()))
                 .ForMember(dest => dest.State, opt => opt.MapFrom(src => (FileStateCore)(int)src.State));
-            // Additional mappings for NodeStatusInfo
+            
             CreateMap<NodeModel, NodeStatusInfo>()
                 .ForMember(dest => dest.NodeId, opt => opt.MapFrom(src => src.Id))
                 .ForMember(dest => dest.Address, opt => opt.MapFrom(src => src.Address))
@@ -119,7 +111,6 @@ namespace VKR_Node.Mapping
                     src.State == NodeStateCore.Offline ? "Offline" : 
                     src.State.ToString()));
                 
-            // Additional mappings for GetNodeConfigurationReply
             CreateMap<NodeModel, GetNodeConfigurationReply>()
                 .ForMember(dest => dest.NodeId, opt => opt.MapFrom(src => src.Id))
                 .ForMember(dest => dest.ListenAddress, opt => opt.MapFrom(src => src.Address))
@@ -139,7 +130,6 @@ namespace VKR_Node.Mapping
                 .ForMember(dest => dest.ReplicationFactor, opt => opt.Ignore())
                 .ForMember(dest => dest.DefaultChunkSize, opt => opt.Ignore());
                 
-            // Map for FileStatusInfo
             CreateMap<FileModel, FileStatusInfo>()
                 .ForMember(dest => dest.FileId, opt => opt.MapFrom(src => src.FileId))
                 .ForMember(dest => dest.FileName, opt => opt.MapFrom(src => src.FileName))

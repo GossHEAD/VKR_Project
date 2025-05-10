@@ -8,14 +8,10 @@ using VRK_WPF.MVVM.ViewModel;
 
 namespace VRK_WPF.MVVM.View
 {
-    /// <summary>
-    /// Interaction logic for AdminWindow.xaml
-    /// </summary>
     public partial class AdminWindow : Window
     {
         private readonly AdminWindowViewModel _viewModel;
         
-        // Pages for navigation
         //private readonly NodeStatusPage _nodeStatusPage;
         private readonly DatabaseManagementPage _databaseManagementPage;
         private readonly NodeConfigPage _nodeConfigPage;
@@ -67,7 +63,6 @@ namespace VRK_WPF.MVVM.View
         {
             if (NavMenu.SelectedItem == null) return;
             
-            // Navigate to selected page
             switch (NavMenu.SelectedIndex)
             {
                 case 0:

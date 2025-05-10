@@ -28,17 +28,14 @@ public static class NodeSelectionHelper
         string? localAddress, 
         ILogger logger)
     {
-        // ID-based check is primary and most reliable
         if (nodeId == localNodeId)
             return true;
         
-        // Address check is secondary
         if (string.IsNullOrEmpty(targetAddress) || string.IsNullOrEmpty(localAddress))
             return false;
 
         try
         {
-            // Normalize addresses for comparison
             string selfAddrNorm = NormalizeAddress(localAddress);
             string targetAddrNorm = NormalizeAddress(targetAddress);
             
@@ -52,18 +49,13 @@ public static class NodeSelectionHelper
         }
     }
 
-    /// <summary>
-    /// Normalizes an address to a standard format for comparison
-    /// </summary>
     private static string NormalizeAddress(string address)
     {
-        // Remove scheme
         if (address.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
             address = address.Substring(7);
         else if (address.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             address = address.Substring(8);
         
-        // Handle common local addresses
         address = address.Replace("localhost:", "127.0.0.1:");
         address = address.Replace("0.0.0.0:", "127.0.0.1:");
         address = address.Replace("[::]:", "127.0.0.1:");

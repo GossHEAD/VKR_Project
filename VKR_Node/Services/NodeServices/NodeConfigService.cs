@@ -11,7 +11,6 @@ using VKR.Protos;
 
 namespace VKR_Node.Services.NodeServices
 {
-    // NodeConfigService.cs
 public class NodeConfigService : INodeConfigService
 {
     private readonly ILogger<NodeConfigService> _logger;
@@ -116,34 +115,10 @@ public class NodeConfigService : INodeConfigService
             
             long totalMemory;
             
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            var memoryStatus = new MEMORYSTATUSEX();
+            if (GlobalMemoryStatusEx(memoryStatus))
             {
-                var memoryStatus = new MEMORYSTATUSEX();
-                if (GlobalMemoryStatusEx(memoryStatus))
-                {
-                    totalMemory = (long)memoryStatus.ullTotalPhys;
-                }
-                else
-                {
-                    totalMemory = -1;
-                }
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                var memInfo = File.ReadAllText("/proc/meminfo");
-                var match = Regex.Match(memInfo, @"MemTotal:\s+(\d+) kB");
-                if (match.Success && long.TryParse(match.Groups[1].Value, out var kbValue))
-                {
-                    totalMemory = kbValue * 1024; // Convert KB to bytes
-                }
-                else
-                {
-                    totalMemory = -1;
-                }
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                totalMemory = -1;
+                totalMemory = (long)memoryStatus.ullTotalPhys;
             }
             else
             {

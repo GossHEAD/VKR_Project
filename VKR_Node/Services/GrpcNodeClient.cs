@@ -30,10 +30,7 @@ namespace VKR_Node.Services
         private readonly ConcurrentDictionary<string, DateTime> _channelCircuitBreakers = new();
         private const int MaxFailuresBeforeCircuitBreak = 3;
         private readonly TimeSpan _circuitBreakDuration = TimeSpan.FromMinutes(2);
-
-        /// <summary>
-        /// Initializes a new instance of the GrpcNodeClient.
-        /// </summary>
+        
         public GrpcNodeClient(ILogger<GrpcNodeClient> logger, IOptions<Configuration.NodeIdentityOptions> nodeOptions)
         {
             _logger = logger;
@@ -59,7 +56,6 @@ namespace VKR_Node.Services
             _logger.LogInformation("GrpcNodeClient initialized for node {NodeId}", _callingNodeId);
         }
         
-        // Add to constructor
         public GrpcNodeClient(
             ILogger<GrpcNodeClient> logger,
             IOptions<Configuration.NodeIdentityOptions> nodeOptions,
@@ -68,19 +64,15 @@ namespace VKR_Node.Services
             _logger = logger;
             _callingNodeId = nodeOptions.Value?.NodeId ?? throw new InvalidOperationException("NodeId is not configured");
     
-            // Apply network configuration
             var network = networkOptions.Value;
             if (network != null)
             {
-                // Set connection timeout based on configuration
                 _channelIdleTimeout = TimeSpan.FromSeconds(network.ConnectionTimeoutSeconds * 2);
         
-                // Max connections can influence circuit breaker thresholds
                 _cleanupInterval = TimeSpan.FromMinutes(
                     Math.Max(1, Math.Min(30, network.MaxConnections / 10)));
             }
 
-            // Start cleanup task
             _cleanupTask = Task.Run(async () => {
                 try
                 {
@@ -104,16 +96,12 @@ namespace VKR_Node.Services
                 _callingNodeId, _channelIdleTimeout.TotalSeconds);
         }
         
-        /// <summary>
-        /// Cleans up idle channels and expired circuit breakers.
-        /// </summary>
         private void CleanupIdleChannels()
         {
             try
             {
                 var now = DateTime.UtcNow;
-        
-                // 1. Clean up expired circuit breakers
+                
                 foreach (var key in _channelCircuitBreakers.Keys.ToList())
                 {
                     if (_channelCircuitBreakers.TryGetValue(key, out var expiry) && now > expiry)
@@ -123,8 +111,7 @@ namespace VKR_Node.Services
                         _logger.LogDebug("Circuit breaker expired for {Address}", key);
                     }
                 }
-        
-                // 2. Clean up idle channels
+                
                 var keysToRemove = _channelLastUsed
                     .Where(kvp => (now - kvp.Value) > _channelIdleTimeout)
                     .Select(kvp => kvp.Key)
@@ -137,7 +124,6 @@ namespace VKR_Node.Services
                     {
                         try
                         {
-                            // Use ShutdownAsync for graceful shutdown
                             channel.ShutdownAsync().Wait(TimeSpan.FromSeconds(2));
                             _logger.LogDebug("Closed idle channel to {Address}", key);
                         }
@@ -156,23 +142,17 @@ namespace VKR_Node.Services
                 _logger.LogError(ex, "Error during channel cleanup");
             }
         }
-
-        /// <summary>
-        /// Gets or creates a gRPC channel for the specified target address with circuit breaking.
-        /// </summary>
+        
         private GrpcChannel GetOrCreateChannel(string targetNodeAddress)
         {
-            // Normalize address
             string formattedAddress = NormalizeAddress(targetNodeAddress);
 
-            // Check if this address has an open circuit breaker
             if (_channelCircuitBreakers.TryGetValue(formattedAddress, out var breakUntil) && 
                 DateTime.UtcNow < breakUntil)
             {
                 _logger.LogWarning("Circuit breaker open for {Address} until {Time}", 
                     formattedAddress, breakUntil.ToString("HH:mm:ss"));
             
-                // Create a one-time channel that won't be cached
                 return GrpcChannel.ForAddress(formattedAddress, new GrpcChannelOptions
                 {
                     HttpHandler = new SocketsHttpHandler
@@ -183,7 +163,6 @@ namespace VKR_Node.Services
                 });
             }
 
-            // Use the existing channel if available
             var channel = _channels.GetOrAdd(formattedAddress, addr => {
                 _logger.LogDebug("Creating gRPC channel for address: {Address}", addr);
                 return GrpcChannel.ForAddress(addr, new GrpcChannelOptions
@@ -195,16 +174,12 @@ namespace VKR_Node.Services
                     }
                 });
             });
-
-            // Record channel usage time
+            
             _channelLastUsed[formattedAddress] = DateTime.UtcNow;
 
             return channel;
         }
-
-        /// <summary>
-        /// Normalizes an address to ensure consistent format.
-        /// </summary>
+        
         private string NormalizeAddress(string targetNodeAddress)
         {
             if (string.IsNullOrWhiteSpace(targetNodeAddress))
@@ -215,10 +190,7 @@ namespace VKR_Node.Services
                 ? targetNodeAddress
                 : $"http://{targetNodeAddress}";
         }
-
-        /// <summary>
-        /// Helper method to execute gRPC operations with consistent error handling.
-        /// </summary>
+        
         private async Task<T?> ExecuteWithErrorHandlingAsync<T>(
             string methodName,
             string targetAddress,
@@ -257,14 +229,12 @@ namespace VKR_Node.Services
             {
                 sw.Stop();
                 
-                // Increment failure count
                 int failures = _channelFailureCount.AddOrUpdate(
                     formattedAddress, 
-                    1,  // Initial value if key doesn't exist
-                    (_, current) => current + 1  // Increment existing value
+                    1,
+                    (_, current) => current + 1 
                 );
                 
-                // If too many failures, implement circuit breaker
                 if (failures >= MaxFailuresBeforeCircuitBreak)
                 {
                     var breakUntil = DateTime.UtcNow + _circuitBreakDuration;
@@ -272,18 +242,15 @@ namespace VKR_Node.Services
                     
                     _logger.LogWarning("Circuit breaker triggered for {Target} until {Time} after {Failures} failures", 
                         targetAddress, breakUntil.ToString("HH:mm:ss"), failures);
-                        
-                    // Remove the failed channel to force recreation
+                    
                     if (_channels.TryRemove(formattedAddress, out var failedChannel))
                     {
                         try
                         {
-                            // Try to close gracefully
                             failedChannel.ShutdownAsync().Wait(TimeSpan.FromSeconds(1));
                         }
                         catch
                         {
-                            // Ignore shutdown errors
                         }
                     }
                 }
@@ -295,17 +262,16 @@ namespace VKR_Node.Services
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning("gRPC {Method} to {Target} was cancelled", methodName, targetAddress);
-                throw; // Re-throw cancellation
+                throw; 
             }
             catch (Exception ex)
             {
                 sw.Stop();
                 
-                // Increment failure count for any exception
                 int failures = _channelFailureCount.AddOrUpdate(
                     formattedAddress, 
-                    1,  // Initial value if key doesn't exist
-                    (_, current) => current + 1  // Increment existing value
+                    1,
+                    (_, current) => current + 1 
                 );
                 
                 _logger.LogError(ex, "Error during gRPC {Method} to {Target} (Failure {Count})", 
@@ -313,10 +279,7 @@ namespace VKR_Node.Services
                 return null;
             }
         }
-
-        /// <summary>
-        /// Sends a request to replicate a chunk to a specified target node.
-        /// </summary>
+        
         public async Task<ReplicateChunkReply> ReplicateChunkToNodeAsync(
             string targetNodeAddress, 
             ReplicateChunkRequest request, 
@@ -343,9 +306,6 @@ namespace VKR_Node.Services
                 };
         }
 
-        /// <summary>
-        /// Sends a request to delete a chunk replica on a specified target node.
-        /// </summary>
         public async Task<DeleteChunkReply> DeleteChunkOnNodeAsync(
             string targetNodeAddress, 
             DeleteChunkRequest request, 
@@ -371,10 +331,7 @@ namespace VKR_Node.Services
                     Message = "Connection to target node failed" 
                 };
         }
-
-        /// <summary>
-        /// Sends a Ping request to a specified target node to check its availability.
-        /// </summary>
+        
         public async Task<PingReply> PingNodeAsync(
             string targetNodeAddress, 
             PingRequest request, 
@@ -402,10 +359,7 @@ namespace VKR_Node.Services
                     ResponderNodeId = "Error: Connection failed" 
                 };
         }
-
-        /// <summary>
-        /// Finds the successor node for a given key.
-        /// </summary>
+        
         public Task<NodeModel?> FindSuccessorOnNodeAsync(
             NodeModel targetNode, 
             string keyId, 
@@ -415,10 +369,7 @@ namespace VKR_Node.Services
             // TODO: Implement when DHT functionality is required
             return Task.FromResult<NodeModel?>(null);
         }
-
-        /// <summary>
-        /// Gets the predecessor node from a target node.
-        /// </summary>
+        
         public Task<NodeModel?> GetPredecessorFromNodeAsync(
             NodeModel targetNode, 
             CancellationToken cancellationToken = default)
@@ -427,23 +378,16 @@ namespace VKR_Node.Services
             // TODO: Implement when DHT functionality is required
             return Task.FromResult<NodeModel?>(null);
         }
-
-        /// <summary>
-        /// Notifies a target node about a potential predecessor.
-        /// </summary>
+        
         public Task<bool> NotifyNodeAsync(
             NodeModel targetNode, 
             NodeModel selfInfo, 
             CancellationToken cancellationToken = default)
         {
             _logger.LogWarning("NotifyNodeAsync is not implemented");
-            // TODO: Implement when DHT functionality is required
             return Task.FromResult(false);
         }
 
-        /// <summary>
-        /// Requests chunk data from a target node via streaming.
-        /// </summary>
         public async Task<AsyncServerStreamingCall<RequestChunkReply>?> RequestChunkFromNodeAsync(
             string targetNodeAddress, 
             RequestChunkRequest request, 
@@ -460,7 +404,6 @@ namespace VKR_Node.Services
                     deadline: DateTime.UtcNow.AddSeconds(60), 
                     cancellationToken: cancellationToken);
                 
-                // Creating the streaming call
                 return client.RequestChunk(request, options);
             }
             catch (RpcException ex) when (ex.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
@@ -472,7 +415,7 @@ namespace VKR_Node.Services
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning("RequestChunk initiation to {TargetAddress} cancelled", targetNodeAddress);
-                throw; // Re-throw cancellation
+                throw; 
             }
             catch (Exception ex)
             {
@@ -481,9 +424,6 @@ namespace VKR_Node.Services
             }
         }
 
-        /// <summary>
-        /// Gets the list of known files from a target node.
-        /// </summary>
         public async Task<GetNodeFileListReply?> GetNodeFileListAsync(
             string targetNodeAddress, 
             GetNodeFileListRequest request, 
@@ -505,10 +445,7 @@ namespace VKR_Node.Services
                 },
                 cancellationToken);
         }
-
-        /// <summary>
-        /// Sends an acknowledgement that a replica has been stored.
-        /// </summary>
+        
         public async Task AcknowledgeReplicaAsync(
             string targetNodeAddress, 
             AcknowledgeReplicaRequest request, 
@@ -567,8 +504,6 @@ namespace VKR_Node.Services
                                 kvp.Key, calls, successRate, avgLatency);
                         }
                     }
-            
-                    // Optionally reset metrics after logging
                     _metrics.Clear();
                 }
             }
@@ -581,10 +516,6 @@ namespace VKR_Node.Services
                 _logger.LogError(ex, "Error in metrics logging task");
             }
         }
-
-        /// <summary>
-        /// Disposes of resources.
-        /// </summary>
         public void Dispose()
         {
             if (_disposed) return;
@@ -592,12 +523,10 @@ namespace VKR_Node.Services
             _logger.LogInformation("Disposing GrpcNodeClient and closing cached channels");
             _disposed = true;
             
-            // Stop the cleanup task
             _cleanupCts.Cancel();
             try { _cleanupTask.Wait(TimeSpan.FromSeconds(1)); } catch { /* Ignore */ }
             _cleanupCts.Dispose();
             
-            // Dispose channels
             var channelsToDispose = _channels.Values.ToList();
             _channels.Clear();
             _channelLastUsed.Clear();

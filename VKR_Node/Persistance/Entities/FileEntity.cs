@@ -3,9 +3,6 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace VKR_Node.Persistance.Entities;
 
-/// <summary>
-/// Entity representing a file in the database.
-/// </summary>
 [Table("FilesMetadata")]
 public class FileEntity
 {

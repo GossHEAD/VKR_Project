@@ -1,30 +1,88 @@
-﻿// In VKR_WPF project
+﻿using System.ComponentModel;
+using System.Windows.Media;
+
 namespace VRK_WPF.MVVM.Model
 {
-    public class LogEntry
+    public class LogEntry : INotifyPropertyChanged
     {
-        public DateTime Timestamp { get; set; }
-        public string Level { get; set; }
-        public string Message { get; set; }
-        public string NodeId { get; set; }
-        public string FullText { get; set; }
+        private DateTime _timestamp;
+        private string _level = string.Empty;
+        private string _message = string.Empty;
+        private string _nodeId = string.Empty;
         
-        public bool IsError => Level?.Contains("ERR", StringComparison.OrdinalIgnoreCase) == true;
-        public bool IsWarning => Level?.Contains("WARN", StringComparison.OrdinalIgnoreCase) == true;
-        public bool IsInfo => Level?.Contains("INFO", StringComparison.OrdinalIgnoreCase) == true;
-        public bool IsDebug => Level?.Contains("DEBUG", StringComparison.OrdinalIgnoreCase) == true;
-        
-        // For log coloring
-        public System.Windows.Media.Brush GetLevelBrush()
-        {
-            return Level?.ToUpperInvariant() switch
+        public DateTime Timestamp 
+        { 
+            get => _timestamp; 
+            set
             {
-                var l when l.Contains("ERR") => System.Windows.Media.Brushes.Red,
-                var l when l.Contains("WARN") => System.Windows.Media.Brushes.Orange,
-                var l when l.Contains("INFO") => System.Windows.Media.Brushes.Green,
-                var l when l.Contains("DEBUG") => System.Windows.Media.Brushes.Gray,
-                _ => System.Windows.Media.Brushes.Black
-            };
+                _timestamp = value;
+                OnPropertyChanged(nameof(Timestamp));
+            }
+        }
+        
+        public string Level 
+        { 
+            get => _level; 
+            set
+            {
+                _level = value;
+                OnPropertyChanged(nameof(Level));
+                OnPropertyChanged(nameof(IsInfo));
+                OnPropertyChanged(nameof(IsWarning));
+                OnPropertyChanged(nameof(IsError));
+                OnPropertyChanged(nameof(IsDebug));
+                OnPropertyChanged(nameof(GetLevelBrush));
+            }
+        }
+        
+        public string Message 
+        { 
+            get => _message; 
+            set
+            {
+                _message = value;
+                OnPropertyChanged(nameof(Message));
+            }
+        }
+        
+        public string NodeId 
+        { 
+            get => _nodeId; 
+            set
+            {
+                _nodeId = value;
+                OnPropertyChanged(nameof(NodeId));
+            }
+        }
+        
+        public string FullText => $"{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level}] {NodeId} {Message}";
+        
+        public bool IsInfo => Level.ToUpperInvariant().Contains("INFO");
+        public bool IsWarning => Level.ToUpperInvariant().Contains("WARN");
+        public bool IsError => Level.ToUpperInvariant().Contains("ERR") || Level.ToUpperInvariant().Contains("FAIL");
+        public bool IsDebug => Level.ToUpperInvariant().Contains("DEBUG") || Level.ToUpperInvariant().Contains("TRACE");
+        
+        public Brush GetLevelBrush
+        {
+            get
+            {
+                return Level.ToUpperInvariant() switch
+                {
+                    var l when l.Contains("INFO") => Brushes.Green,
+                    var l when l.Contains("WARN") => Brushes.Orange,
+                    var l when l.Contains("ERR") || l.Contains("FAIL") => Brushes.Red,
+                    var l when l.Contains("DEBUG") => Brushes.Blue,
+                    var l when l.Contains("TRACE") => Brushes.Gray,
+                    _ => Brushes.Black
+                };
+            }
+        }
+        
+        public event PropertyChangedEventHandler? PropertyChanged;
+        
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
 }

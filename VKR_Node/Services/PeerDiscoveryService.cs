@@ -28,12 +28,8 @@ namespace VKR_Node.Services
         private readonly TimeSpan _initialDelay;
         private readonly int _maxConcurrentPings;
         
-        // Cache last known states to reduce DB writes
         private readonly ConcurrentDictionary<string, (NodeStateCore State, DateTime LastUpdated)> _nodeStateCache = new();
-
-        /// <summary>
-        /// Creates a new instance of the PeerDiscoveryService.
-        /// </summary>
+        
         public PeerDiscoveryService(
             ILogger<PeerDiscoveryService> logger,
             INodeClient nodeClient,
@@ -48,7 +44,6 @@ namespace VKR_Node.Services
             _serviceProvider = serviceProvider;
             _networkOptions = networkOptions.Value;
 
-            // Get configuration or use defaults
             int pingIntervalSeconds = dhtOptions.Value?.StabilizationIntervalSeconds > 0 
                 ? dhtOptions.Value.StabilizationIntervalSeconds 
                 : 30;
@@ -65,14 +60,10 @@ namespace VKR_Node.Services
             LogKnownNodesStatus();
         }
 
-        /// <summary>
-        /// Main execution loop of the service.
-        /// </summary>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("PeerDiscoveryService starting execution");
             
-            // Initial delay to allow other services to initialize
             try
             {
                 await Task.Delay(_initialDelay, stoppingToken);
@@ -113,9 +104,6 @@ namespace VKR_Node.Services
             _logger.LogInformation("PeerDiscoveryService execution stopped");
         }
 
-        /// <summary>
-        /// Executes a single discovery cycle, pinging all known nodes.
-        /// </summary>
         private async Task ExecuteDiscoveryCycleAsync(CancellationToken cancellationToken)
         {
             _logger.LogDebug("Starting peer discovery cycle");
@@ -127,7 +115,6 @@ namespace VKR_Node.Services
                 return;
             }
 
-            // Filter out self nodes
             var peerNodes = knownNodes
                 .Where(node => !IsSelf(node.NodeId, node.Address))
                 .ToList();
@@ -176,18 +163,13 @@ namespace VKR_Node.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error waiting for ping tasks to complete");
-                // Continue execution - don't rethrow as this shouldn't crash the service
             }
         }
 
-        /// <summary>
-        /// Processes a single node by pinging it and updating its status.
-        /// </summary>
         private async Task ProcessNodeAsync(KnownNodeOptions node, CancellationToken cancellationToken)
         {
             try
             {
-                // Create a timeout for this specific ping
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(_pingTimeout);
                 
@@ -196,20 +178,15 @@ namespace VKR_Node.Services
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                // Propagate cancellation
                 throw;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing node {NodeId}", node.NodeId);
-                // We'll still try to update the node status as offline
                 await UpdateNodeStatusAsync(node, false, "Error: " + ex.GetType().Name, cancellationToken);
             }
         }
 
-        /// <summary>
-        /// Pings a node to check if it's online.
-        /// </summary>
         private async Task<(bool Success, string? ResponderId)> PingNodeAsync(KnownNodeOptions node, CancellationToken ct)
         {
             _logger.LogTrace("Pinging node {NodeId} at {Address}", node.NodeId, node.Address);
@@ -219,7 +196,7 @@ namespace VKR_Node.Services
                 var reply = await _nodeClient.PingNodeAsync(
                     node.Address,
                     new PingRequest { SenderNodeId = _nodeOptions.NodeId },
-                    ct); // Pass cancellation token
+                    ct); 
 
                 bool success = reply?.Success == true;
                 
@@ -240,9 +217,6 @@ namespace VKR_Node.Services
             }
         }
 
-        /// <summary>
-        /// Updates a node's status in the metadata system.
-        /// </summary>
         private async Task UpdateNodeStatusAsync(
             KnownNodeOptions node, 
             bool success, 
@@ -253,7 +227,6 @@ namespace VKR_Node.Services
 
             var newState = success ? NodeStateCore.Online : NodeStateCore.Offline;
             
-            // Check if state changed from cache to reduce DB writes
             bool stateChanged = true;
             if (_nodeStateCache.TryGetValue(node.NodeId, out var cachedState))
             {
@@ -283,7 +256,6 @@ namespace VKR_Node.Services
 
                 await metadataManager.SaveNodeStateAsync(statusInfo, ct);
                 
-                // Update cache
                 _nodeStateCache[node.NodeId] = (newState, DateTime.UtcNow);
                 
                 _logger.LogDebug("Updated {NodeId} status to {State}", node.NodeId, newState);
@@ -294,22 +266,16 @@ namespace VKR_Node.Services
             }
         }
         
-        /// <summary>
-        /// Checks if a node is this node (self).
-        /// </summary>
         private bool IsSelf(string nodeId, string? targetAddress)
         {
-            // ID-based check is primary and most reliable
             if (nodeId == _nodeOptions.NodeId)
                 return true;
             
-            // Address check is secondary
             if (string.IsNullOrEmpty(targetAddress) || string.IsNullOrEmpty(_networkOptions.ListenAddress))
                 return false;
 
             try
             {
-                // Normalize addresses for comparison
                 string selfAddrNorm = NormalizeAddress(_networkOptions.ListenAddress);
                 string targetAddrNorm = NormalizeAddress(targetAddress);
                 
@@ -323,18 +289,13 @@ namespace VKR_Node.Services
             }
         }
         
-        /// <summary>
-        /// Normalizes an address for comparison.
-        /// </summary>
         private string NormalizeAddress(string address)
         {
-            // Remove scheme
             if (address.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
                 address = address.Substring(7);
             else if (address.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 address = address.Substring(8);
             
-            // Handle common local addresses
             address = address.Replace("localhost:", "127.0.0.1:");
             address = address.Replace("0.0.0.0:", "127.0.0.1:");
             address = address.Replace("[::]:", "127.0.0.1:");
@@ -342,9 +303,6 @@ namespace VKR_Node.Services
             return address.ToLowerInvariant();
         }
         
-        /// <summary>
-        /// Logs information about the configured known nodes.
-        /// </summary>
         private void LogKnownNodesStatus()
         {
             if (_networkOptions.KnownNodes == null || !_networkOptions.KnownNodes.Any())
@@ -353,13 +311,11 @@ namespace VKR_Node.Services
                 return;
             }
 
-            // Count self-references for information
             int selfCount = _networkOptions.KnownNodes.Count(n => IsSelf(n.NodeId, n.Address));
             
             _logger.LogInformation("Configured with {TotalNodes} known nodes ({SelfNodes} self-references)",
                 _networkOptions.KnownNodes.Count, selfCount);
             
-            // Log each node for debugging
             foreach (var node in _networkOptions.KnownNodes)
             {
                 bool isSelf = IsSelf(node.NodeId, node.Address);
@@ -368,9 +324,6 @@ namespace VKR_Node.Services
             }
         }
 
-        /// <summary>
-        /// Called when the service is stopping.
-        /// </summary>
         public override Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("PeerDiscoveryService shutdown initiated");

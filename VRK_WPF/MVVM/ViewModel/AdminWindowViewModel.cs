@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.ObjectModel;
-using System.Threading.Tasks;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -19,7 +17,6 @@ namespace VRK_WPF.MVVM.ViewModel
         private GrpcChannel? _currentChannel;
         private StorageService.StorageServiceClient? _storageClient;
         
-        // Properties for UI binding
         [ObservableProperty]
         private ObservableCollection<NodeViewModel> _availableNodes = new();
         
@@ -38,11 +35,9 @@ namespace VRK_WPF.MVVM.ViewModel
         [ObservableProperty]
         private bool _isProcessing;
         
-        // Selected table for DB management
         [ObservableProperty]
         private string _selectedTable = "Files";
         
-        // Properties for node status
         [ObservableProperty]
         private string _nodeStatus = "Не подключено";
         
@@ -55,36 +50,28 @@ namespace VRK_WPF.MVVM.ViewModel
         [ObservableProperty]
         private string _diskSpace = "N/A";
         
-        // Constructor
         public AdminWindowViewModel(ILogger<AdminWindowViewModel>? logger = null)
         {
             _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<AdminWindowViewModel>.Instance;
             
-            // Set current user info from auth service
             if (AuthService.CurrentUser != null)
             {
                 CurrentUserInfo = $"{AuthService.CurrentUser.FullName} ({AuthService.CurrentUser.Role})";
             }
             
-            // Initialize commands
             LogoutCommand = new RelayCommand(Logout);
             ConnectToNodeCommand = new RelayCommand(async () => await ConnectToNodeAsync(), CanConnectToNode);
             RefreshStatusCommand = new RelayCommand(async () => await RefreshNodeStatusAsync(), () => _storageClient != null);
             
-            // Load available nodes
             LoadAvailableNodes();
         }
         
-        // Commands
         public RelayCommand LogoutCommand { get; }
         public RelayCommand ConnectToNodeCommand { get; }
         public RelayCommand RefreshStatusCommand { get; }
         
-        // Helper methods
         private void LoadAvailableNodes()
         {
-            // In a real application, this would come from a configuration or database
-            // For this example, we'll add some hardcoded nodes
             AvailableNodes.Clear();
             AvailableNodes.Add(new NodeViewModel { NodeId = "Node1", Address = "http://localhost:5001" });
             AvailableNodes.Add(new NodeViewModel { NodeId = "Node2", Address = "http://localhost:5002" });
@@ -92,7 +79,6 @@ namespace VRK_WPF.MVVM.ViewModel
             AvailableNodes.Add(new NodeViewModel { NodeId = "Node4", Address = "http://localhost:5004" });
             AvailableNodes.Add(new NodeViewModel { NodeId = "Node5", Address = "http://localhost:5005" });
             
-            // Default to first node
             if (AvailableNodes.Count > 0)
             {
                 SelectedNode = AvailableNodes[0];
@@ -117,16 +103,13 @@ namespace VRK_WPF.MVVM.ViewModel
             
             try
             {
-                // Close existing connection
                 _currentChannel?.Dispose();
                 _currentChannel = null;
                 _storageClient = null;
                 
-                // Create new connection
                 _currentChannel = GrpcChannel.ForAddress(SelectedNode.Address);
                 _storageClient = new StorageService.StorageServiceClient(_currentChannel);
                 
-                // Test connection
                 var request = new GetNodeConfigurationRequest();
                 var reply = await _storageClient.GetNodeConfigurationAsync(request, deadline: DateTime.UtcNow.AddSeconds(5));
                 
@@ -135,13 +118,13 @@ namespace VRK_WPF.MVVM.ViewModel
                     SelectedNodeName = $"Узел: {reply.NodeId}";
                     StatusMessage = $"Подключено к узлу {reply.NodeId}";
                     
-                    // Update node status
+                    
                     CpuUsage = reply.CpuUsagePercent;
                     MemoryUsage = $"{FormatBytes(reply.MemoryUsedBytes)} / {FormatBytes(reply.MemoryTotalBytes)}";
                     DiskSpace = $"{FormatBytes(reply.DiskSpaceAvailableBytes)} свободно из {FormatBytes(reply.DiskSpaceTotalBytes)}";
                     NodeStatus = "Онлайн";
                     
-                    // Refresh commands' CanExecute
+                    
                     ConnectToNodeCommand.NotifyCanExecuteChanged();
                     RefreshStatusCommand.NotifyCanExecuteChanged();
                 }
@@ -187,7 +170,7 @@ namespace VRK_WPF.MVVM.ViewModel
                 
                 if (reply.Success)
                 {
-                    // Update node status
+                    
                     CpuUsage = reply.CpuUsagePercent;
                     MemoryUsage = $"{FormatBytes(reply.MemoryUsedBytes)} / {FormatBytes(reply.MemoryTotalBytes)}";
                     DiskSpace = $"{FormatBytes(reply.DiskSpaceAvailableBytes)} свободно из {FormatBytes(reply.DiskSpaceTotalBytes)}";
@@ -228,33 +211,33 @@ namespace VRK_WPF.MVVM.ViewModel
         
         private void Logout()
         {
-            // Close the connection
+            
             _currentChannel?.Dispose();
             _currentChannel = null;
             _storageClient = null;
             
-            // Logout from auth service
+            
             AuthService.Logout();
             
-            // Close the admin window and show login window
+            
             foreach (Window window in Application.Current.Windows)
             {
                 if (window is AdminWindow)
                 {
                     window.Close();
                     
-                    // Show login window
+                    
                     var loginWindow = new LoginWindow();
                     loginWindow.Show();
                     
-                    // If login window is closed without successful login, exit the application
+                    
                     if (loginWindow.DialogResult != true)
                     {
                         Application.Current.Shutdown();
                     }
                     else
                     {
-                        // If login successful, show main window
+                        
                         var mainWindow = new MainWindow();
                         mainWindow.Show();
                     }

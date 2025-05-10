@@ -155,7 +155,6 @@ namespace VKR_Node.Services
             
             try
             {
-                // Get all nodes
                 var allNodes = await _metadataManager.GetAllNodeStatesAsync(context.CancellationToken);
                 var offlineNodes = allNodes.Where(n => n.State == NodeStateCore.Offline).ToList();
                 
@@ -168,7 +167,6 @@ namespace VKR_Node.Services
                     };
                 }
                 
-                // Mark all offline nodes as Online
                 foreach (var node in offlineNodes)
                 {
                     node.State = NodeStateCore.Online;
@@ -239,15 +237,6 @@ namespace VKR_Node.Services
                     fileStatusInfo.FileName = file.FileName;
                     fileStatusInfo.IsAvailable = isFileAvailable;
                     reply.FileStatuses.Add(fileStatusInfo);
-                    
-                    // reply.FileStatuses.Add(new FileStatusInfo
-                    // {
-                    //     FileId = file.FileId,
-                    //     FileName = file.FileName,
-                    //     IsAvailable = isFileAvailable,
-                    //     CurrentReplicationFactor = currentReplication == int.MaxValue ? 0 : currentReplication,
-                    //     DesiredReplicationFactor = _dhtOptions.ReplicationFactor
-                    // });
                 }
                 
                 return reply;

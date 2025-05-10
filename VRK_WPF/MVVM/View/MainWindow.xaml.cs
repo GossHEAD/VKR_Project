@@ -7,9 +7,6 @@ using VRK_WPF.MVVM.ViewModel;
 
 namespace VRK_WPF.MVVM.View
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
         public MainWindow()
@@ -70,9 +67,6 @@ namespace VRK_WPF.MVVM.View
             }
         }
         
-        /// <summary>
-        /// Initialize frames with their content pages
-        /// </summary>
         private void InitializeFrames()
         {
             try
@@ -100,9 +94,6 @@ namespace VRK_WPF.MVVM.View
             }
         }
 
-        /// <summary>
-        /// Configures the UI elements based on the current user's role
-        /// </summary>
         private void ConfigureUIBasedOnUserRole()
         {
             try
@@ -142,10 +133,7 @@ namespace VRK_WPF.MVVM.View
                 System.Diagnostics.Debug.WriteLine($"Error configuring UI: {ex.Message}");
             }
         }
-
-        /// <summary>
-        /// Finds a tab by its header text
-        /// </summary>
+        
         private TabItem? FindTabByHeader(string header)
         {
             var mainTabControl = this.FindName("MainTabControl") as TabControl;
@@ -163,10 +151,7 @@ namespace VRK_WPF.MVVM.View
             
             return null;
         }
-
-        /// <summary>
-        /// Updates the status bar with user information
-        /// </summary>
+        
         private void UpdateStatusBarWithUserInfo()
         {
             if (AuthService.CurrentUser == null)
@@ -177,10 +162,7 @@ namespace VRK_WPF.MVVM.View
                 viewModel.StatusBarText = $"Пользователь: {AuthService.CurrentUser.FullName} | Роль: {AuthService.CurrentUser.Role}";
             }
         }
-        
-        /// <summary>
-        /// Switch to the Documentation tab
-        /// </summary>
+
         public void ShowDocumentation()
         {
             if (MainTabControl != null && DocumentationTab != null)
@@ -189,9 +171,6 @@ namespace VRK_WPF.MVVM.View
             }
         }
         
-        /// <summary>
-        /// Switch to the About tab
-        /// </summary>
         public void ShowAbout()
         {
             if (MainTabControl != null && AboutTab != null)

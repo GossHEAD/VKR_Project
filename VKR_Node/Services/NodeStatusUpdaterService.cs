@@ -35,14 +35,7 @@ namespace VKR_Node.Services
         private int _consecutiveSuccesses = 0;
         private bool _isHealthy = true;
         private string _healthStatus = "Starting";
-
-        /// <summary>
-        /// Creates a new instance of the NodeStatusUpdaterService.
-        /// </summary>
-        /// <param name="logger">Logger for this service</param>
-        /// <param name="serviceProvider">Service provider for creating scoped services</param>
-        /// <param name="nodeOptions">Node configuration options</param>
-        /// <param name="dhtOptions">DHT configuration options containing timing settings</param>
+        
         public NodeStatusUpdaterService(
             ILogger<NodeStatusUpdaterService> logger,
             IServiceProvider serviceProvider,
@@ -55,13 +48,12 @@ namespace VKR_Node.Services
             _nodeOptions = nodeOptions.Value;
             _nodeNetworkOptionsOptions = networkOptions.Value;
             
-            // Get interval from configuration or use default
             int intervalSeconds = dhtOptions.Value?.StabilizationIntervalSeconds > 0 
                 ? dhtOptions.Value.StabilizationIntervalSeconds 
-                : 60; // Default to 60 seconds
+                : 60; 
             
             _updateInterval = TimeSpan.FromSeconds(intervalSeconds);
-            _initialDelay = TimeSpan.FromSeconds(15); // Short initial delay
+            _initialDelay = TimeSpan.FromSeconds(15); 
             _standardInterval = TimeSpan.FromSeconds(intervalSeconds);
             _minInterval = TimeSpan.FromSeconds(Math.Max(15, intervalSeconds / 4));
             _maxInterval = TimeSpan.FromSeconds(intervalSeconds * 2);
@@ -71,14 +63,11 @@ namespace VKR_Node.Services
                 _nodeOptions.NodeId ?? "Unknown", _updateInterval);
         }
 
-        // Method to expose health status to other components
         public (bool IsHealthy, string Status, DateTime LastSuccessfulUpdate) GetHealthStatus()
         {
             return (_isHealthy, _healthStatus, _lastSuccessfulUpdate);
         }
-        /// <summary>
-        /// Main execution loop of the service.
-        /// </summary>
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("NodeStatusUpdaterService starting execution loop");
@@ -106,7 +95,6 @@ namespace VKR_Node.Services
                         _isHealthy = true;
                         _healthStatus = "Healthy";
             
-                        // After 3 consecutive successes, gradually increase interval
                         if (_consecutiveSuccesses > 3 && _currentInterval < _maxInterval)
                         {
                             _currentInterval = TimeSpan.FromSeconds(Math.Min(
@@ -129,7 +117,6 @@ namespace VKR_Node.Services
                                 _consecutiveFailures);
                         }
             
-                        // On failure, decrease interval
                         _currentInterval = TimeSpan.FromSeconds(Math.Max(
                             _currentInterval.TotalSeconds * 0.7, 
                             _minInterval.TotalSeconds));
@@ -145,7 +132,7 @@ namespace VKR_Node.Services
                     _healthStatus = $"Error: {ex.Message}";
                     
                     _consecutiveSuccesses = 0;
-                    _currentInterval = _minInterval; // Use minimum interval after exception
+                    _currentInterval = _minInterval; 
                     _logger.LogError(ex, "Error updating node status");
                 }
     
@@ -162,11 +149,7 @@ namespace VKR_Node.Services
             
             _logger.LogInformation("NodeStatusUpdaterService execution stopped");
         }
-
-        /// <summary>
-        /// Updates the node's status information in the metadata database.
-        /// </summary>
-        /// <returns>True if update was successful, false if errors occurred</returns>
+        
         private async Task<bool> UpdateNodeStatusAsync(CancellationToken cancellationToken)
         {
             string? localNodeId = _nodeOptions.NodeId;
@@ -186,15 +169,13 @@ namespace VKR_Node.Services
                 var metadataManager = scope.ServiceProvider.GetRequiredService<IMetadataManager>();
                 var dataManager = scope.ServiceProvider.GetRequiredService<IDataManager>();
 
-                // Collect system metrics
                 var metrics = await CollectNodeMetricsAsync(dataManager, metadataManager, cancellationToken);
 
-                // Create status info object
                 var statusInfo = new NodeModel
                 {
                     Id = localNodeId,
                     Address = localAddress,
-                    State = NodeStateCore.Online, // Assume online since this code is running
+                    State = NodeStateCore.Online, 
                     LastSeen = DateTime.UtcNow,
                     DiskSpaceAvailableBytes = metrics.DiskSpaceAvailable,
                     DiskSpaceTotalBytes = metrics.DiskSpaceTotal,
@@ -205,7 +186,6 @@ namespace VKR_Node.Services
                     MemoryTotalBytes = metrics.MemoryTotal
                 };
 
-                // Save status to metadata store
                 await metadataManager.SaveNodeStateAsync(statusInfo, cancellationToken);
                 _logger.LogInformation("Updated status for Node {NodeId}: DiskFree={DiskFree}, Chunks={ChunkCount}, CPU={CpuUsage}%", 
                     localNodeId, FormatBytes(metrics.DiskSpaceAvailable), metrics.ChunkCount, metrics.CpuUsage);
@@ -223,9 +203,7 @@ namespace VKR_Node.Services
                 return false;
             }
         }
-        /// <summary>
-        /// Collects various metrics about the node's status.
-        /// </summary>
+
         private async Task<(long DiskSpaceAvailable, long DiskSpaceTotal, int ChunkCount, double CpuUsage, long MemoryUsed, long MemoryTotal)> 
             CollectNodeMetricsAsync(IDataManager dataManager, IMetadataManager metadataManager, CancellationToken cancellationToken)
         {
@@ -236,7 +214,6 @@ namespace VKR_Node.Services
             long memoryUsed = -1;
             long memoryTotal = -1;
 
-            // Get disk space info
             try
             {
                 diskFree = await dataManager.GetFreeDiskSpaceAsync(cancellationToken);
@@ -257,7 +234,6 @@ namespace VKR_Node.Services
                 _logger.LogError(ex, "Error getting total disk space");
             }
 
-            // Get locally stored chunk count
             try
             {
                 var localChunks = await metadataManager.GetChunksStoredLocallyAsync(cancellationToken);
@@ -269,13 +245,12 @@ namespace VKR_Node.Services
                 _logger.LogError(ex, "Error getting local chunk count");
             }
             
-            // Add CPU usage monitoring
             try
             {
                 var startTime = DateTime.UtcNow;
                 var startCpuUsage = Process.GetCurrentProcess().TotalProcessorTime;
                 
-                await Task.Delay(200, cancellationToken); // Brief sample period
+                await Task.Delay(200, cancellationToken); 
                 
                 var endTime = DateTime.UtcNow;
                 var endCpuUsage = Process.GetCurrentProcess().TotalProcessorTime;
@@ -291,14 +266,12 @@ namespace VKR_Node.Services
                 _logger.LogError(ex, "Error measuring CPU usage");
             }
             
-            // Add memory usage monitoring
             try
             {
                 var process = Process.GetCurrentProcess();
                 memoryUsed = process.WorkingSet64;
                 _logger.LogTrace("Memory used: {MemoryUsed}", FormatBytes(memoryUsed));
                 
-                // Get total physical memory
                 memoryTotal = GetTotalPhysicalMemory();
                 _logger.LogTrace("Total memory: {MemoryTotal}", FormatBytes(memoryTotal));
             }
@@ -314,33 +287,15 @@ namespace VKR_Node.Services
         {
             try
             {
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    var computerInfo = new ComputerInfo();
-                    return (long)computerInfo.TotalPhysicalMemory;
-                }
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                {
-                    // Parse /proc/meminfo on Linux
-                    string memInfoContent = File.ReadAllText("/proc/meminfo");
-                    var match = Regex.Match(memInfoContent, @"MemTotal:\s+(\d+) kB");
-                    if (match.Success)
-                    {
-                        return long.Parse(match.Groups[1].Value) * 1024; // Convert KB to bytes
-                    }
-                }
-                
-                return -1;
+                var computerInfo = new ComputerInfo();
+                return (long)computerInfo.TotalPhysicalMemory;
             }
             catch
             {
                 return -1;
             }
         }
-
-        /// <summary>
-        /// Formats a byte count into a human-readable size.
-        /// </summary>
+        
         private string FormatBytes(long bytes)
         {
             if (bytes < 0) return "Unknown";
@@ -357,10 +312,7 @@ namespace VKR_Node.Services
             
             return $"{len:0.##} {sizes[order]}";
         }
-
-        /// <summary>
-        /// Called when the service is stopping.
-        /// </summary>
+        
         public override Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("NodeStatusUpdaterService stopping");

@@ -2,9 +2,6 @@
 
 namespace VKR_Core.Models;
 
-/// <summary>
-/// Core domain model for a file chunk.
-/// </summary>
 public record class ChunkModel : IChunk
 {
     public required string ChunkId { get; init; }

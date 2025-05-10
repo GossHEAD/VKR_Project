@@ -3,9 +3,6 @@ using VKR_Core.Models.Interfaces;
 
 namespace VKR_Core.Models;
 
-/// <summary>
-/// Core domain model for a network node.
-/// </summary>
 public record class NodeModel : INode
 {
     public required string Id { get; init; }

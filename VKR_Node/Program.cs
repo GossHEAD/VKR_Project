@@ -121,18 +121,15 @@ namespace VKR_Node
                 var storageOptions = services.GetRequiredService<IOptions<StorageOptions>>().Value;
                 var dhtOptions = services.GetRequiredService<IOptions<DhtOptions>>().Value;
 
-                // Log node identity
                 logger.LogInformation("[Config] Node ID: {NodeId}", nodeOptions.NodeId ?? "NULL");
                 logger.LogInformation("[Config] Display Name: {DisplayName}", 
                     nodeOptions.DisplayName ?? "Not specified");
 
-                // Log network configuration
                 logger.LogInformation("[Config] Network Address: {Address}:{Port}", 
                     networkOptions.ListenAddress ?? "NULL", networkOptions.ListenPort);
                 logger.LogInformation("[Config] Max Connections: {MaxConn}", 
                     networkOptions.MaxConnections);
 
-                // Log known nodes
                 if (networkOptions.KnownNodes != null && networkOptions.KnownNodes.Any())
                 {
                     logger.LogInformation("--- Known Nodes ({Count}) ---", 
@@ -149,7 +146,6 @@ namespace VKR_Node
                     logger.LogWarning("[Config] No known nodes configured!");
                 }
 
-                // Log database settings
                 logger.LogInformation("[Config] Database Path: {Path}", 
                     dbOptions.DatabasePath ?? "NULL");
                 logger.LogInformation("[Config] Has Explicit Connection String: {HasConnStr}", 
@@ -157,7 +153,6 @@ namespace VKR_Node
                 logger.LogInformation("[Config] Auto Migrate: {AutoMigrate}", 
                     dbOptions.AutoMigrate);
 
-                // Log storage settings
                 logger.LogInformation("[Config] Storage Base Path: {Path}", 
                     storageOptions.BasePath ?? "NULL");
                 logger.LogInformation("[Config] Chunk Size: {Size} bytes", 
@@ -165,18 +160,15 @@ namespace VKR_Node
                 logger.LogInformation("[Config] Max Storage Size: {Size} bytes", 
                     storageOptions.MaxSizeBytes);
 
-                // Log DHT settings
                 logger.LogInformation("[Config] DHT Replication Factor: {Factor}", 
                     dhtOptions.ReplicationFactor);
                 logger.LogInformation("[Config] DHT Bootstrap Node: {Node}", 
                     dhtOptions.BootstrapNodeAddress ?? "None");
 
-                // Test connection string generation with nodeId
                 var effectiveConnString = dbOptions.GetEffectiveConnectionString(nodeOptions.NodeId);
                 logger.LogInformation("[Config] Effective DB Connection String: {ConnStr}", 
                     effectiveConnString);
 
-                // Get actual storage path with nodeId substitution
                 var actualBasePath = storageOptions.BasePath?.Replace("{nodeId}", nodeOptions.NodeId);
                 logger.LogInformation("[Config] Actual Storage Base Path: {Path}", 
                     actualBasePath ?? "NULL");
@@ -229,7 +221,7 @@ namespace VKR_Node
             catch (Exception ex)
             {
                 logger.LogCritical(ex, "Failed to initialize database or services.");
-                throw; // Propagate to outer handler
+                throw; 
             }
         }
 
@@ -241,11 +233,9 @@ namespace VKR_Node
                     Console.WriteLine($"[ConfigureAppConfiguration] Base Path: {env.ContentRootPath}");
                     Console.WriteLine($"[ConfigureAppConfiguration] Environment: {env.EnvironmentName}");
 
-                    // Base configuration
                     config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
                     config.AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
 
-                    // Node-specific configuration
                     var configFile = GetConfigFilePath(args);
                     if (!string.IsNullOrEmpty(configFile))
                     {
@@ -253,40 +243,23 @@ namespace VKR_Node
                         config.AddJsonFile(configFile, optional: false, reloadOnChange: true);
                     }
 
-                    // Environment variables and command line
                     config.AddEnvironmentVariables();
                     config.AddCommandLine(args);
                 })
                 .UseSerilog()
-                // .ConfigureLogging(logging =>
-                // {
-                //     logging.ClearProviders();
-                //     logging.AddConsole();
-                //     logging.AddDebug();
-                // })
                 .ConfigureServices((hostContext, services) =>
                 {
-                    // Register AutoMapper
                     services.AddAutoMapper(typeof(MappingProfile));
-                    
-                    // Configuration Options
                     RegisterConfigurationOptions(hostContext, services);
-                    
-                    // Core Services
                     RegisterCoreServices(services);
-                    
-                    // Background Services
-                    RegisterBackgroundServices(services);
-                    
-                    // Health Checks
+                    RegisterBackgroundServices(services);                    
                     ConfigureHealthChecks(services);
                     
-                    // Database Services
                     services.AddDbContextFactory<NodeDbContext>(options =>
                     {
                         var dbOptions = services.BuildServiceProvider().GetRequiredService<IOptions<DatabaseOptions>>().Value;
     
-                        string connectionString = dbOptions.HasExplicitConnectionString
+                        var connectionString = dbOptions.HasExplicitConnectionString
                             ? dbOptions.ConnectionString
                             : $"Data Source={dbOptions.DatabasePath}";
         
@@ -300,15 +273,13 @@ namespace VKR_Node
     
                         if (dbOptions.CommandTimeoutSeconds > 0)
                         {
-                            TimeSpan timeout = TimeSpan.FromSeconds(dbOptions.CommandTimeoutSeconds);
+                            var timeout = TimeSpan.FromSeconds(dbOptions.CommandTimeoutSeconds);
                             optionsBuilder.ConfigureLoggingCacheTime(timeout);
                         }
                     });
                     
-                    // Storage and Node Services
                     RegisterStorageServices(services);
                     
-                    // Communications
                     services.AddGrpc();
                 })
                 .ConfigureWebHostDefaults(webBuilder =>
@@ -337,7 +308,6 @@ namespace VKR_Node
         {
             string configFile = null;
             
-            // Check for --config or --ConfigPath arguments
             for (int i = 0; i < args.Length; i++)
             {
                 string currentArg = args[i];
@@ -356,7 +326,7 @@ namespace VKR_Node
                          i + 1 < args.Length && !args[i+1].StartsWith("--"))
                 {
                     argValue = args[i + 1];
-                    i++; // Skip the next arg
+                    i++; 
                 }
 
                 if (argValue != null)
@@ -371,10 +341,8 @@ namespace VKR_Node
                 return null;
             }
 
-            // Convert to full path
             string fullPath = Path.GetFullPath(configFile);
             
-            // Verify file exists
             if (!File.Exists(fullPath))
             {
                 Console.WriteLine($"[Config] WARNING: Config file not found at {fullPath}");
@@ -449,11 +417,9 @@ namespace VKR_Node
 
         private static void RegisterBackgroundServices(IServiceCollection services)
         {
-            // Background services
             services.AddHostedService<PeerDiscoveryService>();
             services.AddHostedService<ReplicationHealthService>();
             
-            // NodeStatusUpdater as both a singleton service and a hosted service
             services.AddSingleton<NodeStatusUpdaterService>();
             services.AddSingleton<IHostedService>(provider => 
                 provider.GetRequiredService<NodeStatusUpdaterService>());
@@ -488,7 +454,6 @@ namespace VKR_Node
             {
                 var logger = options.ApplicationServices.GetRequiredService<ILogger<Program>>();
                 
-                // Get network configuration
                 var networkOptions = context.Configuration
                     .GetSection("DistributedStorage:Network")
                     .Get<NetworkOptions>();
@@ -500,7 +465,6 @@ namespace VKR_Node
                     return;
                 }
                 
-                // Parse the address
                 IPAddress ipAddress;
                 string host = networkOptions.ListenAddress;
                 int port = networkOptions.ListenPort;
@@ -526,7 +490,6 @@ namespace VKR_Node
                     ipAddress = IPAddress.Any;
                 }
                 
-                // Configure the endpoint
                 logger.LogInformation("[Kestrel] Configuring endpoint to listen on: {IpAddress}:{Port} (HTTP/2)",
                     ipAddress, port);
                     

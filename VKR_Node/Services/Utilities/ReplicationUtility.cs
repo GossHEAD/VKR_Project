@@ -16,9 +16,6 @@ namespace VKR_Node.Services.Utilities
     /// </summary>
     public static class ReplicationUtility
     {
-        /// <summary>
-        /// Selects appropriate nodes to replicate data to based on chunk ID and available nodes
-        /// </summary>
         public static List<KnownNodeOptions> SelectReplicaTargets(
             List<KnownNodeOptions> onlinePeers, 
             string chunkId, 
@@ -29,13 +26,11 @@ namespace VKR_Node.Services.Utilities
                 return new List<KnownNodeOptions>();
             }
             
-            // If we don't have enough peers, return all we have
             if (onlinePeers.Count <= replicasNeeded)
             {
                 return onlinePeers;
             }
             
-            // Use consistent hashing to distribute chunks evenly
             int hashCode = Math.Abs(chunkId.GetHashCode());
             int startIndex = hashCode % onlinePeers.Count;
             var selectedTargets = new List<KnownNodeOptions>();
@@ -47,10 +42,7 @@ namespace VKR_Node.Services.Utilities
             
             return selectedTargets;
         }
-
-        /// <summary>
-        /// Checks if a node is online by pinging it
-        /// </summary>
+        
         public static async Task<bool> IsNodeOnlineAsync(
             string nodeId, 
             string nodeAddress,

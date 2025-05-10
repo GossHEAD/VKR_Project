@@ -1,24 +1,19 @@
-﻿// LogViewer.xaml.cs
-
-using System.ComponentModel;
+﻿using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
-using System.Windows.Media;
+using VRK_WPF.MVVM.Model;
 using VRK_WPF.MVVM.Services;
 
 namespace VRK_WPF.MVVM.View
 {
-    /// <summary>
-    /// Interaction logic for LogViewer.xaml
-    /// </summary>
     public partial class LogViewer : UserControl
     {
         private readonly LogManager _logManager;
         private readonly CollectionViewSource _viewSource;
         private bool _autoScroll = true;
-        private ScrollViewer _logScrollViewer;
         
         public LogViewer()
         {
@@ -26,21 +21,15 @@ namespace VRK_WPF.MVVM.View
             _viewSource = new CollectionViewSource { Source = _logManager.Logs };
     
             InitializeComponent();
-    
+            DataContext = this;
             lvLogs.ItemsSource = _viewSource.View;
     
-            this.Loaded += (s, e) => 
+            this.Loaded += async (s, e) => 
             {
+                // Node selector is always visible in this version
+                PopulateNodeLogsDropdown();
                 ApplyFilters();
-        
-                _logScrollViewer = FindScrollViewer(lvLogs);
-        
-                if (_logScrollViewer != null)
-                {
-                    _logScrollViewer.ScrollChanged += LogScrollViewer_ScrollChanged;
-                }
-        
-                StartMonitoring();
+                await StartMonitoring();
             };
     
             ((ICollectionView)_viewSource.View).CollectionChanged += (s, e) =>
@@ -51,38 +40,20 @@ namespace VRK_WPF.MVVM.View
                 }
             };
 
-            this.Unloaded += (s, e) => 
+            Unloaded += (s, e) => 
             {
                 StopMonitoring();
-        
-                if (_logScrollViewer != null)
-                {
-                    _logScrollViewer.ScrollChanged -= LogScrollViewer_ScrollChanged;
-                }
             };
         }
         
-        private ScrollViewer FindScrollViewer(DependencyObject depObj)
+        private async Task StartMonitoring()
         {
-            if (depObj == null) return null;
-            
-            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(depObj); i++)
-            {
-                DependencyObject child = VisualTreeHelper.GetChild(depObj, i);
-                
-                if (child is ScrollViewer scrollViewer)
-                {
-                    return scrollViewer;
-                }
-                
-                ScrollViewer childViewer = FindScrollViewer(child);
-                if (childViewer != null)
-                {
-                    return childViewer;
-                }
-            }
-            
-            return null;
+            await _logManager.StartMonitoringAsync();
+        }
+        
+        private void StopMonitoring()
+        {
+            _logManager.StopMonitoring();
         }
         
         private void LogScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
@@ -96,16 +67,6 @@ namespace VRK_WPF.MVVM.View
             {
                 _autoScroll = true;
             }
-        }
-        
-        private async void StartMonitoring()
-        {
-            await _logManager.StartMonitoringAsync();
-        }
-        
-        private void StopMonitoring()
-        {
-            _logManager.StopMonitoring();
         }
         
         private void FilterLogs(object sender, RoutedEventArgs e)
@@ -139,6 +100,98 @@ namespace VRK_WPF.MVVM.View
             _logManager.ClearLogs();
         }
         
+        private string FindLogsDirectory(string startDir)
+        {
+            string logsDir = Path.Combine(startDir, "Logs");
+        
+            if (Directory.Exists(logsDir))
+                return logsDir;
+            
+            DirectoryInfo? dir = new DirectoryInfo(startDir);
+            while (dir != null)
+            {
+                logsDir = Path.Combine(dir.FullName, "Logs");
+                if (Directory.Exists(logsDir))
+                    return logsDir;
+                
+                dir = dir.Parent;
+            }
+        
+            return string.Empty;
+        }
+        
+        private string DetermineNodeIdFromLogFile(string filePath)
+        {
+            string fileName = Path.GetFileNameWithoutExtension(filePath);
+            string[] parts = fileName.Split('-');
+        
+            if (parts.Length >= 3 && parts[1] == "log")
+            {
+                return parts[0];
+            }
+        
+            try
+            {
+                using var reader = new StreamReader(filePath, new FileStreamOptions
+                {
+                    Mode = FileMode.Open,
+                    Access = FileAccess.Read,
+                    Share = FileShare.ReadWrite
+                });
+            
+                for (int i = 0; i < 20 && !reader.EndOfStream; i++)
+                {
+                    string? line = reader.ReadLine();
+                    if (line == null) continue;
+                
+                    var match = System.Text.RegularExpressions.Regex.Match(line, @"NodeId: (\w+)");
+                    if (match.Success)
+                    {
+                        return match.Groups[1].Value;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore file reading errors
+            }
+        
+            return Path.GetFileNameWithoutExtension(filePath);
+        }
+        
+        private void PopulateNodeLogsDropdown()
+        {
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string logsDir = FindLogsDirectory(baseDir);
+        
+            if (string.IsNullOrEmpty(logsDir) || !Directory.Exists(logsDir))
+                return;
+            
+            var logFiles = Directory.GetFiles(logsDir, "*-log-*.txt")
+                .Select(f => new NodeLogFile
+                {
+                    FilePath = f,
+                    NodeId = DetermineNodeIdFromLogFile(f),
+                    LastWriteTime = File.GetLastWriteTime(f)
+                })
+                .OrderByDescending(f => f.LastWriteTime)
+                .ToList();
+            
+            cbNodeLogs.ItemsSource = logFiles;
+            if (logFiles.Any())
+            {
+                cbNodeLogs.SelectedIndex = 0;
+            }
+        }
+
+        private async void CbNodeLogs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (cbNodeLogs.SelectedItem is NodeLogFile selectedLog)
+            {
+                await _logManager.SwitchLogFileAsync(selectedLog.FilePath);
+            }
+        }
+        
         private void ApplyFilters()
         {
             if (_viewSource == null || _viewSource.View == null)
@@ -155,7 +208,7 @@ namespace VRK_WPF.MVVM.View
     
             _viewSource.View.Filter = item =>
             {
-                if (item is Model.LogEntry log)
+                if (item is LogEntry log)
                 {
                     return (string.IsNullOrWhiteSpace(searchText) || 
                             log.Message.Contains(searchText, StringComparison.OrdinalIgnoreCase) || 

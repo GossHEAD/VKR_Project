@@ -9,7 +9,6 @@ using VKR.Protos;
 
 namespace VKR_Node.Services.NodeServices;
 
-// NodeStatusService.cs
 public class NodeStatusService : INodeStatusService
 {
     private readonly ILogger<NodeStatusService> _logger;
@@ -39,7 +38,6 @@ public class NodeStatusService : INodeStatusService
 
         try
         {
-            // Add self status
             reply.Nodes.Add(new NodeStatusInfo
             {
                 NodeId = _localNodeId,

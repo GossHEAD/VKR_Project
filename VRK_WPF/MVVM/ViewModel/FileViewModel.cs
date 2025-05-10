@@ -2,15 +2,9 @@
 
 namespace VRK_WPF.MVVM.ViewModel;
 
-/// <summary>
-    /// ViewModel representing a file's metadata for display in the UI (e.g., in a ListView).
-    /// Inherits from ObservableObject for property change notifications.
-    /// </summary>
+
     public partial class FileViewModel : ObservableObject
     {
-        // Use [ObservableProperty] attribute to auto-generate boilerplate
-        // (backing field, property getter/setter, OnPropertyChanged call)
-
         [ObservableProperty]
         private string? _fileId;
 
@@ -18,7 +12,7 @@ namespace VRK_WPF.MVVM.ViewModel;
         private string? _fileName;
 
         [ObservableProperty]
-        private long _fileSize; // Use long for potentially large files
+        private long _fileSize; 
 
         [ObservableProperty]
         private DateTime _creationTime;
@@ -27,9 +21,7 @@ namespace VRK_WPF.MVVM.ViewModel;
         private string? _contentType;
 
         [ObservableProperty]
-        private string? _state; // Display state as a string (e.g., "Available", "Deleting")
-
-        // Constructor (optional, properties can be set directly)
+        private string? _state; 
         public FileViewModel() { }
 
         public FileViewModel(VKR_Core.Models.FileModel coreData)
@@ -37,9 +29,9 @@ namespace VRK_WPF.MVVM.ViewModel;
             FileId = coreData.FileId;
             FileName = coreData.FileName;
             FileSize = coreData.FileSize;
-            CreationTime = coreData.CreationTime.ToLocalTime(); // Convert to local time for display
+            CreationTime = coreData.CreationTime.ToLocalTime(); 
             ContentType = coreData.ContentType;
-            State = coreData.State.ToString(); // Convert enum to string
+            State = coreData.State.ToString(); 
         }
 
         public FileViewModel(VKR.Protos.FileMetadata protoData)

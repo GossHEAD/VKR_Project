@@ -30,10 +30,6 @@ public class ChunkStreamingHelper
         _localNodeId = localNodeId;
     }
 
-    /// <summary>
-    /// Attempts to stream a chunk from the local storage to the response stream
-    /// </summary>
-    /// <returns>True if successful, false otherwise</returns>
     public async Task<bool> TryStreamLocalChunkAsync(
         ChunkModel chunkInfo,
         IServerStreamWriter<DownloadFileReply> responseStream,
@@ -43,10 +39,8 @@ public class ChunkStreamingHelper
         
         try
         {
-            // Create a copy of the chunk info with the local node ID
             var localChunkInfo = chunkInfo with { StoredNodeId = _localNodeId };
             
-            // Retrieve the chunk data from local storage
             chunkStream = await _dataManager.RetrieveChunkAsync(localChunkInfo, context.CancellationToken);
             
             if (chunkStream == null)
@@ -55,8 +49,7 @@ public class ChunkStreamingHelper
                 return false;
             }
             
-            // Stream the chunk data in buffer-sized pieces
-            const int bufferSize = 65536; // 64KB buffer
+            const int bufferSize = 65536; 
             byte[] buffer = new byte[bufferSize];
             int bytesRead;
             
@@ -81,7 +74,6 @@ public class ChunkStreamingHelper
         }
         catch (OperationCanceledException)
         {
-            // Propagate cancellation
             _logger.LogInformation("Streaming of local Chunk {ChunkId} was cancelled", chunkInfo.ChunkId);
             throw;
         }
@@ -92,18 +84,13 @@ public class ChunkStreamingHelper
         }
         finally
         {
-            // Ensure the stream is properly disposed
             if (chunkStream != null)
             {
                 await chunkStream.DisposeAsync();
             }
         }
     }
-
-    /// <summary>
-    /// Attempts to stream a chunk from a remote node to the response stream
-    /// </summary>
-    /// <returns>True if successful, false otherwise</returns>
+    
     public async Task<bool> TryStreamRemoteChunkAsync(
         ChunkModel chunkInfo,
         KnownNodeOptions targetNodeInfo,
@@ -117,18 +104,15 @@ public class ChunkStreamingHelper
         
         try
         {
-            // Create request to fetch chunk from remote node
             var remoteRequest = new RequestChunkRequest
             {
                 FileId = chunkInfo.FileId,
                 ChunkId = chunkInfo.ChunkId
             };
             
-            // Create a timeout for the remote request
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
-            cts.CancelAfter(TimeSpan.FromSeconds(60)); // Timeout after 60 seconds
+            cts.CancelAfter(TimeSpan.FromSeconds(60)); 
             
-            // Initiate the request to the remote node
             remoteCall = await _nodeClient.RequestChunkFromNodeAsync(
                 targetNodeInfo.Address, 
                 remoteRequest, 
@@ -140,7 +124,6 @@ public class ChunkStreamingHelper
                 return false;
             }
             
-            // Stream the response data from the remote node to the client
             await foreach (var replyChunk in remoteCall.ResponseStream.ReadAllAsync(cts.Token))
             {
                 if (replyChunk.Data != null && !replyChunk.Data.IsEmpty)
@@ -200,7 +183,6 @@ public class ChunkStreamingHelper
         }
         finally
         {
-            // Ensure proper disposal of the gRPC call
             remoteCall?.Dispose();
         }
     }

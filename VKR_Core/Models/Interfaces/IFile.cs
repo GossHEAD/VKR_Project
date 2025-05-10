@@ -2,9 +2,6 @@
 
 namespace VKR_Core.Models.Interfaces;
 
-/// <summary>
-/// Defines the core properties of a file.
-/// </summary>
 public interface IFile
 {
     string FileId { get; }

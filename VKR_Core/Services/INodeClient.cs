@@ -38,21 +38,6 @@ namespace VKR_Core.Services
         Task<PingReply> PingNodeAsync(string targetNodeAddress, PingRequest request, CancellationToken cancellationToken = default); // MODIFIED: Added token parameter
 
         /// <summary>
-        /// Вызывает FindSuccessor на удаленном узле.
-        /// </summary>
-        Task<NodeModel?> FindSuccessorOnNodeAsync(NodeModel targetNode, string keyId, CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Вызывает GetPredecessor на удаленном узле.
-        /// </summary>
-        Task<NodeModel?> GetPredecessorFromNodeAsync(NodeModel targetNode, CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Вызывает Notify на удаленном узле.
-        /// </summary>
-        Task<bool> NotifyNodeAsync(NodeModel targetNode, NodeModel selfInfo, CancellationToken cancellationToken = default); // Возвращает true при успехе
-
-        /// <summary>
         /// Requests chunk data from a target node via streaming.
         /// </summary>
         /// <param name="targetNodeAddress">The address (e.g., "host:port") of the target node.</param>
