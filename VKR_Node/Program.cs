@@ -35,7 +35,10 @@ namespace VKR_Node
 
             try
             {
+                
                 var host = CreateHostBuilder(args).Build();
+                UpdateNodeIdBasedOnConfiguration(host.Services, args);
+        
                 await RunWithConfigurationValidation(host, args);
             }
             catch (Exception ex)
@@ -51,22 +54,93 @@ namespace VKR_Node
             }
         }
         
+        private static void UpdateLoggerNodeId(string nodeId)
+        {
+            try
+            {
+                string logsDirectory = Path.Combine(AppContext.BaseDirectory, "Logs");
+                string logFilePath = Path.Combine(logsDirectory, $"{nodeId}-log-.txt");
+        
+                Log.CloseAndFlush();
+        
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Debug()
+                    .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+                    .Enrich.FromLogContext()
+                    .Enrich.WithProperty("NodeId", nodeId)
+                    .WriteTo.Console()
+                    .WriteTo.File(
+                        logFilePath,
+                        rollingInterval: RollingInterval.Infinite, 
+                        retainedFileCountLimit: 31,
+                        fileSizeLimitBytes: 10 * 1024 * 1024, 
+                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                    .CreateLogger();
+        
+                Log.Information("Log file updated for Node ID: {NodeId}, Log file: {LogFile}", 
+                    nodeId, Path.GetFileName(logFilePath));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating logger Node ID: {ex.Message}");
+            }
+        }
+        
+        
+        
+        private static void UpdateNodeIdBasedOnConfiguration(IServiceProvider services, string[] args)
+        {
+            try
+            {
+                using var scope = services.CreateScope();
+                var nodeOptions = scope.ServiceProvider.GetService<IOptions<NodeIdentityOptions>>();
+        
+                if (nodeOptions?.Value?.NodeId != null)
+                {
+                    LoggingConfiguration.UpdateNodeIdInLogger(nodeOptions.Value.NodeId);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to update NodeId in logger from configuration");
+            }
+        }
+        
         private static void ConfigureSerilog(string[] args)
         {
-            string logsDirectory = Path.Combine(AppContext.BaseDirectory, "Logs");
-            Directory.CreateDirectory(logsDirectory); 
-        
-            string nodeId = "node";
+            string nodeId = "Node1"; 
+            
+            
             for (int i = 0; i < args.Length - 1; i++)
             {
                 if (args[i].Equals("--NodeId", StringComparison.OrdinalIgnoreCase) || 
-                    args[i].Equals("--Identity:NodeId", StringComparison.OrdinalIgnoreCase))
+                    args[i].Equals("--Identity:NodeId", StringComparison.OrdinalIgnoreCase) ||
+                    args[i].Equals("--DistributedStorage:Identity:NodeId", StringComparison.OrdinalIgnoreCase))
                 {
                     nodeId = args[i + 1];
                     break;
                 }
+                
+                // Handle format with equals sign
+                if (args[i].StartsWith("--NodeId=", StringComparison.OrdinalIgnoreCase) ||
+                    args[i].StartsWith("--Identity:NodeId=", StringComparison.OrdinalIgnoreCase) ||
+                    args[i].StartsWith("--DistributedStorage:Identity:NodeId=", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parts = args[i].Split('=', 2);
+                    if (parts.Length == 2 && !string.IsNullOrEmpty(parts[1]))
+                    {
+                        nodeId = parts[1];
+                        break;
+                    }
+                }
             }
-        
+
+            
+            string logsDirectory = Path.Combine(AppContext.BaseDirectory, "Logs");
+            Directory.CreateDirectory(logsDirectory);
+            
+            string logFilePath = Path.Combine(logsDirectory, $"{nodeId}-log-.txt");
+            
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
                 .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
@@ -74,15 +148,17 @@ namespace VKR_Node
                 .Enrich.WithProperty("NodeId", nodeId)
                 .WriteTo.Console()
                 .WriteTo.File(
-                    Path.Combine(logsDirectory, $"{nodeId}-log-.txt"),
-                    rollingInterval: RollingInterval.Day,
+                    logFilePath,
+                    rollingInterval: RollingInterval.Infinite, // Don't add date to filename
                     retainedFileCountLimit: 31,
                     fileSizeLimitBytes: 10 * 1024 * 1024, 
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
-        
-            Log.Information("Logging initialized. Log files will be saved to: {LogDirectory}", logsDirectory);
+            
+            Log.Information("Logging initialized. Node ID: {NodeId}, Log files will be saved to: {LogDirectory}/{LogFile}", 
+                nodeId, logsDirectory, Path.GetFileName(logFilePath));
         }
+
 
         private static async Task RunWithConfigurationValidation(IHost host, string[] args)
         {
@@ -93,10 +169,14 @@ namespace VKR_Node
 
                 try
                 {
+                    var nodeOptions = scope.ServiceProvider.GetRequiredService<IOptions<NodeIdentityOptions>>().Value;
+                    string nodeId = nodeOptions.NodeId ?? "Unknown";
+            
+                    UpdateLoggerNodeId(nodeId);
+            
                     await LogConfigurationDetails(scope.ServiceProvider, logger);
-
                     await InitializeDatabaseAndServices(scope.ServiceProvider, logger);
-
+            
                     logger.LogInformation("Starting application host...");
                     await host.RunAsync();
                     logger.LogInformation("Application host stopped.");

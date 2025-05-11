@@ -1,5 +1,9 @@
-﻿using System.Windows;
+﻿using System.ComponentModel;
+using System.Diagnostics;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 using VKR_Core.Enums;
 using VRK_WPF.MVVM.Services;
@@ -9,6 +13,9 @@ namespace VRK_WPF.MVVM.View
 {
     public partial class MainWindow : Window
     {
+        private NodeConfigurationManager _nodeConfigManager;
+        private NodeProcessManager _nodeProcessManager;
+        
         public MainWindow()
         {
             InitializeComponent();
@@ -35,6 +42,7 @@ namespace VRK_WPF.MVVM.View
                 };
         
                 ConfigureUIBasedOnUserRole();
+                InitializeNodeManager();
             }
             catch (Exception ex)
             {
@@ -179,36 +187,138 @@ namespace VRK_WPF.MVVM.View
             }
         }
         
-        private void ShowPage(Page page)
+        private void InitializeNodeManager()
         {
-            Window window = new Window
-            {
-                Title = page.Title,
-                Content = page,
-                Width = 650,
-                Height = 550,
-                WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                ResizeMode = ResizeMode.CanResize,
-                SizeToContent = SizeToContent.Manual,
-                Owner = this 
-            };
+            _nodeConfigManager = new NodeConfigurationManager();
+            _nodeProcessManager = new NodeProcessManager(_nodeConfigManager);
             
-            window.ShowDialog();
+            _nodeProcessManager.NodeOutputReceived += NodeProcess_OutputReceived;
+            _nodeProcessManager.NodeErrorReceived += NodeProcess_ErrorReceived;
+            _nodeProcessManager.NodeExited += NodeProcess_Exited;
+            
+            UpdateNodeStatusUI();
+            PopulateConfigDropdown();
         }
-        
-        public void HandleMenuActions(string action)
+
+        private void PopulateConfigDropdown()
         {
-            switch (action)
+            var configs = _nodeConfigManager.GetAvailableConfigs();
+            cmbNodeConfigs.ItemsSource = configs;
+            
+            // Select current config
+            var currentConfig = configs.FirstOrDefault(c => c.IsCurrentNode);
+            if (currentConfig != null)
             {
-                case "OpenDocumentation":
-                    ShowDocumentation();
-                    break;
-                case "OpenAbout":
-                    ShowAbout();
-                    break;
-                default:
-                    break;
+                cmbNodeConfigs.SelectedItem = currentConfig;
             }
+        }
+
+        private void UpdateNodeStatusUI()
+        {
+            bool isRunning = _nodeProcessManager.IsNodeRunning;
+            
+            cmbNodeConfigs.Text = isRunning ? "Running" : "Not running";
+            cmbNodeConfigs.Foreground = isRunning ? Brushes.Green : Brushes.Red;
+            
+            btnStartNode.IsEnabled = !isRunning;
+            btnStopNode.IsEnabled = isRunning;
+            
+            txtNodeId.Text = _nodeConfigManager.CurrentNodeId;
+        }
+
+        private void NodeProcess_OutputReceived(object sender, string data)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                txtNodeOutput.AppendText(data + Environment.NewLine);
+                txtNodeOutput.ScrollToEnd();
+            });
+        }
+
+        private void NodeProcess_ErrorReceived(object sender, string data)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                txtNodeOutput.AppendText($"ERROR: {data}" + Environment.NewLine);
+                txtNodeOutput.ScrollToEnd();
+            });
+        }
+
+        private void NodeProcess_Exited(object sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                txtNodeOutput.AppendText("Node process has exited." + Environment.NewLine);
+                UpdateNodeStatusUI();
+            });
+        }
+
+        private void BtnStartNode_Click(object sender, RoutedEventArgs e)
+        {
+            if (_nodeProcessManager.StartNode())
+            {
+                txtNodeStatusBar.Text = "Node started successfully";
+                UpdateNodeStatusUI();
+            }
+            else
+            {
+                txtNodeStatusBar.Text = "Failed to start node";
+            }
+        }
+
+        private void BtnStopNode_Click(object sender, RoutedEventArgs e)
+        {
+            _nodeProcessManager.StopNode();
+            txtNodeStatusBar.Text = "Node stopped";
+            UpdateNodeStatusUI();
+        }
+
+        private void CmbNodeConfigs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (cmbNodeConfigs.SelectedItem is NodeConfig config)
+            {
+                _nodeConfigManager.SetCurrentConfig(config.ConfigPath);
+                txtNodeId.Text = _nodeConfigManager.CurrentNodeId;
+                txtNodeStatusBar.Text = $"Selected config: {config.NodeId}";
+            }
+        }
+
+        private void BtnCreateConfig_Click(object sender, RoutedEventArgs e)
+        {
+            string configPath = _nodeConfigManager.CreateDefaultConfig();
+            txtNodeStatusBar.Text = $"Created new config: {configPath}";
+            PopulateConfigDropdown();
+        }
+
+        private void BtnEditConfig_Click(object sender, RoutedEventArgs e)
+        {
+            if (cmbNodeConfigs.SelectedItem is NodeConfig config)
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = config.ConfigPath,
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error opening config file: {ex.Message}", "Error", 
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            // Stop node process when application closes
+            if (_nodeProcessManager.IsNodeRunning)
+            {
+                _nodeProcessManager.StopNode();
+            }
+            
+            base.OnClosing(e);
         }
     }
 }
