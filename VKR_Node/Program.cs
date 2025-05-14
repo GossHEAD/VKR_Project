@@ -121,7 +121,6 @@ namespace VKR_Node
                     break;
                 }
                 
-                // Handle format with equals sign
                 if (args[i].StartsWith("--NodeId=", StringComparison.OrdinalIgnoreCase) ||
                     args[i].StartsWith("--Identity:NodeId=", StringComparison.OrdinalIgnoreCase) ||
                     args[i].StartsWith("--DistributedStorage:Identity:NodeId=", StringComparison.OrdinalIgnoreCase))
@@ -149,7 +148,7 @@ namespace VKR_Node
                 .WriteTo.Console()
                 .WriteTo.File(
                     logFilePath,
-                    rollingInterval: RollingInterval.Infinite, // Don't add date to filename
+                    rollingInterval: RollingInterval.Infinite, 
                     retainedFileCountLimit: 31,
                     fileSizeLimitBytes: 10 * 1024 * 1024, 
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")

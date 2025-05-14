@@ -114,10 +114,8 @@ namespace VKR_Node.Configuration
             
             string nodeId = ExtractNodeIdFromArgs(args, configuration);
             
-            // Create a fixed log file path without rolling interval in the name
             string logFilePath = Path.Combine(logsDirectory, $"{nodeId}-log.txt");
             
-            // Create date-based filename for historical logs
             string currentDate = DateTime.Now.ToString("yyyyMMdd");
             string dateLogFilePath = Path.Combine(logsDirectory, $"{nodeId}-log-{currentDate}.txt");
             
@@ -127,19 +125,18 @@ namespace VKR_Node.Configuration
                 .Enrich.FromLogContext()
                 .Enrich.WithProperty("NodeId", nodeId)
                 .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{NodeId}] {Message:lj}{NewLine}{Exception}")
-                // Main log file with consistent name
                 .WriteTo.File(
                     logFilePath,
-                    rollingInterval: RollingInterval.Infinite,  // Don't add date to main filename
-                    retainedFileCountLimit: 1,  // Only keep the most recent version
+                    rollingInterval: RollingInterval.Infinite,  
+                    retainedFileCountLimit: 1,  
                     fileSizeLimitBytes: 10 * 1024 * 1024,
                     rollOnFileSizeLimit: true,
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-                // Date-based historical log
+                
                 .WriteTo.File(
                     dateLogFilePath,
-                    rollingInterval: RollingInterval.Infinite,  // We've already included the date in the filename
-                    retainedFileCountLimit: 31,  // Keep a month of logs
+                    rollingInterval: RollingInterval.Infinite,  
+                    retainedFileCountLimit: 31,  
                     fileSizeLimitBytes: 10 * 1024 * 1024,
                     rollOnFileSizeLimit: true,
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}");
@@ -150,7 +147,6 @@ namespace VKR_Node.Configuration
                 nodeId, logsDirectory);
         }
         
-        // Rest of methods remain the same
         private static string GetLogsDirectory()
         {
             string baseDir = AppContext.BaseDirectory;

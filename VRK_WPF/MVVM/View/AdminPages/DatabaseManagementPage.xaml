@@ -3,7 +3,6 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-      xmlns:local="clr-namespace:VRK_WPF.MVVM.View.AdminPages"
       xmlns:converters="clr-namespace:VRK_WPF.MVVM.Converters"
       mc:Ignorable="d" 
       d:DesignHeight="600" d:DesignWidth="800"
@@ -29,82 +28,104 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         
-        <!-- Header -->
+        <!-- Header and Node Selection -->
         <Grid Grid.Row="0" Margin="10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             
-            <StackPanel Grid.Column="0" Orientation="Horizontal">
+            <StackPanel Grid.Column="0">
                 <TextBlock Text="Управление базой данных" Style="{StaticResource HeaderTextStyle}"/>
+                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                    <TextBlock Text="Узел:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <ComboBox ItemsSource="{Binding AvailableNodeDatabases}" 
+                              SelectedItem="{Binding SelectedNodeDatabase}" 
+                              MinWidth="250"
+                              Margin="0,0,10,0"
+                              DisplayMemberPath="NodeId"/>
+                    <Button Content="Обновить список" 
+                            Command="{Binding RefreshNodeListCommand}"
+                            Style="{StaticResource ActionButtonStyle}"/>
+                    <Button Content="Открыть БД..." 
+                            Command="{Binding OpenDatabaseCommand}"
+                            Style="{StaticResource ActionButtonStyle}"/>
+                    <Button Content="Резервное копирование" 
+                            Command="{Binding BackupDatabaseCommand}"
+                            Style="{StaticResource ActionButtonStyle}"
+                            IsEnabled="{Binding CanBackupDatabase}"/>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+        
+        <!-- Table Selection and Controls -->
+        <Grid Grid.Row="1" Margin="10,0,10,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Text="Таблица:" VerticalAlignment="Center" Margin="0,0,5,0"/>
                 <ComboBox ItemsSource="{Binding AvailableTables}" 
                           SelectedItem="{Binding SelectedTable}" 
                           DisplayMemberPath="DisplayName"
-                          Margin="15,0,0,0" 
-                          Width="200"
-                          VerticalAlignment="Center"/>
+                          MinWidth="150"/>
+                <TextBlock Text="Поиск:" VerticalAlignment="Center" Margin="15,0,5,0"/>
+                <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" 
+                         Width="250" 
+                         VerticalAlignment="Center"/>
             </StackPanel>
             
             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <Button Content="Восстановление базы данных" 
-                        Command="{Binding BackupDatabaseCommand}"
-                        Style="{StaticResource ActionButtonStyle}"/>
+                <Button Content="Обновить" 
+                        Command="{Binding RefreshDataCommand}"
+                        Style="{StaticResource ActionButtonStyle}"
+                        IsEnabled="{Binding CanRefreshData}"/>
+                <Button Content="Добавить" 
+                        Command="{Binding AddRowCommand}"
+                        Style="{StaticResource ActionButtonStyle}"
+                        IsEnabled="{Binding CanAddRow}"/>
+                <Button Content="Сохранить" 
+                        Command="{Binding SaveChangesCommand}"
+                        Style="{StaticResource ActionButtonStyle}" 
+                        IsEnabled="{Binding CanSaveChanges}"/>
+                <Button Content="Удалить" 
+                        Command="{Binding DeleteRowCommand}"
+                        Style="{StaticResource ActionButtonStyle}"
+                        Background="IndianRed" 
+                        Foreground="White"
+                        IsEnabled="{Binding CanDeleteRow}"/>
             </StackPanel>
         </Grid>
         
-        <!-- Main Content -->
-        <Grid Grid.Row="1" Margin="10,0,10,10">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            
-            <!-- Table Tools -->
-            <Grid Grid.Row="0" Margin="0,0,0,10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                
-                <!-- Search box -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="Поиск:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                    <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" 
-                             Width="250" 
-                             VerticalAlignment="Center"/>
-                </StackPanel>
-                
-                <!-- Control buttons -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button Content="Обновить" 
-                            Command="{Binding RefreshDataCommand}"
-                            Style="{StaticResource ActionButtonStyle}"
-                            IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBool}}"/>
-                    <Button Content="Добавить новую" 
-                            Command="{Binding AddRowCommand}"
-                            Style="{StaticResource ActionButtonStyle}"
-                            IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBool}}"/>
-                    <Button Content="Сохранить изменения" 
-                            Command="{Binding SaveChangesCommand}"
-                            Style="{StaticResource ActionButtonStyle}" 
-                            IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBool}}"/>
-                    <Button Content="Удалить" 
-                            Command="{Binding DeleteRowCommand}"
-                            Style="{StaticResource ActionButtonStyle}"
-                            Background="IndianRed" 
-                            Foreground="White"
-                            IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBool}}"/>
-                </StackPanel>
-            </Grid>
-        </Grid>
+        <!-- Data Grid -->
+        <DataGrid Grid.Row="2" 
+                  ItemsSource="{Binding TableData}" 
+                  SelectedItem="{Binding SelectedRow}"
+                  AutoGenerateColumns="True"
+                  IsReadOnly="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  CanUserReorderColumns="True"
+                  CanUserResizeColumns="True"
+                  CanUserSortColumns="True"
+                  AlternatingRowBackground="#F5F5F5"
+                  BorderThickness="1"
+                  BorderBrush="#DDDDDD"
+                  HorizontalGridLinesBrush="#EEEEEE"
+                  VerticalGridLinesBrush="#EEEEEE"
+                  IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBool}}"
+                  HeadersVisibility="All"
+                  Margin="10,0,10,10"/>
         
         <!-- Status Bar -->
-        <StatusBar Grid.Row="2" Background="#F5F5F5">
+        <StatusBar Grid.Row="3" Background="#F5F5F5">
             <StatusBarItem>
                 <TextBlock Text="{Binding StatusMessage}"/>
             </StatusBarItem>
@@ -115,5 +136,21 @@
                              Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}"/>
             </StatusBarItem>
         </StatusBar>
+        
+        <!-- Loading overlay -->
+        <Grid Grid.Row="0" Grid.RowSpan="4" 
+              Background="#80000000" 
+              Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="Пожалуйста, подождите..." 
+                           Foreground="White" 
+                           FontSize="16" 
+                           HorizontalAlignment="Center" 
+                           Margin="0,0,0,10"/>
+                <ProgressBar IsIndeterminate="True" 
+                             Width="200" 
+                             Height="15"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Page>

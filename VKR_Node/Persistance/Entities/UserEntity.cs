@@ -16,8 +16,7 @@ public class UserEntity
     [MaxLength(100)]
     public required string Username { get; set; }
 
-    [Required]
-    public required string PasswordHash { get; set; } 
+    public string PasswordHash { get; set; } 
 
     [Required]
     public UserRole Role { get; set; } = UserRole.ITSpecialist;

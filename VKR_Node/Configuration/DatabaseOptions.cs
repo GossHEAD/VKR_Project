@@ -9,8 +9,15 @@ namespace VKR_Node.Configuration
         
         public string? ConnectionString { get; set; }
         
-        public bool HasExplicitConnectionString => !string.IsNullOrWhiteSpace(ConnectionString);
-        
+        public bool HasExplicitConnectionString
+        {
+            get => !string.IsNullOrWhiteSpace(ConnectionString);
+            set
+            {
+                var hasExplicitConnectionString = HasExplicitConnectionString;
+            }
+        }
+
         public bool AutoMigrate { get; set; } = true;
         
         public bool BackupBeforeMigration { get; set; } = true;

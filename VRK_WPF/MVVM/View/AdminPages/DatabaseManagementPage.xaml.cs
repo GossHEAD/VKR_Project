@@ -12,5 +12,12 @@ public partial class DatabaseManagementPage : Page
         InitializeComponent();
         _viewModel = new DatabaseManagementViewModel();
         DataContext = _viewModel;
+            
+        Unloaded += DatabaseManagementPage_Unloaded;
+    }
+        
+    private void DatabaseManagementPage_Unloaded(object sender, System.Windows.RoutedEventArgs e)
+    {
+        _viewModel.Dispose();
     }
 }

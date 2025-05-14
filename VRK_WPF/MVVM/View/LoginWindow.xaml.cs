@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using VRK_WPF.MVVM.Services;
 using VRK_WPF.MVVM.ViewModel;
 
 namespace VRK_WPF.MVVM.View
@@ -15,12 +16,23 @@ namespace VRK_WPF.MVVM.View
         {
             InitializeComponent();
             _viewModel = new LoginWindowViewModel();
+            DataContext = _viewModel;
             
-            _viewModel.LoginSucceeded += (s, e) => {
-                LoginSucceeded?.Invoke(this, EventArgs.Empty);
+            _viewModel.LoginSucceeded += (sender, e) =>
+            {
+                if (AuthService.CurrentUser != null)
+                {
+                    LoginSucceeded?.Invoke(this, new LoginEventArgs(
+                        AuthService.CurrentUser.Username,
+                        AuthService.CurrentUser.Role));
+                }
+            
+                if (_viewModel.LoginSuccessful)
+                {
+                    DialogResult = true;
+                }
             };
             
-            DataContext = _viewModel;
             
             Loaded += (s, e) => {
                 UsernameTextBox.Focus();
@@ -37,6 +49,18 @@ namespace VRK_WPF.MVVM.View
             _viewModel.LoginSucceeded -= OnLoginSucceeded;
             
             base.OnClosed(e);
+        }
+    }
+    
+    public class LoginEventArgs : EventArgs
+    {
+        public string Username { get; set; } = string.Empty;
+        public VKR_Core.Enums.UserRole Role { get; set; }
+    
+        public LoginEventArgs(string username, VKR_Core.Enums.UserRole role)
+        {
+            Username = username;
+            Role = role;
         }
     }
 }

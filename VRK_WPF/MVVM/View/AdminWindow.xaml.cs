@@ -12,70 +12,83 @@ namespace VRK_WPF.MVVM.View
     {
         private readonly AdminWindowViewModel _viewModel;
         
-        //private readonly NodeStatusPage _nodeStatusPage;
-        private readonly DatabaseManagementPage _databaseManagementPage;
-        private readonly NodeConfigPage _nodeConfigPage;
-        private readonly LogViewerPage _logViewerPage;
+        private DatabaseManagementPage _databaseManagementPage;
+        private NodeConfigPage _nodeConfigPage;
+        private LogViewerPage _logViewerPage;
+        private bool _isInitialized = false;
         
         public AdminWindow()
         {
             InitializeComponent();
             
-            // Check if user is authorized as admin
-            //if (AuthService.CurrentUser == null || !AuthService.HasRole(Model.UserRole.Administrator))
+            if (AuthService.CurrentUser == null || 
+                !AuthService.HasRole(VKR_Core.Enums.UserRole.Administrator))
             {
                 MessageBox.Show("Для доступа к административной панели необходимы права администратора.",
-                                "Доступ запрещен", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    "Доступ запрещен", MessageBoxButton.OK, MessageBoxImage.Warning);
                 Close();
                 return;
             }
             
-            // Create and store pages
-            //_nodeStatusPage = new NodeStatusPage();
-            _databaseManagementPage = new DatabaseManagementPage();
-            _nodeConfigPage = new NodeConfigPage();
-            _logViewerPage = new LogViewerPage();
-            
-            // Initialize ViewModel
             _viewModel = new AdminWindowViewModel();
             DataContext = _viewModel;
             
-            // Set initial page
-            //AdminContentFrame.Content = _nodeStatusPage;
-            
-            // Subscribe to window events
             Loaded += AdminWindow_Loaded;
             Closing += AdminWindow_Closing;
         }
         
         private void AdminWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // Initial setup after window is loaded
             Title = $"Административная панель - {AuthService.CurrentUser?.FullName ?? "Неизвестный пользователь"}";
+            
+            InitializePages();
+            
+            // Set initial page
+            AdminContentFrame.Content = _nodeConfigPage;
+            
+            _isInitialized = true;
         }
         
         private void AdminWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            // Cleanup resources if needed
+        }
+        
+        private void InitializePages()
+        {
+            _databaseManagementPage = new DatabaseManagementPage();
+            _nodeConfigPage = new NodeConfigPage();
+            _logViewerPage = new LogViewerPage();
         }
         
         private void NavMenu_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (NavMenu.SelectedItem == null) return;
+            // Skip if not initialized or NavMenu selection is null
+            if (!_isInitialized || NavMenu.SelectedItem == null) 
+                return;
+            
+            // Make sure pages are initialized
+            if (_databaseManagementPage == null || _nodeConfigPage == null || _logViewerPage == null)
+            {
+                InitializePages();
+            }
             
             switch (NavMenu.SelectedIndex)
             {
-                case 0:
-                    //AdminContentFrame.Content = _nodeStatusPage;
-                    break;
-                case 1:
-                    AdminContentFrame.Content = _databaseManagementPage;
-                    break;
-                case 2:
+                case 0: // Node Status
                     AdminContentFrame.Content = _nodeConfigPage;
                     break;
-                case 3:
+                case 1: // Database Management
+                    AdminContentFrame.Content = _databaseManagementPage;
+                    break;
+                case 2: // Node Configuration
+                    AdminContentFrame.Content = _nodeConfigPage;
+                    break;
+                case 3: // Logs
                     AdminContentFrame.Content = _logViewerPage;
+                    break;
+                case 4:
+                    MessageBox.Show("Simulation functionality not yet implemented.", 
+                        "Not Implemented", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
                 default:
                     break;
