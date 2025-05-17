@@ -115,7 +115,7 @@
                         <ListBoxItem>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="📊" FontSize="16" Margin="0,0,10,0"/>
-                                <TextBlock Text="Статус узла" VerticalAlignment="Center"/>
+                                <TextBlock Text="Статус узлов" VerticalAlignment="Center"/>
                             </StackPanel>
                         </ListBoxItem>
                         <ListBoxItem>
@@ -127,19 +127,13 @@
                         <ListBoxItem>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="⚙️" FontSize="16" Margin="0,0,10,0"/>
-                                <TextBlock Text="Конфигурация" VerticalAlignment="Center"/>
+                                <TextBlock Text="Управление конфигурациями" VerticalAlignment="Center"/>
                             </StackPanel>
                         </ListBoxItem>
                         <ListBoxItem>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="📝" FontSize="16" Margin="0,0,10,0"/>
-                                <TextBlock Text="Журнал событий" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </ListBoxItem>
-                        <ListBoxItem>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="🔄" FontSize="16" Margin="0,0,10,0"/>
-                                <TextBlock Text="Симуляция" VerticalAlignment="Center"/>
+                                <TextBlock Text="Журналы событий" VerticalAlignment="Center"/>
                             </StackPanel>
                         </ListBoxItem>
                     </ListBox>

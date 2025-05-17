@@ -441,6 +441,9 @@ namespace VKR_Node.Services.FileService
                 return;
             }
 
+            var replicationTasks = new List<Task<bool>>();
+            var successfulReplications = new ConcurrentBag<string>();
+
             foreach (var targetNode in targetReplicaNodes)
             {
                 if (string.IsNullOrEmpty(targetNode.Address))
@@ -448,50 +451,93 @@ namespace VKR_Node.Services.FileService
                     continue;
                 }
 
-                var replicateRequest = new ReplicateChunkRequest
-                {
-                    FileId = chunkInfo.FileId,
-                    ChunkId = chunkInfo.ChunkId,
-                    ChunkIndex = chunkInfo.ChunkIndex,
-                    Data = chunkProto.Data,
-                    OriginalNodeId = _localNodeId,
-                    
-                    ParentFileMetadata = _mapper.Map<FileMetadata>(partialFileModel)
-                };
-
-                
-                _ = Task.Run(async () =>
+                var replicationTask = Task.Run(async () =>
                 {
                     try
                     {
-                        _logger.LogDebug("Replicating Chunk {Id} to Node {TargetId} ({Addr})",
+                        _logger.LogDebug("Replicating Chunk {ChunkId} to Node {TargetId} ({Addr})",
                             chunkInfo.ChunkId, targetNode.NodeId, targetNode.Address);
 
-                        
+                        var replicateRequest = new ReplicateChunkRequest
+                        {
+                            FileId = chunkInfo.FileId,
+                            ChunkId = chunkInfo.ChunkId,
+                            ChunkIndex = chunkInfo.ChunkIndex,
+                            Data = chunkProto.Data,
+                            OriginalNodeId = _localNodeId,
+                            ParentFileMetadata = _mapper.Map<FileMetadata>(partialFileModel)
+                        };
+
                         var reply = await _nodeClient.ReplicateChunkToNodeAsync(
                             targetNode.Address,
                             replicateRequest,
-                            CancellationToken.None);
+                            cancellationToken);
 
-                        if (!reply.Success)
+                        if (reply.Success)
                         {
-                            _logger.LogWarning("Replication call for chunk {Id} to {Addr} failed: {Msg}",
-                                chunkInfo.ChunkId, targetNode.Address, reply.Message);
+                            successfulReplications.Add(targetNode.NodeId);
+                            _logger.LogInformation(
+                                "Replication call for chunk {ChunkId} to {NodeId} completed successfully",
+                                chunkInfo.ChunkId, targetNode.NodeId);
+                            return true;
                         }
                         else
                         {
-                            _logger.LogInformation("Replication call for chunk {Id} to {Addr} completed.",
-                                chunkInfo.ChunkId, targetNode.Address);
+                            _logger.LogWarning("Replication call for chunk {ChunkId} to {NodeId} failed: {Msg}",
+                                chunkInfo.ChunkId, targetNode.NodeId, reply.Message);
+                            return false;
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Exception in background replication task for chunk {Id} to {Addr}.",
-                            chunkInfo.ChunkId, targetNode.Address);
+                        _logger.LogError(ex, "Exception in replication for chunk {ChunkId} to {NodeId}",
+                            chunkInfo.ChunkId, targetNode.NodeId);
+                        return false;
+                    }
+                }, cancellationToken);
+
+                replicationTasks.Add(replicationTask);
+            }
+
+            await Task.WhenAll(replicationTasks);
+
+            if (successfulReplications.Any())
+            {
+                var allStorageNodes = new List<string> { _localNodeId };
+                allStorageNodes.AddRange(successfulReplications);
+
+                await _metadataManager.UpdateChunkStorageNodesAsync(
+                    chunkInfo.FileId,
+                    chunkInfo.ChunkId,
+                    allStorageNodes,
+                    cancellationToken);
+
+                _logger.LogInformation("Updated storage nodes for Chunk {ChunkId}. Added {Count} replicas.",
+                    chunkInfo.ChunkId, successfulReplications.Count);
+            }
+            else if (replicasNeeded > 0)
+            {
+                _logger.LogWarning("Failed to replicate Chunk {ChunkId} to any nodes. Will retry in background.",
+                    chunkInfo.ChunkId);
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _replicationManager.EnsureChunkReplicationAsync(
+                            chunkInfo.FileId,
+                            chunkInfo.ChunkId,
+                            CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Background replication retry for Chunk {ChunkId} failed",
+                            chunkInfo.ChunkId);
                     }
                 });
             }
         }
+
 
         private async Task HandleUploadErrorAsync(string? fileId, CancellationToken cancellationToken)
         {
@@ -763,10 +809,18 @@ namespace VKR_Node.Services.FileService
                 }
 
                 _logger.LogWarning("Failed local stream for Chunk {Id}. Trying remote.", chunkInfo.ChunkId);
+                storageNodes.Remove(_localNodeId);
             }
 
             
-            var remoteNodeIds = storageNodes.Where(id => id != _localNodeId).ToList();
+            //var remoteNodeIds = storageNodes.Where(id => id != _localNodeId).ToList();
+            var remoteNodeIds = storageNodes.ToList();
+            if (!remoteNodeIds.Any())
+            {
+                _logger.LogError("No valid storage nodes found for Chunk {ChunkId}", chunkInfo.ChunkId);
+                return false;
+            }
+            remoteNodeIds = remoteNodeIds.OrderBy(_ => Guid.NewGuid()).ToList();
 
             _logger.LogTrace("Attempting remote stream for Chunk {Id} from nodes: {Nodes}",
                 chunkInfo.ChunkId, string.Join(",", remoteNodeIds));

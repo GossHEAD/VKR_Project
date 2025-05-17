@@ -36,7 +36,7 @@ namespace VRK_WPF.MVVM.ViewModel
         private bool _isProcessing;
         
         [ObservableProperty]
-        private string _selectedTable = "Files";
+        private string _selectedTable = "Файлы";
         
         [ObservableProperty]
         private string _nodeStatus = "Не подключено";
@@ -45,10 +45,10 @@ namespace VRK_WPF.MVVM.ViewModel
         private double _cpuUsage;
         
         [ObservableProperty]
-        private string _memoryUsage = "N/A";
+        private string _memoryUsage = "Н/Д";
         
         [ObservableProperty]
-        private string _diskSpace = "N/A";
+        private string _diskSpace = "Н/Д";
         
         public AdminWindowViewModel(ILogger<AdminWindowViewModel>? logger = null)
         {
@@ -211,14 +211,11 @@ namespace VRK_WPF.MVVM.ViewModel
         
         private void Logout()
         {
-            
             _currentChannel?.Dispose();
             _currentChannel = null;
             _storageClient = null;
             
-            
             AuthService.Logout();
-            
             
             foreach (Window window in Application.Current.Windows)
             {
@@ -226,10 +223,8 @@ namespace VRK_WPF.MVVM.ViewModel
                 {
                     window.Close();
                     
-                    
                     var loginWindow = new LoginWindow();
                     loginWindow.Show();
-                    
                     
                     if (loginWindow.DialogResult != true)
                     {
@@ -237,7 +232,6 @@ namespace VRK_WPF.MVVM.ViewModel
                     }
                     else
                     {
-                        
                         var mainWindow = new MainWindow();
                         mainWindow.Show();
                     }

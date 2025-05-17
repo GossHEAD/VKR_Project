@@ -18,7 +18,6 @@ public partial class NodeViewModel : ObservableObject
     
     [ObservableProperty]
     private bool _isSelected;
-
    
     public NodeViewModel(string nodeId, string address, string status = "Unknown", string statusDetails = "")
     {
@@ -27,7 +26,6 @@ public partial class NodeViewModel : ObservableObject
         _status = status;
         _statusDetails = statusDetails;
     }
-
    
     public NodeViewModel() {
         _nodeId = "DesignTime Node";
@@ -35,8 +33,7 @@ public partial class NodeViewModel : ObservableObject
         _status = "DesignTime Status";
         _statusDetails = "DesignTime Details";
     }
-
-   
+    
     public override string ToString()
     {
         return $"Node: {NodeId ?? "N/A"} ({Address ?? "N/A"}) - Status: {Status ?? "N/A"}";
@@ -44,7 +41,6 @@ public partial class NodeViewModel : ObservableObject
     
     partial void OnIsSelectedChanged(bool value)
     {
-       
-        // We need to notify the parent view model
+        
     }
 }

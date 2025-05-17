@@ -6,14 +6,14 @@ namespace VRK_WPF.MVVM.ViewModel;
 public partial class SimulationFileStatusViewModel  : ObservableObject
 {
     [ObservableProperty]
-    private string _fileName;
+    private string? _fileName;
     
     [ObservableProperty]
-    private string _availability;
+    private string? _availability;
     
     [ObservableProperty]
-    private string _replicationStatus;
+    private string? _replicationStatus;
     
     [ObservableProperty]
-    private Brush _statusColor;
+    private Brush? _statusColor;
 }

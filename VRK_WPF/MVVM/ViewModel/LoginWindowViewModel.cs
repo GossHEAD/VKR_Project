@@ -48,7 +48,7 @@ namespace VRK_WPF.MVVM.ViewModel
                     var currentUser = AuthService.CurrentUser;
                     if (currentUser != null)
                     {
-                        System.Diagnostics.Debug.WriteLine($"User logged in: {currentUser.Username} (Role: {currentUser.Role})");
+                        System.Diagnostics.Debug.WriteLine($"Пользователь авторизован: {currentUser.Username} (Роль: {currentUser.Role})");
                     }
                     
                     LoginSucceeded?.Invoke(this, EventArgs.Empty);

@@ -14,8 +14,6 @@ using VKR.Protos;
 
 namespace VKR_Node.Services;
 
-// --- gRPC Service---
-// Наследуются от сгенерированных баз и реализуют методы API
 public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBase
 {
     private readonly ILogger<NodeInternalServiceImpl> _logger;
@@ -24,6 +22,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
     private readonly INodeClient _nodeClient;
     private readonly NodeIdentityOptions _nodeOptions;
     private readonly IMapper _mapper;
+    private readonly IReplicationManager _replicationManager;
 
     private readonly ConcurrentDictionary<string, (long Count, long TotalMs)> _methodMetrics = new();
     public NodeInternalServiceImpl(
@@ -32,7 +31,8 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         IDataManager dataManager,
         INodeClient nodeClient,
         IOptions<NodeIdentityOptions> nodeOptions,
-        IMapper mapper)
+        IMapper mapper,
+        IReplicationManager replicationManager)
     {
         _logger = logger;
         _metadataManager = metadataManager;
@@ -40,6 +40,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         _nodeClient = nodeClient;
         _nodeOptions = nodeOptions.Value;
         _mapper = mapper;
+        _replicationManager = replicationManager;
     }
    
     private void RecordMetric(string methodName, long elapsedMs)
@@ -110,6 +111,27 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
             if (!success)
             {
                 return new ReplicateChunkReply { Success = false, Message = "Failed to store chunk data or metadata" };
+            }
+            
+            if (success)
+            {
+                _ = Task.Run(async () => {
+                    try
+                    {
+                        await Task.Delay(1000);
+                    
+                        await _replicationManager.EnsureChunkReplicationAsync(
+                            request.FileId, request.ChunkId, CancellationToken.None);
+                        
+                        _logger.LogInformation("Secondary replication triggered for Chunk {ChunkId}",
+                            request.ChunkId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error during secondary replication for Chunk {ChunkId}",
+                            request.ChunkId);
+                    }
+                });
             }
 
             if (request.ParentFileMetadata != null)

@@ -32,7 +32,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         
         [ObservableProperty] private bool _isLoading;
 
-        [ObservableProperty] private string _statusMessage = "Ready";
+        [ObservableProperty] private string _statusMessage = "Готов";
 
         [ObservableProperty] private int _logCount;
 
@@ -68,17 +68,17 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         private async void StartMonitoringLogs()
         {
             IsLoading = true;
-            StatusMessage = "Starting log monitoring...";
+            StatusMessage = "Запуск записи журнала...";
             
             try
             {
                 await _logManager.StartMonitoringAsync();
                 LogCount = Logs.Count;
-                StatusMessage = $"Monitoring logs. {LogCount} entries loaded.";
+                StatusMessage = $"Запись журнала. {LogCount} записей сделано.";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error starting log monitoring: {ex.Message}";
+                StatusMessage = $"Ошибка записи журнала событий: {ex.Message}";
             }
             finally
             {
@@ -97,7 +97,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         private async Task RefreshLogsAsync()
         {
             IsLoading = true;
-            StatusMessage = "Refreshing logs...";
+            StatusMessage = "Обновление журнала...";
             
             try
             {
@@ -106,15 +106,15 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 await _logManager.StartMonitoringAsync();
                 
                 LogCount = Logs.Count;
-                StatusMessage = $"Logs refreshed. {LogCount} entries loaded.";
+                StatusMessage = $"Журнал обновлен. {LogCount} записей создано.";
                 
                 
                 ApplyFilters();
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error refreshing logs: {ex.Message}";
-                MessageBox.Show($"Unexpected error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusMessage = $"Ошибка обновления журнала: {ex.Message}";
+                MessageBox.Show($"Неожиданная ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
@@ -129,8 +129,8 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         {
             
             var result = MessageBox.Show(
-                "Are you sure you want to clear the log display? This will not affect the log files.",
-                "Confirm Clear Logs",
+                "Вы уверены, что хотите очистить журнал? Это не затронет исходный файл.",
+                "Принять очистку",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
 
@@ -139,7 +139,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
 
             _logManager.ClearLogs();
             LogCount = 0;
-            StatusMessage = "Logs cleared";
+            StatusMessage = "Журнал очищен";
             
             ClearLogsCommand.NotifyCanExecuteChanged();
             ExportLogsCommand.NotifyCanExecuteChanged();
@@ -160,7 +160,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             if (saveDialog.ShowDialog() == true)
             {
                 IsLoading = true;
-                StatusMessage = "Exporting logs...";
+                StatusMessage = "Экспорт...";
 
                 try
                 {
@@ -203,19 +203,19 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                         }
                     }
 
-                    StatusMessage = $"Exported {Logs.Count} logs to {saveDialog.FileName}";
+                    StatusMessage = $"Экспортированы {Logs.Count} событий в файл {saveDialog.FileName}";
 
                     
                     MessageBox.Show(
-                        $"Successfully exported {Logs.Count} log entries to {saveDialog.FileName}",
-                        "Logs Exported",
+                        $"Успешный экспорт {Logs.Count} событий в {saveDialog.FileName}",
+                        "Журнал экспортирован",
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    StatusMessage = $"Error exporting logs: {ex.Message}";
-                    MessageBox.Show($"Error exporting logs: {ex.Message}", "Export Error", MessageBoxButton.OK,
+                    StatusMessage = $"Ошибка экспорта: {ex.Message}";
+                    MessageBox.Show($"Ошибка экспорта: {ex.Message}", "Ошибка экспорта", MessageBoxButton.OK,
                         MessageBoxImage.Error);
                 }
                 finally
@@ -258,7 +258,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             }
 
             
-            StatusMessage = $"Showing {filteredLogs.Count} of {LogCount} log entries";
+            StatusMessage = $"Показ {filteredLogs.Count} событий {LogCount}";
         }
 
         

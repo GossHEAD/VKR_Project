@@ -577,21 +577,12 @@ namespace VKR_Node.Services
 
         private string GetChunkPath(string fileId, string chunkId)
         {
-            
             var sanitizedFileId = SanitizePathComponent(fileId);
             var sanitizedChunkId = SanitizePathComponent(chunkId);
 
-            if (_storageOptions.UseHashBasedDirectories)
-            {
-                return GetHashBasedPath(sanitizedFileId, sanitizedChunkId);
-            }
-            else
-            {
-                
-                var directoryPath = Path.Combine(_baseStoragePath, sanitizedFileId);
-                var fileName = $"{sanitizedChunkId}.chunk";
-                return Path.Combine(directoryPath, fileName);
-            }
+            var directoryPath = Path.Combine(_baseStoragePath, sanitizedFileId);
+            var fileName = $"{sanitizedChunkId}.chunk";
+            return Path.Combine(directoryPath, fileName);
         }
         
         private string GetHashBasedPath(string fileId, string chunkId)

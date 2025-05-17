@@ -47,13 +47,13 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             
-            <TextBlock Grid.Column="0" Text="Node Configuration" Style="{StaticResource SectionHeaderStyle}"/>
+            <TextBlock Grid.Column="0" Text="Конфигурация узла" Style="{StaticResource SectionHeaderStyle}"/>
             
             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <Button Content="Refresh" 
+                <Button Content="Обновить" 
                         Command="{Binding RefreshConfigCommand}"
                         Style="{StaticResource ActionButtonStyle}"/>
-                <Button Content="Apply Changes" 
+                <Button Content="Принять изменения" 
                         Command="{Binding ApplyConfigCommand}"
                         Style="{StaticResource ActionButtonStyle}"/>
             </StackPanel>
@@ -63,7 +63,7 @@
         <ScrollViewer Grid.Row="1" Margin="10,0,10,10" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <!-- Node Identity Section -->
-                <GroupBox Header="Node Identity" Margin="0,0,0,15" Padding="10">
+                <GroupBox Header="Данные узла" Margin="0,0,0,15" Padding="10">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="140"/>
@@ -75,19 +75,19 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Node ID:" Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="ID узла:" Style="{StaticResource SettingLabelStyle}"/>
                         <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding NodeId}" Margin="0,5"/>
                         
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Display Name:" Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Имя узла:" Style="{StaticResource SettingLabelStyle}"/>
                         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding DisplayName}" Margin="0,5"/>
                         
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Created:" Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Создан:" Style="{StaticResource SettingLabelStyle}"/>
                         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CreationTime}" VerticalAlignment="Center" Margin="0,5"/>
                     </Grid>
                 </GroupBox>
                 
                 <!-- Network Settings Section -->
-                <GroupBox Header="Network Settings" Margin="0,0,0,15" Padding="10">
+                <GroupBox Header="Настройки соединения" Margin="0,0,0,15" Padding="10">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="140"/>
@@ -100,22 +100,22 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Listen Address:" Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="IP-Адрес:" Style="{StaticResource SettingLabelStyle}"/>
                         <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ListenAddress}" Margin="0,5"/>
                         
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Listen Port:" Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Порт:" Style="{StaticResource SettingLabelStyle}"/>
                         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ListenPort}" Margin="0,5"/>
                         
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Max Connections:" Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Макс. соединений:" Style="{StaticResource SettingLabelStyle}"/>
                         <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding MaxConnections}" Margin="0,5"/>
                         
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Timeout (sec):" Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Перерыв (с):" Style="{StaticResource SettingLabelStyle}"/>
                         <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding ConnectionTimeout}" Margin="0,5"/>
                     </Grid>
                 </GroupBox>
                 
                 <!-- Storage Settings Section -->
-                <GroupBox Header="Storage Settings" Margin="0,0,0,15" Padding="10">
+                <GroupBox Header="Настройки хранилища" Margin="0,0,0,15" Padding="10">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="140"/>
@@ -129,10 +129,10 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Base Path:" Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Путь:" Style="{StaticResource SettingLabelStyle}"/>
                         <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding StorageBasePath}" Margin="0,5"/>
                         
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Max Size:" Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Максимальный размер:" Style="{StaticResource SettingLabelStyle}"/>
                         <Grid Grid.Row="1" Grid.Column="1" Margin="0,5">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -142,7 +142,7 @@
                             <ComboBox Grid.Column="1" Width="60" SelectedItem="{Binding MaxSizeUnit}" ItemsSource="{Binding SizeUnits}"/>
                         </Grid>
                         
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Chunk Size:" Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Размер фрагмента:" Style="{StaticResource SettingLabelStyle}"/>
                         <Grid Grid.Row="2" Grid.Column="1" Margin="0,5">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -151,76 +151,6 @@
                             <TextBox Grid.Column="0" Text="{Binding ChunkSizeValue}"/>
                             <ComboBox Grid.Column="1" Width="60" SelectedItem="{Binding ChunkSizeUnit}" ItemsSource="{Binding SizeUnits}"/>
                         </Grid>
-                        
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Use Hash Dirs:" Style="{StaticResource SettingLabelStyle}"/>
-                        <CheckBox Grid.Row="3" Grid.Column="1" IsChecked="{Binding UseHashBasedDirectories}" VerticalAlignment="Center" Margin="0,5"/>
-                        
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Hash Depth:" Style="{StaticResource SettingLabelStyle}"/>
-                        <ComboBox Grid.Row="4" Grid.Column="1" 
-                                  SelectedValue="{Binding HashDirectoryDepth}" 
-                                  ItemsSource="{Binding HashDepthOptions}" 
-                                  Margin="0,5" 
-                                  IsEnabled="{Binding UseHashBasedDirectories}"/>
-                    </Grid>
-                </GroupBox>
-                
-                <!-- DHT Settings Section -->
-                <GroupBox Header="DHT Settings" Margin="0,0,0,15" Padding="10">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Bootstrap Node:" Style="{StaticResource SettingLabelStyle}"/>
-                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding BootstrapNodeAddress}" Margin="0,5"/>
-                        
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Replication Factor:" Style="{StaticResource SettingLabelStyle}"/>
-                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ReplicationFactor}" Margin="0,5"/>
-                        
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Stabilization (sec):" Style="{StaticResource SettingLabelStyle}"/>
-                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding StabilizationInterval}" Margin="0,5"/>
-                        
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Check Replication (sec):" Style="{StaticResource SettingLabelStyle}"/>
-                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding ReplicationCheckInterval}" Margin="0,5"/>
-                        
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Max Parallel Ops:" Style="{StaticResource SettingLabelStyle}"/>
-                        <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding ReplicationMaxParallelism}" Margin="0,5"/>
-                    </Grid>
-                </GroupBox>
-                
-                <!-- Database Settings Section -->
-                <GroupBox Header="Database Settings" Margin="0,0,0,15" Padding="10">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Database Path:" Style="{StaticResource SettingLabelStyle}"/>
-                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding DatabasePath}" Margin="0,5"/>
-                        
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Auto Migrate:" Style="{StaticResource SettingLabelStyle}"/>
-                        <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding AutoMigrate}" VerticalAlignment="Center" Margin="0,5"/>
-                        
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Backup Before Migration:" Style="{StaticResource SettingLabelStyle}"/>
-                        <CheckBox Grid.Row="2" Grid.Column="1" IsChecked="{Binding BackupBeforeMigration}" VerticalAlignment="Center" Margin="0,5"/>
-                        
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Enable SQL Logging:" Style="{StaticResource SettingLabelStyle}"/>
-                        <CheckBox Grid.Row="3" Grid.Column="1" IsChecked="{Binding EnableSqlLogging}" VerticalAlignment="Center" Margin="0,5"/>
                     </Grid>
                 </GroupBox>
             </StackPanel>

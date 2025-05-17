@@ -37,7 +37,7 @@ public partial class App : Application
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error creating window: {ex.Message}", "Error", 
+                    MessageBox.Show($"Ошибка при создании окна: {ex.Message}", "Ошибка", 
                         MessageBoxButton.OK, MessageBoxImage.Error);
                     Shutdown(1);
                 }

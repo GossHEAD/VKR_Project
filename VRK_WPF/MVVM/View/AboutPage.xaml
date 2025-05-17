@@ -13,17 +13,21 @@
                 <Separator />
                 
                 <TextBlock TextWrapping="Wrap" Margin="0,15,0,10" FontSize="14">
-                    Программный комплекс для обучения распределению производственных данных 
+                    Программный комплекс для распределения производственных данных 
                     по узлам промышленной вычислительной сети в нештатной ситуации.
                 </TextBlock>
                 
                 <StackPanel Margin="0,10,0,0">
                     <TextBlock Text="Версия:" FontWeight="Bold" />
-                    <TextBlock Text="1.0.0 (сборка от 04.05.2025)" Margin="15,0,0,5"/>
+                    <TextBlock Text="1.0.0" Margin="15,0,0,5"/>
                     
                     <TextBlock Text="Разработчик:" FontWeight="Bold" />
                     <TextBlock Text="Студент кафедры САПРиУ" Margin="15,0,0,5"/>
                     <TextBlock Text="Богданов Александр Евгеньевич, группа 413" Margin="15,0,0,5"/>
+                    
+                    <TextBlock Text="Руководитель:" FontWeight="Bold" />
+                    <TextBlock Text="Доц., канд. техн. наук" Margin="15,0,0,5"/>
+                    <TextBlock Text="Макарук Роман Валерьевич" Margin="15,0,0,5"/>
                     
                     <TextBlock Text="Контакты:" FontWeight="Bold" />
                     <TextBlock Text="bagdachov@gmail.com" Margin="15,0,0,5"/>
@@ -32,8 +36,8 @@
                 
                 <TextBlock Text="Назначение:" FontWeight="Bold" Margin="0,15,0,5"/>
                 <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                    Данный программный комплекс предназначен для обучения специалистов по информационной 
-                    безопасности методам обеспечения отказоустойчивости хранения данных в распределенных 
+                    Данный программный комплекс предназначен для специалистов отдела информационных технологий
+                    для обеспечения отказоустойчивости хранения данных в распределенных 
                     вычислительных сетях промышленных предприятий. Комплекс позволяет симулировать сценарии 
                     отказа узлов сети и отрабатывать решения по оперативному восстановлению доступа к критически 
                     важным данным.
@@ -41,14 +45,11 @@
                 
                 <TextBlock Text="Системные требования:" FontWeight="Bold" Margin="0,5,0,5"/>
                 <StackPanel Margin="15,0,0,10">
-                    <TextBlock Text="• Windows 10/11 или Linux с установленным .NET 8.0"/>
+                    <TextBlock Text="• Windows 10/11"/>
                     <TextBlock Text="• 4 ГБ оперативной памяти"/>
                     <TextBlock Text="• 500 МБ свободного дискового пространства"/>
                     <TextBlock Text="• Сетевое подключение (для многоузловой конфигурации)"/>
                 </StackPanel>
-                
-                <TextBlock Text="Лицензия:" FontWeight="Bold" Margin="0,5,0,5"/>
-                <TextBlock Text="© 2025 Кафедра САПРиУ. Все права защищены." TextWrapping="Wrap" />
             </StackPanel>
         </ScrollViewer>
     </Grid>

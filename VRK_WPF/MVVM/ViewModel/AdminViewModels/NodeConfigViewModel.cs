@@ -48,10 +48,9 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
 
         
         [ObservableProperty] private bool _isLoading;
-        [ObservableProperty] private string _loadingMessage = "Loading configuration...";
-        [ObservableProperty] private string _statusMessage = "Ready";
+        [ObservableProperty] private string _loadingMessage = "Загрузка конфигурации..."; 
+        [ObservableProperty] private string _statusMessage = "Готово"; 
         [ObservableProperty] private bool _hasChanges;
-
         
         public ObservableCollection<string> SizeUnits { get; } =
             ["B", "KB", "MB", "GB", "TB"];
@@ -98,8 +97,8 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         private void RefreshConfig()
         {
             IsLoading = true;
-            LoadingMessage = "Loading node configuration...";
-            StatusMessage = "Retrieving configuration...";
+            LoadingMessage = "Загрузка конфигурации узла...";
+            StatusMessage = "Получение конфигурации...";
 
             try
             {
@@ -112,17 +111,17 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                     LoadConfigurationFromJson(json);
                     
                     HasChanges = false;
-                    StatusMessage = $"Configuration loaded from {Path.GetFileName(currentConfig.ConfigPath)}";
+                    StatusMessage = $"Конфигурация загружена из {Path.GetFileName(currentConfig.ConfigPath)}";
                 }
                 else
                 {
-                    StatusMessage = "No current node configuration found.";
+                    StatusMessage = "Не было найдено конфигурации узла.";
                 }
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error: {ex.Message}";
-                MessageBox.Show($"Unexpected error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusMessage = $"Ошибка: {ex.Message}";
+                MessageBox.Show($"Неожиданная ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
@@ -138,13 +137,13 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             {
                 Filter = "JSON Files (*.json)|*.json|All Files (*.*)|*.*",
                 DefaultExt = ".json",
-                Title = "Open Node Configuration File"
+                Title = "Открыть конфигурацию"
             };
             
             if (dialog.ShowDialog() == true)
             {
                 IsLoading = true;
-                LoadingMessage = "Loading configuration file...";
+                LoadingMessage = "Загрузка конфигурации файла...";
                 
                 try
                 {
@@ -154,12 +153,12 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                     _configManager.SetCurrentConfig(dialog.FileName);
                     
                     HasChanges = false;
-                    StatusMessage = $"Loaded configuration from {Path.GetFileName(dialog.FileName)}";
+                    StatusMessage = $"Загружена конфигурация из {Path.GetFileName(dialog.FileName)}";
                 }
                 catch (Exception ex)
                 {
-                    StatusMessage = $"Error loading configuration: {ex.Message}";
-                    MessageBox.Show($"Error loading configuration: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    StatusMessage = $"Ошибка загрузки конфигурации: {ex.Message}";
+                    MessageBox.Show($"Ошибка загрузки конфигурации: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 finally
                 {
@@ -175,13 +174,13 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 Filter = "JSON Files (*.json)|*.json|All Files (*.*)|*.*",
                 DefaultExt = ".json",
                 FileName = $"Node-{Environment.MachineName}-config.json",
-                Title = "Create New Node Configuration File"
+                Title = "Создать новый конфигурационный файл"
             };
             
             if (dialog.ShowDialog() == true)
             {
                 IsLoading = true;
-                LoadingMessage = "Creating new configuration...";
+                LoadingMessage = "Создание новой конфигурации...";
                 
                 try
                 {
@@ -198,15 +197,15 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                     _configManager.SetCurrentConfig(dialog.FileName);
                     
                     HasChanges = false;
-                    StatusMessage = $"Created new configuration at {Path.GetFileName(dialog.FileName)}";
+                    StatusMessage = $"Создана новая конфигурации по пути {Path.GetFileName(dialog.FileName)}";
                     
                     
                     RefreshConfig();
                 }
                 catch (Exception ex)
                 {
-                    StatusMessage = $"Error creating configuration: {ex.Message}";
-                    MessageBox.Show($"Error creating configuration: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    StatusMessage = $"Ошибка создания конфигурации: {ex.Message}";
+                    MessageBox.Show($"Ошибка создания конфигурации: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 finally
                 {
@@ -222,8 +221,8 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
 
             
             var result = MessageBox.Show(
-                "Are you sure you want to apply these configuration changes?\nThe node may need to be restarted for changes to take effect.",
-                "Confirm Configuration Changes",
+                "Вы уверены, что принимаете эти изменения?\nУзел придется перезапустить, чтобы изменения вступили в силу.",
+                "Принять изменения",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
 
@@ -231,8 +230,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 return;
 
             IsLoading = true;
-            LoadingMessage = "Applying configuration changes...";
-            StatusMessage = "Saving configuration...";
+            StatusMessage = "Сохранение конфигурации...";
 
             try
             {
@@ -251,25 +249,25 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                     File.WriteAllText(currentConfig.ConfigPath, json);
                     
                     HasChanges = false;
-                    StatusMessage = $"Configuration saved to {Path.GetFileName(currentConfig.ConfigPath)}";
+                    StatusMessage = $"Конфигурация сохранена в {Path.GetFileName(currentConfig.ConfigPath)}";
                     
                     MessageBox.Show(
-                        "Configuration has been updated successfully.\nA node restart is required for changes to take effect.",
-                        "Configuration Updated",
+                        "Конфигурация сохранена.\nУзел придется перезапустить, чтобы изменения вступили в силу.",
+                        "Конфигурация обновлена",
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
                 }
                 else
                 {
-                    StatusMessage = "No current node configuration found.";
-                    MessageBox.Show("Cannot save configuration: No current node configuration found.", 
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    StatusMessage = "Текущая конфигурация не найдена.";
+                    MessageBox.Show("Не получилось сохранить конфигурацию: текущая конфигурация не найдена.", 
+                        "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error: {ex.Message}";
-                MessageBox.Show($"Unexpected error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusMessage = $"Ошибка: {ex.Message}";
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
@@ -283,16 +281,12 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         {
             try
             {
-                
-                using JsonDocument doc = JsonDocument.Parse(json);
-                
+                using JsonDocument doc = JsonDocument.Parse(json);   
                 
                 JsonElement root = doc.RootElement;
                 
-                
                 if (root.TryGetProperty("DistributedStorage", out JsonElement dsElement))
                 {
-                    
                     if (dsElement.TryGetProperty("Identity", out JsonElement identity))
                     {
                         NodeId = identity.GetProperty("NodeId").GetString() ?? string.Empty;
@@ -300,7 +294,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                             ? displayName.GetString() ?? string.Empty 
                             : string.Empty;
                     }
-                    
                     
                     if (dsElement.TryGetProperty("Network", out JsonElement network))
                     {
@@ -378,7 +371,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             catch (Exception ex)
             {
                 
-                throw new InvalidOperationException($"Error parsing configuration: {ex.Message}", ex);
+                throw new InvalidOperationException($"Ошибка обработки конфигурации: {ex.Message}", ex);
             }
         }
 

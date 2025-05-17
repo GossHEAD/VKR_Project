@@ -16,7 +16,7 @@ namespace VKR_Node.Configuration
         [Range(1, 10, ErrorMessage = "Replication factor must be between 1 and 10")]
         public int DefaultReplicationFactor { get; set; } = 3;
         
-        public bool UseHashBasedDirectories { get; set; } = true;
+        public bool UseHashBasedDirectories { get; set; } = false;
         
         [Range(1, 3, ErrorMessage = "Hash directory depth must be between 1 and 3")]
         public int HashDirectoryDepth { get; set; } = 2;

@@ -7,8 +7,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.Win32;
 using VKR_Core.Enums;
+using VKR_Node.Configuration;
 using VKR_Node.Persistance;
 using VKR_Node.Persistance.Entities;
 
@@ -16,14 +18,12 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
 {
     public partial class DatabaseManagementViewModel : ObservableObject
     {
-        // Node selection properties
         [ObservableProperty]
         private ObservableCollection<NodeDatabaseInfo> _availableNodeDatabases = new();
         
         [ObservableProperty]
         private NodeDatabaseInfo? _selectedNodeDatabase;
         
-        // Table properties
         [ObservableProperty]
         private ObservableCollection<TableViewModel> _availableTables = new();
         
@@ -36,12 +36,11 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         [ObservableProperty]
         private object? _selectedRow;
         
-        // UI state properties
         [ObservableProperty]
         private bool _isLoading;
         
         [ObservableProperty]
-        private string _statusMessage = "Ready";
+        private string _statusMessage = "Готов";
         
         [ObservableProperty]
         private bool _isEditing;
@@ -53,7 +52,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         
         public ICollectionView TableDataView { get; }
         
-        // Commands
         public RelayCommand RefreshNodeListCommand { get; }
         public RelayCommand RefreshDataCommand { get; }
         public RelayCommand SaveChangesCommand { get; }
@@ -84,27 +82,25 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         private void InitializeTableList()
         {
             AvailableTables.Clear();
-            AvailableTables.Add(new TableViewModel { TableName = "Files", DisplayName = "Files Metadata", CanEdit = true });
-            AvailableTables.Add(new TableViewModel { TableName = "Chunks", DisplayName = "Chunks Metadata", CanEdit = true });
-            AvailableTables.Add(new TableViewModel { TableName = "ChunkLocations", DisplayName = "Chunk Locations", CanEdit = true });
-            AvailableTables.Add(new TableViewModel { TableName = "Nodes", DisplayName = "Node States", CanEdit = true });
-            AvailableTables.Add(new TableViewModel { TableName = "Users", DisplayName = "Users", CanEdit = true });
-            AvailableTables.Add(new TableViewModel { TableName = "Logs", DisplayName = "Logs", CanEdit = false });
+            AvailableTables.Add(new TableViewModel { TableName = "Files", DisplayName = "Данные файлов", CanEdit = true });
+            AvailableTables.Add(new TableViewModel { TableName = "Chunks", DisplayName = "Данные фрагментов", CanEdit = true });
+            AvailableTables.Add(new TableViewModel { TableName = "ChunkLocations", DisplayName = "Местоположение фрагментов", CanEdit = true });
+            AvailableTables.Add(new TableViewModel { TableName = "Nodes", DisplayName = "Состояние узлов", CanEdit = true });
+            AvailableTables.Add(new TableViewModel { TableName = "Users", DisplayName = "Пользователи", CanEdit = true });
+            AvailableTables.Add(new TableViewModel { TableName = "Logs", DisplayName = "Журнал событий", CanEdit = false });
             
-            // Set default selected table
             //SelectedTable = AvailableTables.FirstOrDefault();
         }
         
         private void RefreshNodeList()
         {
             IsLoading = true;
-            StatusMessage = "Searching for node databases...";
+            StatusMessage = "Поиск баз данных узла...";
             
             try
             {
                 AvailableNodeDatabases.Clear();
                 
-                // Search for node databases in common locations
                 var searchPaths = new[]
                 {
                     Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Storage", "Data"),
@@ -116,11 +112,9 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 {
                     if (Directory.Exists(basePath))
                     {
-                        // Look for database files
                         foreach (var file in Directory.GetFiles(basePath, "node_*.db"))
                         {
                             var fileName = Path.GetFileName(file);
-                            // Try to extract node ID from the filename
                             var nodeId = ExtractNodeIdFromFileName(fileName);
                             
                             AvailableNodeDatabases.Add(new NodeDatabaseInfo
@@ -136,16 +130,16 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 if (AvailableNodeDatabases.Count > 0)
                 {
                     SelectedNodeDatabase = AvailableNodeDatabases[0];
-                    StatusMessage = $"Found {AvailableNodeDatabases.Count} node databases";
+                    StatusMessage = $"Найдено {AvailableNodeDatabases.Count} баз данных узла";
                 }
                 else
                 {
-                    StatusMessage = "No node databases found. Use the Open button to select a database file.";
+                    StatusMessage = "Не найдено баз данных. Используйте операцию открытия файла базы данных.";
                 }
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error finding node databases: {ex.Message}";
+                StatusMessage = $"Ошибка поиск базы данных: {ex.Message}";
             }
             finally
             {
@@ -157,7 +151,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         {
             try
             {
-                // Expected format: node_{NodeID}.db
                 var match = System.Text.RegularExpressions.Regex.Match(fileName, @"node[_-](\w+)\.db$");
                 if (match.Success && match.Groups.Count > 1)
                 {
@@ -166,10 +159,8 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             }
             catch
             {
-                // If regex fails, fall back to simpler approach
             }
             
-            // Simple fallback
             return Path.GetFileNameWithoutExtension(fileName).Replace("node_", "").Replace("node-", "");
         }
         
@@ -179,17 +170,16 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             {
                 Filter = "SQLite Database (*.db)|*.db|All Files (*.*)|*.*",
                 DefaultExt = ".db",
-                Title = "Open Node Database"
+                Title = "Открытие базы данных"
             };
             
             if (dialog.ShowDialog() == true)
             {
                 IsLoading = true;
-                StatusMessage = "Opening database...";
+                StatusMessage = "Открытие базы данных...";
                 
                 try
                 {
-                    // Add to available databases if not already present
                     var dbPath = dialog.FileName;
                     var fileName = Path.GetFileName(dbPath);
                     var nodeId = ExtractNodeIdFromFileName(fileName);
@@ -212,11 +202,11 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                         SelectedNodeDatabase = existingDatabase;
                     }
                     
-                    StatusMessage = $"Opened database for Node {nodeId}";
+                    StatusMessage = $"Открыта база данных узла {nodeId}";
                 }
                 catch (Exception ex)
                 {
-                    StatusMessage = $"Error opening database: {ex.Message}";
+                    StatusMessage = $"Ошибка открытия базы данных: {ex.Message}";
                 }
                 finally
                 {
@@ -233,15 +223,13 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             }
             else
             {
-                // Disconnect from database
                 _dbContext?.Dispose();
                 _dbContext = null;
                 
                 TableData.Clear();
-                StatusMessage = "No database selected";
+                StatusMessage = "База данных не выбрана";
             }
             
-            // Update command availability
             RefreshDataCommand.NotifyCanExecuteChanged();
             SaveChangesCommand.NotifyCanExecuteChanged();
             DeleteRowCommand.NotifyCanExecuteChanged();
@@ -252,42 +240,40 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         private void ConnectToDatabase(string dbPath)
         {
             IsLoading = true;
-            StatusMessage = $"Connecting to database...";
+            StatusMessage = $"Подключение к базе данных...";
             
             try
             {
-                // Dispose of existing context if any
                 _dbContext?.Dispose();
                 
-                // Create new database context
                 var optionsBuilder = new DbContextOptionsBuilder<NodeDbContext>();
                 optionsBuilder.UseSqlite($"Data Source={dbPath}");
+                optionsBuilder.EnableSensitiveDataLogging();
                 
-                // Create a minimal options
-                var dbOptions = Microsoft.Extensions.Options.Options.Create(new VKR_Node.Configuration.DatabaseOptions 
+                var dbOptions = Options.Create(new DatabaseOptions 
                 { 
                     DatabasePath = dbPath,
+                    ConnectionString = $"Data Source={dbPath}",
                     HasExplicitConnectionString = false
                 });
                 
                 _dbContext = new NodeDbContext(optionsBuilder.Options, dbOptions);
                 
-                // Clear existing data
+                
                 TableData.Clear();
                 
-                // Load data if a table is selected
                 if (SelectedTable != null)
                 {
                     _ = RefreshTableDataAsync();
                 }
                 else
                 {
-                    StatusMessage = "Connected to database. Select a table to view data.";
+                    StatusMessage = "База данных подключена. Выберите таблицу для просмотра.";
                 }
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error connecting to database: {ex.Message}";
+                StatusMessage = $"Ошибка подключени к базе данных: {ex.Message}";
                 _dbContext = null;
             }
             finally
@@ -323,7 +309,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             if (string.IsNullOrWhiteSpace(SearchText))
                 return true;
                 
-            // Simple contains search on all string properties
             var properties = item.GetType().GetProperties()
                 .Where(p => p.PropertyType == typeof(string) || p.PropertyType == typeof(int) || p.PropertyType == typeof(long));
                 
@@ -349,7 +334,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 return;
                 
             IsLoading = true;
-            StatusMessage = $"Loading {SelectedTable.DisplayName} data...";
+            StatusMessage = $"Загрузка данных {SelectedTable.DisplayName}...";
             
             try
             {
@@ -376,15 +361,15 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                         await LoadLogsDataAsync();
                         break;
                     default:
-                        StatusMessage = $"Unknown table: {SelectedTable.TableName}";
+                        StatusMessage = $"Неизвестная таблица: {SelectedTable.TableName}";
                         break;
                 }
                 
-                StatusMessage = $"Loaded {TableData.Count} rows from {SelectedTable.DisplayName}.";
+                StatusMessage = $"Загружено {TableData.Count} строк из {SelectedTable.DisplayName}.";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error loading table data: {ex.Message}";
+                StatusMessage = $"Ошибка загрузки таблицы: {ex.Message}";
             }
             finally
             {
@@ -398,24 +383,53 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         
         private async Task LoadFilesDataAsync()
         {
-            var files = await _dbContext!.FilesMetadata.ToListAsync();
-            foreach (var file in files)
+            StatusMessage = "Загрузка данных таблицы Файлов"; // Translated
+
+            try
             {
-                TableData.Add(new FileRowViewModel
+                if (_dbContext == null || !_dbContext.Database.CanConnect())
                 {
-                    FileId = file.FileId,
-                    FileName = file.FileName,
-                    FileSize = file.FileSize,
-                    CreationTime = file.CreationTime,
-                    ModificationTime = file.ModificationTime,
-                    ContentType = file.ContentType,
-                    ChunkSize = file.ChunkSize,
-                    TotalChunks = file.TotalChunks,
-                    State = file.State
-                });
+                    StatusMessage = "Контекст базы данных равен null или невозможно подключиться"; // Translated
+                    return;
+                }
+
+                var files = await _dbContext.FilesMetadata
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                StatusMessage = $"Получено {files.Count} записей из таблицы FilesMetadata"; // Translated
+
+                if (files.Count > 0)
+                {
+                    var first = files[0];
+                    StatusMessage = $"Пример записи - FileId: {first.FileId}, FileName: {first.FileName}, Size: {first.FileSize}"; // Translated
+                }
+
+                foreach (var file in files)
+                {
+                    var viewModel = new FileRowViewModel
+                    {
+                        FileId = file.FileId,
+                        FileName = file.FileName,
+                        FileSize = file.FileSize,
+                        CreationTime = file.CreationTime,
+                        ModificationTime = file.ModificationTime,
+                        ContentType = file.ContentType,
+                        ChunkSize = file.ChunkSize,
+                        TotalChunks = file.TotalChunks,
+                        State = file.State
+                    };
+
+                    TableData.Add(viewModel);
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error in LoadFilesDataAsync: {ex}";
+                throw;
             }
         }
-        
+
         private async Task LoadChunksDataAsync()
         {
             var chunks = await _dbContext!.ChunksMetadata.ToListAsync();
@@ -431,7 +445,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 });
             }
         }
-        
+
         private async Task LoadChunkLocationsDataAsync()
         {
             var locations = await _dbContext!.ChunkLocations.ToListAsync();
@@ -446,7 +460,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 });
             }
         }
-        
+
         private async Task LoadNodesDataAsync()
         {
             var nodes = await _dbContext!.NodeStates.ToListAsync();
@@ -464,7 +478,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 });
             }
         }
-        
+
         private async Task LoadUsersDataAsync()
         {
             var users = await _dbContext!.Users.ToListAsync();
@@ -480,37 +494,35 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 });
             }
         }
-        
+
         private async Task LoadLogsDataAsync()
         {
             // Add code to load logs if there's a logs table
             // This would depend on the structure of your logs table
-            StatusMessage = "Log viewing not implemented yet";
+            StatusMessage = "Просмотр логов пока не реализован"; // Translated
         }
-        
+
         private async Task SaveChangesAsync()
         {
             if (_dbContext == null || SelectedTable == null || !SelectedTable.CanEdit)
                 return;
-                
+
             IsLoading = true;
-            StatusMessage = $"Saving changes to {SelectedTable.DisplayName}...";
-            
+            StatusMessage = $"Сохранение изменений в {SelectedTable.DisplayName}..."; // Translated
+
             try
             {
-                // Find modified rows
                 var modifiedRows = TableData.OfType<IModifiableRow>().Where(r => r.IsModified).ToList();
-                
+
                 if (!modifiedRows.Any())
                 {
-                    StatusMessage = "No changes to save.";
+                    StatusMessage = "Нет изменений для сохранения."; // Translated
                     IsLoading = false;
                     return;
                 }
-                
+
                 using var transaction = await _dbContext.Database.BeginTransactionAsync();
-                
-                // Apply changes based on table type
+
                 switch (SelectedTable.TableName)
                 {
                     case "Files":
@@ -529,24 +541,23 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                         await SaveUsersChangesAsync(modifiedRows.Cast<UserRowViewModel>().ToList());
                         break;
                     default:
-                        throw new InvalidOperationException($"Cannot save changes to {SelectedTable.TableName}");
+                        throw new InvalidOperationException($"Невозможно сохранить изменения в {SelectedTable.TableName}"); // Translated
                 }
-                
+
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
-                
-                // Reset modified flags
+
                 foreach (var row in modifiedRows)
                 {
                     row.IsModified = false;
                 }
-                
-                StatusMessage = $"Saved {modifiedRows.Count} changes to {SelectedTable.DisplayName}.";
+
+                StatusMessage = $"Сохранено {modifiedRows.Count} изменений в {SelectedTable.DisplayName}."; // Translated
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error saving changes: {ex.Message}";
-                MessageBox.Show($"Error saving changes: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusMessage = $"Ошибка сохранения изменений: {ex.Message}"; // Translated
+                MessageBox.Show($"Ошибка сохранения изменений: {ex.Message}", "Ошибка сохранения изменений", MessageBoxButton.OK, MessageBoxImage.Error); // Translated
             }
             finally
             {
@@ -554,7 +565,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 SaveChangesCommand.NotifyCanExecuteChanged();
             }
         }
-        
+
         private async Task SaveFilesChangesAsync(List<FileRowViewModel> modifiedRows)
         {
             foreach (var row in modifiedRows)
@@ -572,7 +583,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
                 else
                 {
-                    // Add new entity
                     _dbContext!.FilesMetadata.Add(new FileEntity
                     {
                         FileId = row.FileId,
@@ -588,7 +598,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
             }
         }
-        
+
         private async Task SaveChunksChangesAsync(List<ChunkRowViewModel> modifiedRows)
         {
             foreach (var row in modifiedRows)
@@ -602,7 +612,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
                 else
                 {
-                    // Add new entity
                     _dbContext!.ChunksMetadata.Add(new ChunkEntity
                     {
                         FileId = row.FileId,
@@ -614,7 +623,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
             }
         }
-        
+
         private async Task SaveChunkLocationsChangesAsync(List<ChunkLocationRowViewModel> modifiedRows)
         {
             foreach (var row in modifiedRows)
@@ -626,7 +635,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
                 else
                 {
-                    // Add new entity
                     _dbContext!.ChunkLocations.Add(new ChunkLocationEntity
                     {
                         FileId = row.FileId,
@@ -637,7 +645,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
             }
         }
-        
+
         private async Task SaveNodesChangesAsync(List<NodeRowViewModel> modifiedRows)
         {
             foreach (var row in modifiedRows)
@@ -654,7 +662,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
                 else
                 {
-                    // Add new entity
                     _dbContext!.NodeStates.Add(new NodeEntity
                     {
                         NodeId = row.NodeId,
@@ -668,7 +675,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
             }
         }
-        
+
         private async Task SaveUsersChangesAsync(List<UserRowViewModel> modifiedRows)
         {
             foreach (var row in modifiedRows)
@@ -682,7 +689,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
                 else
                 {
-                    // Add new entity
                     _dbContext!.Users.Add(new UserEntity
                     {
                         UserId = row.UserId,
@@ -694,29 +700,27 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
             }
         }
-        
+
         private async Task DeleteRowAsync()
         {
             if (_dbContext == null || SelectedTable == null || !SelectedTable.CanEdit || SelectedRow == null)
                 return;
-                
-            // Confirm deletion
-            var result = MessageBox.Show($"Are you sure you want to delete this {SelectedTable.TableName} record?", 
-                "Confirm Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                
+
+            var result = MessageBox.Show($"Вы уверены, что хотите удалить эту запись из таблицы {SelectedTable.TableName}?", // Translated
+                "Подтверждение удаления", MessageBoxButton.YesNo, MessageBoxImage.Warning); // Translated
+
             if (result != MessageBoxResult.Yes)
                 return;
-                
+
             IsLoading = true;
-            StatusMessage = $"Deleting record from {SelectedTable.DisplayName}...";
-            
+            StatusMessage = $"Удаление записи из {SelectedTable.DisplayName}..."; // Translated
+
             try
             {
                 bool deleted = false;
-                
+
                 using var transaction = await _dbContext.Database.BeginTransactionAsync();
-                
-                // Delete based on table type
+
                 switch (SelectedTable.TableName)
                 {
                     case "Files":
@@ -735,29 +739,28 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                         deleted = await DeleteUserRowAsync((UserRowViewModel)SelectedRow);
                         break;
                     default:
-                        throw new InvalidOperationException($"Cannot delete from {SelectedTable.TableName}");
+                        throw new InvalidOperationException($"Невозможно удалить из {SelectedTable.TableName}"); // Translated
                 }
-                
+
                 if (deleted)
                 {
                     await _dbContext.SaveChangesAsync();
                     await transaction.CommitAsync();
-                    
-                    // Remove from collection
+
                     TableData.Remove(SelectedRow);
-                    
-                    StatusMessage = $"Deleted record from {SelectedTable.DisplayName}.";
+
+                    StatusMessage = $"Запись удалена из {SelectedTable.DisplayName}."; // Translated
                 }
                 else
                 {
                     await transaction.RollbackAsync();
-                    StatusMessage = "Delete operation failed";
+                    StatusMessage = "Операция удаления не удалась"; // Translated
                 }
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error deleting record: {ex.Message}";
-                MessageBox.Show($"Error deleting record: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusMessage = $"Ошибка удаления записи: {ex.Message}"; // Translated
+                MessageBox.Show($"Ошибка удаления записи: {ex.Message}", "Ошибка удаления записи", MessageBoxButton.OK, MessageBoxImage.Error); // Translated
             }
             finally
             {
@@ -765,7 +768,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 DeleteRowCommand.NotifyCanExecuteChanged();
             }
         }
-        
+
         private async Task<bool> DeleteFileRowAsync(FileRowViewModel row)
         {
             var entity = await _dbContext!.FilesMetadata.FindAsync(row.FileId);
@@ -776,7 +779,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             }
             return false;
         }
-        
+
         private async Task<bool> DeleteChunkRowAsync(ChunkRowViewModel row)
         {
             var entity = await _dbContext!.ChunksMetadata.FindAsync(row.FileId, row.ChunkId);
@@ -787,7 +790,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             }
             return false;
         }
-        
+
         private async Task<bool> DeleteChunkLocationRowAsync(ChunkLocationRowViewModel row)
         {
             var entity = await _dbContext!.ChunkLocations.FindAsync(row.FileId, row.ChunkId, row.StoredNodeId);
@@ -798,7 +801,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             }
             return false;
         }
-        
+
         private async Task<bool> DeleteNodeRowAsync(NodeRowViewModel row)
         {
             var entity = await _dbContext!.NodeStates.FindAsync(row.NodeId);
@@ -809,7 +812,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             }
             return false;
         }
-        
+
         private async Task<bool> DeleteUserRowAsync(UserRowViewModel row)
         {
             var entity = await _dbContext!.Users.FindAsync(row.UserId);
@@ -820,15 +823,14 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             }
             return false;
         }
-        
+
         private void AddNewRow()
         {
             if (_dbContext == null || SelectedTable == null || !SelectedTable.CanEdit)
                 return;
-                
-            // Create new row based on table type
+
             object newRow;
-            
+
             switch (SelectedTable.TableName)
             {
                 case "Files":
@@ -842,7 +844,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                         IsModified = true
                     };
                     break;
-                    
+
                 case "Chunks":
                     newRow = new ChunkRowViewModel
                     {
@@ -853,16 +855,16 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                         IsModified = true
                     };
                     break;
-                    
+
                 case "ChunkLocations":
                     var chunks = TableData.OfType<ChunkRowViewModel>().ToList();
                     if (chunks.Count == 0)
                     {
-                        MessageBox.Show("Cannot create chunk location without existing chunks.", 
-                            "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        MessageBox.Show("Невозможно создать местоположение фрагмента без существующих фрагментов.", // Translated
+                            "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning); // Translated
                         return;
                     }
-                    
+
                     var firstChunk = chunks.First();
                     newRow = new ChunkLocationRowViewModel
                     {
@@ -873,7 +875,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                         IsModified = true
                     };
                     break;
-                    
+
                 case "Nodes":
                     newRow = new NodeRowViewModel
                     {
@@ -887,11 +889,11 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                         IsModified = true
                     };
                     break;
-                    
+
                 case "Users":
                     newRow = new UserRowViewModel
                     {
-                        UserId = TableData.Count > 0 ? 
+                        UserId = TableData.Count > 0 ?
                             TableData.OfType<UserRowViewModel>().Max(u => u.UserId) + 1 : 1,
                         Username = "NewUser",
                         Role = (int)UserRole.ITSpecialist,
@@ -900,66 +902,61 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                         IsModified = true
                     };
                     break;
-                    
+
                 default:
-                    MessageBox.Show($"Adding new rows to {SelectedTable.TableName} is not currently supported.", 
-                        "Not Supported", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show($"Добавление новых строк в {SelectedTable.TableName} в настоящее время не поддерживается.", // Translated
+                        "Не поддерживается", MessageBoxButton.OK, MessageBoxImage.Information); // Translated
                     return;
             }
-            
-            // Add to collection
+
             TableData.Add(newRow);
             SelectedRow = newRow;
-            
-            StatusMessage = $"Added new row to {SelectedTable.DisplayName}. Don't forget to save changes.";
+
+            StatusMessage = $"Добавлена новая строка в {SelectedTable.DisplayName}. Не забудьте сохранить изменения."; // Translated
             SaveChangesCommand.NotifyCanExecuteChanged();
         }
-        
+
         private async Task BackupDatabaseAsync()
         {
             if (_dbContext == null || SelectedNodeDatabase == null)
                 return;
-                
+
             var dialog = new SaveFileDialog
             {
-                Filter = "SQLite Database (*.db)|*.db|All Files (*.*)|*.*",
+                Filter = "База данных SQLite (*.db)|*.db|Все файлы (*.*)|*.*", // Translated
                 DefaultExt = ".db",
                 FileName = $"backup_{Path.GetFileName(SelectedNodeDatabase.DbPath)}"
             };
-            
+
             if (dialog.ShowDialog() == true)
             {
                 IsLoading = true;
-                StatusMessage = "Backing up database...";
-                
+                StatusMessage = "Создание резервной копии базы данных..."; // Translated
+
                 try
                 {
-                    // Close existing connections
                     await _dbContext.Database.CloseConnectionAsync();
-                    
-                    // Create a backup connection
+
                     using var sourceConnection = new SqliteConnection($"Data Source={SelectedNodeDatabase.DbPath}");
                     await sourceConnection.OpenAsync();
-                    
+
                     using var destinationConnection = new SqliteConnection($"Data Source={dialog.FileName}");
                     await destinationConnection.OpenAsync();
-                    
-                    // Perform the backup
+
                     sourceConnection.BackupDatabase(destinationConnection);
-                    
-                    StatusMessage = $"Database successfully backed up to {dialog.FileName}";
-                    
-                    MessageBox.Show($"Database backup completed successfully.\nLocation: {dialog.FileName}", 
-                        "Backup Success", MessageBoxButton.OK, MessageBoxImage.Information);
-                        
-                    // Reconnect to the database
+
+                    StatusMessage = $"Резервная копия базы данных успешно создана в {dialog.FileName}"; // Translated
+
+                    MessageBox.Show($"Резервное копирование базы данных успешно завершено.\nРасположение: {dialog.FileName}", // Translated
+                        "Резервное копирование успешно", MessageBoxButton.OK, MessageBoxImage.Information); // Translated
+
                     ConnectToDatabase(SelectedNodeDatabase.DbPath);
                 }
                 catch (Exception ex)
                 {
-                    StatusMessage = $"Error backing up database: {ex.Message}";
-                    MessageBox.Show($"Error backing up database: {ex.Message}", 
-                        "Backup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    StatusMessage = $"Ошибка создания резервной копии базы данных: {ex.Message}"; // Translated
+                    MessageBox.Show($"Ошибка создания резервной копии базы данных: {ex.Message}",
+                        "Ошибка резервного копирования", MessageBoxButton.OK, MessageBoxImage.Error); // Translated
                 }
                 finally
                 {
@@ -967,23 +964,22 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
             }
         }
-        
+
         public void Dispose()
         {
             _dbContext?.Dispose();
         }
     }
-    
-    // Class to store node database information
+
     public class NodeDatabaseInfo
     {
         public string NodeId { get; set; } = string.Empty;
         public string DbPath { get; set; } = string.Empty;
         public DateTime LastModified { get; set; }
-        
+
         public override string ToString()
         {
-            return $"Node {NodeId} (Last Modified: {LastModified:g})";
+            return $"Узел {NodeId} (Последнее изменение: {LastModified:g})"; // Translated
         }
     }
 }

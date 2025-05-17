@@ -138,13 +138,13 @@ namespace VRK_WPF.MVVM.View
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error configuring UI: {ex.Message}");
+                Debug.WriteLine($"Ошибка настройки интерфейса: {ex.Message}");
             }
         }
         
         private TabItem? FindTabByHeader(string header)
         {
-            var mainTabControl = this.FindName("MainTabControl") as TabControl;
+            var mainTabControl = FindName("MainTabControl") as TabControl;
             
             if (mainTabControl != null)
             {
@@ -205,7 +205,6 @@ namespace VRK_WPF.MVVM.View
             var configs = _nodeConfigManager.GetAvailableConfigs();
             cmbNodeConfigs.ItemsSource = configs;
             
-            // Select current config
             var currentConfig = configs.FirstOrDefault(c => c.IsCurrentNode);
             if (currentConfig != null)
             {
@@ -217,7 +216,7 @@ namespace VRK_WPF.MVVM.View
         {
             bool isRunning = _nodeProcessManager.IsNodeRunning;
             
-            cmbNodeConfigs.Text = isRunning ? "Running" : "Not running";
+            cmbNodeConfigs.Text = isRunning ? "Запущен" : "Не запущен";
             cmbNodeConfigs.Foreground = isRunning ? Brushes.Green : Brushes.Red;
             
             btnStartNode.IsEnabled = !isRunning;
@@ -239,7 +238,7 @@ namespace VRK_WPF.MVVM.View
         {
             Dispatcher.Invoke(() =>
             {
-                txtNodeOutput.AppendText($"ERROR: {data}" + Environment.NewLine);
+                txtNodeOutput.AppendText($"Ошибка: {data}" + Environment.NewLine);
                 txtNodeOutput.ScrollToEnd();
             });
         }
@@ -248,7 +247,7 @@ namespace VRK_WPF.MVVM.View
         {
             Dispatcher.Invoke(() =>
             {
-                txtNodeOutput.AppendText("Node process has exited." + Environment.NewLine);
+                txtNodeOutput.AppendText("Процесс узла завершился." + Environment.NewLine);
                 UpdateNodeStatusUI();
             });
         }
@@ -257,19 +256,19 @@ namespace VRK_WPF.MVVM.View
         {
             if (_nodeProcessManager.StartNode())
             {
-                txtNodeStatusBar.Text = "Node started successfully";
+                txtNodeStatusBar.Text = "Узел успешно запущен";
                 UpdateNodeStatusUI();
             }
             else
             {
-                txtNodeStatusBar.Text = "Failed to start node";
+                txtNodeStatusBar.Text = "Ошибка запуска узла";
             }
         }
 
         private void BtnStopNode_Click(object sender, RoutedEventArgs e)
         {
             _nodeProcessManager.StopNode();
-            txtNodeStatusBar.Text = "Node stopped";
+            txtNodeStatusBar.Text = "Узел остановлен";
             UpdateNodeStatusUI();
         }
 
@@ -279,14 +278,14 @@ namespace VRK_WPF.MVVM.View
             {
                 _nodeConfigManager.SetCurrentConfig(config.ConfigPath);
                 txtNodeId.Text = _nodeConfigManager.CurrentNodeId;
-                txtNodeStatusBar.Text = $"Selected config: {config.NodeId}";
+                txtNodeStatusBar.Text = $"Выбрана конфигурация: {config.NodeId}";
             }
         }
 
         private void BtnCreateConfig_Click(object sender, RoutedEventArgs e)
         {
             string configPath = _nodeConfigManager.CreateDefaultConfig();
-            txtNodeStatusBar.Text = $"Created new config: {configPath}";
+            txtNodeStatusBar.Text = $"Создана новая конфигурация: {configPath}";
             PopulateConfigDropdown();
         }
 
@@ -304,7 +303,7 @@ namespace VRK_WPF.MVVM.View
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error opening config file: {ex.Message}", "Error", 
+                    MessageBox.Show($"Ошибка открытия конфигурации: {ex.Message}", "Ошибка", 
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
@@ -312,7 +311,6 @@ namespace VRK_WPF.MVVM.View
 
         protected override void OnClosing(CancelEventArgs e)
         {
-            // Stop node process when application closes
             if (_nodeProcessManager.IsNodeRunning)
             {
                 _nodeProcessManager.StopNode();

@@ -106,31 +106,46 @@ namespace VRK_WPF.MVVM.Services
         
         private string FindNodeExecutable()
         {
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            
             string[] possibleLocations = {
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, NodeExecutableName),
                 
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "VKR_Node", "bin", "Debug", "net8.0", NodeExecutableName),
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "VKR_Node", "bin", "Release", "net8.0", NodeExecutableName),
+                Path.Combine(baseDir, NodeExecutableName),       
+                
+                Path.Combine(baseDir, "bin", NodeExecutableName),
+                
+                Path.Combine(baseDir, "..", "VKR_Node", "bin", "Debug", "net8.0", NodeExecutableName),
+                Path.Combine(baseDir, "..", "VKR_Node", "bin", "Release", "net8.0", NodeExecutableName),
+                
+                Path.Combine(baseDir, "..", "VKR_Node", "bin", "Debug", "net6.0", NodeExecutableName),
+                Path.Combine(baseDir, "..", "VKR_Node", "bin", "Release", "net6.0", NodeExecutableName),
+                Path.Combine(baseDir, "..", "VKR_Node", "bin", "Debug", "net472", NodeExecutableName),
+                Path.Combine(baseDir, "..", "VKR_Node", "bin", "Release", "net472", NodeExecutableName),
+                Path.Combine(baseDir, "node", NodeExecutableName),
                 
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "VKR_Network", NodeExecutableName)
             };
             
             foreach (string path in possibleLocations)
             {
-                if (File.Exists(path))
+                string normalizedPath = Path.GetFullPath(path);
+                if (File.Exists(normalizedPath))
                 {
-                    return path;
+                    return normalizedPath; 
                 }
             }
             
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            string parentDir = Path.GetDirectoryName(baseDir);
-            
+            var parentDir = Path.GetDirectoryName(baseDir);
             if (!string.IsNullOrEmpty(parentDir))
             {
-                foreach (string file in Directory.GetFiles(parentDir, NodeExecutableName, SearchOption.AllDirectories))
-                {
-                    return file;
+                try {
+                    foreach (var file in Directory.GetFiles(parentDir, NodeExecutableName, SearchOption.AllDirectories))
+                    {
+                        return file;
+                    }
+                }
+                catch (Exception ex) {
+                    Debug.WriteLine($"Error searching for node executable: {ex.Message}");
                 }
             }
             

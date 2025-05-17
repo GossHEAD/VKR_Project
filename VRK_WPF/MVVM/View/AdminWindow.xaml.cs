@@ -43,7 +43,6 @@ namespace VRK_WPF.MVVM.View
             
             InitializePages();
             
-            // Set initial page
             AdminContentFrame.Content = _nodeConfigPage;
             
             _isInitialized = true;
@@ -62,11 +61,9 @@ namespace VRK_WPF.MVVM.View
         
         private void NavMenu_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            // Skip if not initialized or NavMenu selection is null
             if (!_isInitialized || NavMenu.SelectedItem == null) 
                 return;
             
-            // Make sure pages are initialized
             if (_databaseManagementPage == null || _nodeConfigPage == null || _logViewerPage == null)
             {
                 InitializePages();
@@ -74,21 +71,17 @@ namespace VRK_WPF.MVVM.View
             
             switch (NavMenu.SelectedIndex)
             {
-                case 0: // Node Status
+                case 0:
                     AdminContentFrame.Content = _nodeConfigPage;
                     break;
-                case 1: // Database Management
+                case 1:
                     AdminContentFrame.Content = _databaseManagementPage;
                     break;
-                case 2: // Node Configuration
+                case 2:
                     AdminContentFrame.Content = _nodeConfigPage;
                     break;
-                case 3: // Logs
+                case 3:
                     AdminContentFrame.Content = _logViewerPage;
-                    break;
-                case 4:
-                    MessageBox.Show("Simulation functionality not yet implemented.", 
-                        "Not Implemented", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
                 default:
                     break;
