@@ -1,0 +1,291 @@
+﻿<Page x:Class="VRK_WPF.MVVM.View.UserPages.SettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:VRK_WPF.MVVM.View.UserPages"
+      xmlns:converters="clr-namespace:VRK_WPF.MVVM.Converters"
+      mc:Ignorable="d" 
+      d:DesignHeight="600" d:DesignWidth="800"
+      Title="Настройки">
+
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <converters:InverseBooleanConverter x:Key="InverseBool"/>
+        
+        <Style x:Key="HeaderStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,15"/>
+        </Style>
+        
+        <Style x:Key="SubHeaderStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="ActionButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+            <Setter Property="MinWidth" Value="120"/>
+        </Style>
+
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#DDDDDD"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="0,0,0,15"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect ShadowDepth="1" BlurRadius="4" Color="#20000000" Direction="270"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        
+        <Style x:Key="SettingLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Margin" Value="0,0,10,5"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+        </Style>
+        
+        <Style x:Key="SettingValueStyle" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,0,0,5"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
+        
+        <Style x:Key="SettingsProgressBarStyle" TargetType="ProgressBar">
+            <Setter Property="Margin" Value="10,5"/>
+            <Setter Property="Height" Value="10"/>
+            <Setter Property="IsIndeterminate" Value="True"/>
+            <Setter Property="Visibility" Value="{Binding IsSettingsLoading, Converter={StaticResource BoolToVis}}"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        </Style>
+        
+        <Style x:Key="SettingsErrorMessageStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="Red"/>
+            <Setter Property="Margin" Value="10,5"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Visibility" Value="{Binding HasSettingsError, Converter={StaticResource BoolToVis}}"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <!-- Header -->
+            <TextBlock Text="Настройки системы" Style="{StaticResource HeaderStyle}"/>
+
+            <!-- Connection Settings -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Настройки соединения" Style="{StaticResource SubHeaderStyle}"/>
+                    
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <TextBlock Grid.Row="0" Grid.Column="0" 
+                                   Text="URL сервера:" 
+                                   Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" 
+                                 Text="{Binding TargetNodeAddress, UpdateSourceTrigger=PropertyChanged}" 
+                                 Margin="0,0,0,10" 
+                                 Padding="5,8"/>
+                        
+                        <TextBlock Grid.Row="1" Grid.Column="0" 
+                                   Text="Статус:" 
+                                   Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" 
+                                   Text="{Binding ConnectionStatus}" 
+                                   Foreground="{Binding ConnectionStatusColor}" 
+                                   FontWeight="Medium"/>
+                    </Grid>
+                    
+                    <Button Content="Подключиться" 
+                            Command="{Binding ConnectCommand}" 
+                            Style="{StaticResource ActionButtonStyle}"
+                            Margin="0,15,0,0"
+                            HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Local Node Management -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Управление локальным узлом" Style="{StaticResource SubHeaderStyle}"/>
+                    
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <TextBlock Grid.Row="0" Grid.Column="0" 
+                                   Text="Статус узла:" 
+                                   Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" 
+                                   x:Name="txtNodeStatus" 
+                                   Text="Не запущен" 
+                                   Foreground="Red"/>
+                        
+                        <TextBlock Grid.Row="1" Grid.Column="0" 
+                                   Text="ID узла:" 
+                                   Style="{StaticResource SettingLabelStyle}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" 
+                                   x:Name="txtNodeId" 
+                                   Text="Не настроен"/>
+                        
+                        <TextBlock Grid.Row="2" Grid.Column="0" 
+                                   Text="Конфигурация:" 
+                                   Style="{StaticResource SettingLabelStyle}"/>
+                        <ComboBox Grid.Row="2" Grid.Column="1" 
+                                  x:Name="cmbNodeConfigs" 
+                                  Margin="0,0,0,10"
+                                  SelectionChanged="CmbNodeConfigs_SelectionChanged"/>
+                        
+                        <TextBlock Grid.Row="3" Grid.Column="0" 
+                                   Text="Действия:" 
+                                   Style="{StaticResource SettingLabelStyle}"/>
+                        <StackPanel Grid.Row="3" Grid.Column="1" 
+                                    Orientation="Horizontal">
+                            <Button x:Name="btnStartNode" 
+                                    Content="Запустить узел" 
+                                    Style="{StaticResource ActionButtonStyle}"
+                                    Click="BtnStartNode_Click"/>
+                            <Button x:Name="btnStopNode" 
+                                    Content="Остановить узел" 
+                                    Style="{StaticResource ActionButtonStyle}"
+                                    IsEnabled="False"
+                                    Click="BtnStopNode_Click"/>
+                            <Button x:Name="btnCreateConfig" 
+                                    Content="Создать конфигурацию" 
+                                    Style="{StaticResource ActionButtonStyle}"
+                                    Click="BtnCreateConfig_Click"/>
+                            <Button x:Name="btnEditConfig" 
+                                    Content="Редактировать" 
+                                    Style="{StaticResource ActionButtonStyle}"
+                                    Click="BtnEditConfig_Click"/>
+                        </StackPanel>
+                    </Grid>
+                    
+                    <!-- Node Console Output -->
+                    <TextBlock Text="Консоль узла" 
+                               Style="{StaticResource SubHeaderStyle}"
+                               Margin="0,20,0,10"/>
+                    <Border Background="#F5F5F5" 
+                            BorderBrush="#DDDDDD" 
+                            BorderThickness="1" 
+                            Padding="5" 
+                            Margin="0,0,0,10">
+                        <TextBox x:Name="txtNodeOutput" 
+                                 IsReadOnly="True" 
+                                 Height="200"
+                                 FontFamily="Consolas"
+                                 FontSize="12"
+                                 VerticalScrollBarVisibility="Auto"/>
+                    </Border>
+                    
+                    <TextBlock x:Name="txtNodeStatusBar" 
+                               Text="Готов"
+                               FontStyle="Italic"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Remote Node Configuration -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <TextBlock Grid.Column="0" Text="Конфигурация подключенного узла" Style="{StaticResource SubHeaderStyle}"/>
+                        <Button Grid.Column="1" 
+                                Content="Обновить" 
+                                Command="{Binding RefreshSettingsCommand}"
+                                Style="{StaticResource ActionButtonStyle}"
+                                HorizontalAlignment="Right"/>
+                    </Grid>
+                    
+                    <ProgressBar Style="{StaticResource SettingsProgressBarStyle}" 
+                                 Margin="0,10,0,10"
+                                 Height="5"
+                                 IsIndeterminate="True"
+                                 Visibility="{Binding IsSettingsLoading, Converter={StaticResource BoolToVis}}"/>
+                    
+                    <TextBlock Text="{Binding SettingsErrorMessage}" 
+                               Style="{StaticResource SettingsErrorMessageStyle}"/>
+                    
+                    <Grid IsEnabled="{Binding IsSettingsInteractionEnabled}" Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="180"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingLabelStyle}" Text="ID узла:"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource SettingValueStyle}" Text="{Binding SettingNodeId}"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource SettingLabelStyle}" Text="Адрес прослушивания:"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource SettingValueStyle}" Text="{Binding SettingListenAddress}"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource SettingLabelStyle}" Text="Путь к хранилищу:"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource SettingValueStyle}" Text="{Binding SettingStorageBasePath}"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource SettingLabelStyle}" Text="Фактор репликации:"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource SettingValueStyle}" Text="{Binding SettingReplicationFactor}"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource SettingLabelStyle}" Text="Размер фрагмента (байт):"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource SettingValueStyle}" Text="{Binding SettingDefaultChunkSize}"/>
+                        
+                        <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource SettingLabelStyle}" Text="Использование ЦП:"/>
+                        <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource SettingValueStyle}">
+                                <TextBlock.Text>
+                                    <Binding Path="SettingCpuUsage" StringFormat="{}{0:F1}%"/>
+                                </TextBlock.Text>
+                            </TextBlock>
+                            <ProgressBar Width="100" Height="16" Margin="10,0,0,0" Minimum="0" Maximum="100" 
+                                         Value="{Binding SettingCpuUsage}" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="6" Grid.Column="0" Style="{StaticResource SettingLabelStyle}" Text="Использование RAM:"/>
+                        <TextBlock Grid.Row="6" Grid.Column="1" Style="{StaticResource SettingValueStyle}" Text="{Binding SettingMemoryUsage}"/>
+
+                        <TextBlock Grid.Row="7" Grid.Column="0" Style="{StaticResource SettingLabelStyle}" Text="Дисковое пространство:"/>
+                        <TextBlock Grid.Row="7" Grid.Column="1" Style="{StaticResource SettingValueStyle}" Text="{Binding SettingDiskSpace}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

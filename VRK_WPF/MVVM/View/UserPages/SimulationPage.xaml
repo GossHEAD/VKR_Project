@@ -1,0 +1,250 @@
+﻿<Page x:Class="VRK_WPF.MVVM.View.UserPages.SimulationPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:VRK_WPF.MVVM.View.UserPages"
+      xmlns:converters="clr-namespace:VRK_WPF.MVVM.Converters"
+      mc:Ignorable="d" 
+      d:DesignHeight="600" d:DesignWidth="800"
+      Title="Симуляция">
+
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <converters:InverseBooleanConverter x:Key="InverseBool"/>
+        
+        <Style x:Key="HeaderStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,15"/>
+        </Style>
+        
+        <Style x:Key="SubHeaderStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="ActionButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+            <Setter Property="MinWidth" Value="120"/>
+        </Style>
+
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#DDDDDD"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="0,0,0,15"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect ShadowDepth="1" BlurRadius="4" Color="#20000000" Direction="270"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        
+        <Style TargetType="TextBlock" x:Key="StatusTextBlockStyle">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status}" Value="Online">
+                    <Setter Property="Foreground" Value="Green"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Offline">
+                    <Setter Property="Foreground" Value="Red"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Joining">
+                    <Setter Property="Foreground" Value="Orange"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Leaving">
+                    <Setter Property="Foreground" Value="OrangeRed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Error">
+                    <Setter Property="Foreground" Value="Red"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Connecting">
+                    <Setter Property="Foreground" Value="Orange"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="Симуляция нештатных ситуаций" Style="{StaticResource HeaderStyle}"/>
+
+        <!-- Simulation Controls -->
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}">
+            <StackPanel>
+                <TextBlock Text="Управление симуляцией" Style="{StaticResource SubHeaderStyle}"/>
+                
+                <TextBlock Text="Выберите узлы для отключения:" Margin="0,10,0,5"/>
+                <ListView Name="SimNodesListView" 
+                          ItemsSource="{Binding SimulationNodes}" 
+                          SelectionMode="Multiple" 
+                          Height="150" 
+                          Margin="0,0,0,15"
+                          BorderThickness="1"
+                          BorderBrush="#DDDDDD">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="ID узла" DisplayMemberBinding="{Binding NodeId}" Width="150"/>
+                            <GridViewColumn Header="Адрес" DisplayMemberBinding="{Binding Address}" Width="200"/>
+                            <GridViewColumn Header="Статус" Width="100">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Status}" Style="{StaticResource StatusTextBlockStyle}"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+                
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Отключить выбранные узлы" 
+                            Command="{Binding DisableSelectedNodesCommand}" 
+                            IsEnabled="{Binding CanSimulateNodeFailure}"
+                            Style="{StaticResource ActionButtonStyle}"/>
+                    <Button Content="Восстановить все узлы" 
+                            Command="{Binding RestoreAllNodesCommand}" 
+                            IsEnabled="{Binding CanRestoreNodes}"
+                            Style="{StaticResource ActionButtonStyle}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Simulation Results -->
+        <Border Grid.Row="2" Style="{StaticResource CardStyle}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <TextBlock Grid.Row="0" Text="Результаты симуляции" Style="{StaticResource SubHeaderStyle}"/>
+                
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- File Status -->
+                    <Border Grid.Column="0" Margin="0,0,7.5,0"
+                            Background="#F8F8F8"
+                            BorderBrush="#E0E0E0"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                        <Grid Margin="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <TextBlock Grid.Row="0" Text="Статус файлов" FontWeight="Medium" Margin="0,0,0,10"/>
+                            
+                            <ListView Grid.Row="1" ItemsSource="{Binding SimulationFileStatuses}"
+                                      BorderThickness="0"
+                                      Background="Transparent">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="Файл" DisplayMemberBinding="{Binding FileName}" Width="150"/>
+                                        <GridViewColumn Header="Доступность" DisplayMemberBinding="{Binding Availability}" Width="100"/>
+                                        <GridViewColumn Header="Репликации" DisplayMemberBinding="{Binding ReplicationStatus}" Width="Auto"/>
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Chunk Distribution -->
+                    <Border Grid.Column="1" Margin="7.5,0,0,0"
+                            Background="#F8F8F8"
+                            BorderBrush="#E0E0E0"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                        <Grid Margin="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <TextBlock Grid.Row="0" Text="Распределение фрагментов" FontWeight="Medium" Margin="0,0,0,10"/>
+                            
+                            <ListView Grid.Row="1" ItemsSource="{Binding SimulationChunkDistribution}"
+                                      BorderThickness="0"
+                                      Background="Transparent">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="Фрагмент" DisplayMemberBinding="{Binding ChunkId}" Width="120"/>
+                                        <GridViewColumn Header="Файл" DisplayMemberBinding="{Binding FileName}" Width="120"/>
+                                        <GridViewColumn Header="Узлы" DisplayMemberBinding="{Binding NodeLocations}" Width="Auto"/>
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                        </Grid>
+                    </Border>
+                </Grid>
+                
+                <!-- Activity Log -->
+                <Grid Grid.Row="2" Margin="0,15,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <TextBlock Grid.Row="0" Text="Журнал активности" FontWeight="Medium" Margin="0,0,0,10"/>
+                    
+                    <Border Grid.Row="1" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4">
+                        <TextBox Text="{Binding SimulationLog}" 
+                                 IsReadOnly="True" 
+                                 VerticalScrollBarVisibility="Auto" 
+                                 Height="120"
+                                 FontFamily="Consolas"
+                                 Background="#F8F8F8"
+                                 Padding="5"/>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- Simulation Status -->
+        <Border Grid.Row="3" Style="{StaticResource CardStyle}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <TextBlock Grid.Row="0" 
+                           Text="{Binding SimulationStatus}" 
+                           FontWeight="Medium" 
+                           Foreground="{Binding SimulationStatusColor}"
+                           HorizontalAlignment="Center"/>
+                
+                <ProgressBar Grid.Row="1" 
+                             Visibility="{Binding IsSimulationInProgress, Converter={StaticResource BoolToVis}}" 
+                             Height="10" 
+                             Value="{Binding SimulationProgress}"
+                             Maximum="100"
+                             Margin="0,10,0,0"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Page>
