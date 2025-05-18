@@ -7,458 +7,175 @@
         xmlns:viewModel="clr-namespace:VRK_WPF.MVVM.ViewModel"
         xmlns:converters="clr-namespace:VRK_WPF.MVVM.Converters"
         mc:Ignorable="d"
-        Title="Программный комплекс" Height="1000" Width="1000" WindowStartupLocation="CenterScreen"
-        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
-        TextElement.FontWeight="Regular"
-        TextElement.FontSize="13"
-        TextOptions.TextFormattingMode="Ideal"
-        TextOptions.TextRenderingMode="Auto">
+        Title="Распределенная система хранения данных" Height="900" Width="1200" WindowStartupLocation="CenterScreen"
+        Background="#F5F5F5">
 
     <Window.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/themes/materialdesigntheme.light.xaml" />
-                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/themes/materialdesign2.defaults.xaml" />
-                <ResourceDictionary Source="pack://application:,,,/MaterialDesignColors;component/themes/recommended/primary/materialdesigncolor.deeppurple.xaml" />
-                <ResourceDictionary Source="pack://application:,,,/MaterialDesignColors;component/themes/recommended/secondary/materialdesigncolor.lime.xaml" />
-            </ResourceDictionary.MergedDictionaries>
+        <converters:BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <converters:InverseBooleanConverter x:Key="InverseBool"/>
+        <converters:NullToFalseConverter x:Key="NullToFalse"/>
 
-            <converters:NullToFalseConverter x:Key="NullToFalseConverter"/>
-            <converters:BooleanToVisibilityConverter x:Key="BoolToVis" />
-            <converters:InverseBooleanConverter x:Key="InverseBool" />
+        <Style x:Key="HeaderTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="24"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
 
-            <Style TargetType="TextBlock" x:Key="StatusTextBlockStyle">
-                <Style.Triggers>
-                    <DataTrigger Binding="{Binding Status}" Value="Online">
-                        <Setter Property="Foreground" Value="Green"/>
-                        <Setter Property="FontWeight" Value="Bold"/>
-                    </DataTrigger>
-                    <DataTrigger Binding="{Binding Status}" Value="Offline">
-                        <Setter Property="Foreground" Value="Red"/>
-                    </DataTrigger>
-                    <DataTrigger Binding="{Binding Status}" Value="Joining">
-                         <Setter Property="Foreground" Value="Orange"/>
-                    </DataTrigger>
-                     <DataTrigger Binding="{Binding Status}" Value="Leaving">
-                        <Setter Property="Foreground" Value="OrangeRed"/>
-                     </DataTrigger>
-                     <DataTrigger Binding="{Binding Status}" Value="Error">
-                        <Setter Property="Foreground" Value="Red"/>
-                         <Setter Property="FontWeight" Value="Bold"/>
-                    </DataTrigger>
-                    <DataTrigger Binding="{Binding Status}" Value="Connecting">
-                        <Setter Property="Foreground" Value="Orange"/>
-                    </DataTrigger>
-                </Style.Triggers>
-            </Style>
+        <Style x:Key="SubheaderTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Margin" Value="0,5,0,5"/>
+        </Style>
 
-            <Style TargetType="TextBlock" x:Key="SettingLabel">
-                <Setter Property="FontWeight" Value="Bold"/>
-                <Setter Property="Margin" Value="0,0,10,5"/>
-                <Setter Property="VerticalAlignment" Value="Top"/>
-                <Setter Property="HorizontalAlignment" Value="Right"/>
-            </Style>
-            <Style TargetType="TextBlock" x:Key="SettingValue">
-                <Setter Property="Margin" Value="0,0,0,5"/>
-                <Setter Property="VerticalAlignment" Value="Top"/>
-                <Setter Property="TextWrapping" Value="Wrap"/>
-                <Setter Property="HorizontalAlignment" Value="Left"/>
-            </Style>
-            <Style TargetType="TextBlock" x:Key="SettingsErrorMessageStyle" BasedOn="{StaticResource MaterialDesignBody1TextBlock}">
-                <Setter Property="Foreground" Value="Red"/>
-                <Setter Property="Margin" Value="10,5"/>
-                <Setter Property="TextWrapping" Value="Wrap"/>
-                <Setter Property="Visibility" Value="{Binding HasSettingsError, Converter={StaticResource BoolToVis}}"/>
-                <Setter Property="HorizontalAlignment" Value="Center"/>
-            </Style>
-            <Style TargetType="ProgressBar" x:Key="SettingsProgressBarStyle">
-                <Setter Property="Margin" Value="10,5"/>
-                <Setter Property="Height" Value="10"/>
-                <Setter Property="IsIndeterminate" Value="True"/>
-                <Setter Property="Visibility" Value="{Binding IsSettingsLoading, Converter={StaticResource BoolToVis}}"/>
-                <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            </Style>
+        <Style x:Key="NavigationButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Padding" Value="15,5"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E0E0E0"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#CCCCCC"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
 
-            </ResourceDictionary>
+        <Style x:Key="ActionButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="MinWidth" Value="120"/>
+        </Style>
+
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#DDDDDD"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="0,0,0,15"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect ShadowDepth="1" BlurRadius="4" Color="#20000000" Direction="270"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="TextBlock" x:Key="StatusTextBlockStyle">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status}" Value="Online">
+                    <Setter Property="Foreground" Value="Green"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Offline">
+                    <Setter Property="Foreground" Value="Red"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Joining">
+                    <Setter Property="Foreground" Value="Orange"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Leaving">
+                    <Setter Property="Foreground" Value="OrangeRed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Error">
+                    <Setter Property="Foreground" Value="Red"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Connecting">
+                    <Setter Property="Foreground" Value="Orange"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+            <RowDefinition Height="60"/> <RowDefinition Height="*"/> <RowDefinition Height="30"/> </Grid.RowDefinitions>
 
-        <TabControl x:Name="MainTabControl" Grid.Row="0" Margin="5" Background="White">
+        <Grid Grid.Row="0" Background="#0078D7">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
 
-            <TabItem Header="Файлы">
-                <Grid Margin="5">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+            <TextBlock Grid.Column="0" Text="Распределенная система хранения данных" Foreground="White" FontSize="18" FontWeight="SemiBold"
+                     VerticalAlignment="Center" Margin="20,0"/>
 
-                    <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,5,0,10">
-                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                             <Button Content="Выбрать файл..." Command="{Binding SelectFileCommand}" IsEnabled="{Binding IsUploading, Converter={StaticResource InverseBool}}"/>
-                            <TextBlock Text="Выбран:" VerticalAlignment="Center" Margin="10,0,5,0" FontWeight="SemiBold"/>
-                            <TextBlock Text="{Binding SelectedFileName, TargetNullValue='(нет)'}" VerticalAlignment="Center" FontStyle="Italic"/>
-                        </StackPanel>
-                         <Button DockPanel.Dock="Right" Content="Загрузить файл"
-                                IsEnabled="{Binding CanExecuteUpload}" Command="{Binding UploadFileCommand}"
-                                HorizontalAlignment="Right"/>
-                    </DockPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="20,0">
+                <TextBlock Text="{Binding CurrentUserName}"
+                         Foreground="White"
+                         VerticalAlignment="Center"
+                         Margin="0,0,10,0"/>
+                <TextBlock Text="|" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="{Binding CurrentUserRole}"
+                         Foreground="White"
+                         VerticalAlignment="Center"/>
+                <Button x:Name="ExitButton"
+                        Content="Выход"
+                        Padding="10,3"
+                        Background="#FF5252"
+                        Foreground="White"
+                        BorderThickness="0"
+                        VerticalAlignment="Center"
+                        Margin="15,0,0,0"/>
+            </StackPanel>
+        </Grid>
 
-                    <ListView Grid.Row="1" Margin="0,0,0,5"
-                              ItemsSource="{Binding Files}"
-                              SelectedItem="{Binding SelectedFile, Mode=TwoWay}"
-                              x:Name="FilesListView"
-                              SelectionMode="Single"
-                              HorizontalContentAlignment="Stretch"
-                              AlternationCount="2">
-                        <ListView.Resources>
-                             </ListView.Resources>
-                        <ListView.View>
-                            <GridView>
-                                <GridViewColumn Header="Название файла" DisplayMemberBinding="{Binding FileName}" Width="180"/>
-                                <GridViewColumn Header="Объем (байт)" DisplayMemberBinding="{Binding FileSize}" Width="180"/>
-                                <GridViewColumn Header="Создан" DisplayMemberBinding="{Binding CreationTime, StringFormat='yyyy-MM-dd HH:mm'}" Width="140"/>
-                                <GridViewColumn Header="Состояние" DisplayMemberBinding="{Binding State}" Width="100"/>
-                                <GridViewColumn Header="ID" DisplayMemberBinding="{Binding FileId}" Width="200"/>
-                            </GridView>
-                        </ListView.View>
-                    </ListView>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="230" MinWidth="200"/>
+                <ColumnDefinition Width="5"/> <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
-                        <Button Content="Обновить список" Command="{Binding RefreshFilesListCommand}"/>
-                         <Button Content="Скачать файл" Command="{Binding DownloadFileCommand}" IsEnabled="{Binding CanExecuteDownload}"/>
-                        <Button Content="Удалить файл" Command="{Binding DeleteFileCommand}" IsEnabled="{Binding CanExecuteDelete}" Background="{DynamicResource MaterialDesign.Brush.ValidationError}"/>
+            <Grid Grid.Column="0" Background="#F0F0F0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Background="#E0E0E0" Padding="10">
+                    <StackPanel>
+                        <TextBlock Text="Подключение узла" FontWeight="SemiBold" Margin="0,0,0,5"/> <TextBox Text="{Binding TargetNodeAddress, UpdateSourceTrigger=PropertyChanged}"
+                               Padding="5,8" Margin="0,0,0,10"/>
+                        <Button Content="Подключиться / Отключиться" Command="{Binding ConnectCommand}"
+                              HorizontalAlignment="Stretch"/>
+                        <TextBlock Text="{Binding ConnectionStatus}"
+                                 Foreground="{Binding ConnectionStatusColor}"
+                                 Margin="0,10,0,0" FontWeight="SemiBold"/>
                     </StackPanel>
+                </Border>
 
-                    <StackPanel Grid.Row="3" Margin="0,10,0,0">
-                        <Grid Visibility="{Binding IsUploading, Converter={StaticResource BoolToVis}}">
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Прогресс загрузки:" FontWeight="SemiBold"/>
-                            <ProgressBar Grid.Row="1" Grid.Column="0" Value="{Binding UploadProgress}" Maximum="100"/>
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding UploadStatus}" HorizontalAlignment="Center" Margin="0,2,0,5" FontSize="11" FontStyle="Italic"/>
-                            <Button Grid.Row="1" Grid.Column="1" Content="Отмена" Command="{Binding CancelUploadCommand}" Background="OrangeRed" Margin="10,0,0,0" Padding="6,3"/>
-                        </Grid>
-                        <Grid Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
-                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Прогресс скачивания:" FontWeight="SemiBold"/>
-                            <ProgressBar Grid.Row="1" Grid.Column="0" Value="{Binding DownloadProgress}" Maximum="100"/>
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding DownloadStatus}" HorizontalAlignment="Center" Margin="0,2,0,5" FontSize="11" FontStyle="Italic"/>
-                            <Button Grid.Row="1" Grid.Column="1" Content="Отмена" Command="{Binding CancelDownloadCommand}" Background="OrangeRed" Margin="10,0,0,0" Padding="6,3"/>
-                        </Grid>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,10">
+                        <Button Content="Файлы" Style="{StaticResource NavigationButtonStyle}" x:Name="FilesButton" Click="NavigationButton_Click"/> <Button Content="Статус сети" Style="{StaticResource NavigationButtonStyle}" x:Name="NetworkButton" Click="NavigationButton_Click"/> <Button Content="Настройки" Style="{StaticResource NavigationButtonStyle}" x:Name="SettingsButton" Click="NavigationButton_Click"/> <Button Content="Симуляция" Style="{StaticResource NavigationButtonStyle}" x:Name="SimulationButton" Click="NavigationButton_Click"/> <Button Content="Аналитика" Style="{StaticResource NavigationButtonStyle}" x:Name="AnalyticsButton" Click="NavigationButton_Click"/> <Button Content="Документация" Style="{StaticResource NavigationButtonStyle}" x:Name="DocumentationButton" Click="NavigationButton_Click"/> <Button Content="О программе" Style="{StaticResource NavigationButtonStyle}" x:Name="AboutButton" Click="NavigationButton_Click"/> </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="2" Background="#E0E0E0" Padding="10">
+                    <StackPanel>
+                        <TextBlock Text="Статус узла" FontWeight="SemiBold" Margin="0,0,0,5"/> <TextBlock Text="{Binding NodeStatus}" FontWeight="Medium"/>
+                        <ProgressBar Value="{Binding SettingCpuUsage}" Maximum="100"
+                                   Height="10" Margin="0,5"/>
+                        <TextBlock Text="{Binding SettingDiskSpace}" TextWrapping="Wrap"
+                                 FontSize="11"/>
                     </StackPanel>
-                </Grid>
-            </TabItem>
+                </Border>
+            </Grid>
 
-            <TabItem Header="Сеть">
-                <Grid Margin="5">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,5,0,10">
-                        <Button Content="Обновить статус узлов"
-                                Command="{Binding RefreshNodeStatusCommand}"
-                                IsEnabled="{Binding IsNodeStatusRefreshing, Converter={StaticResource InverseBool}}"/>
-                         <Button Content="Настройки выбранного узла..."
-                                Command="{Binding OpenNodeSettingsCommand}" Margin="10,0,0,0"
-                                IsEnabled="False"/>
-                    </StackPanel>
-                    <ListView Grid.Row="1"
-                              ItemsSource="{Binding Nodes}"
-                              SelectionMode="Single"
-                              HorizontalContentAlignment="Stretch"
-                              AlternationCount="2">
-                         <ListView.Resources>
-                             <Style TargetType="ListViewItem" BasedOn="{StaticResource MaterialDesignListBoxItem}">
-                                <Style.Triggers>
-                                    <Trigger Property="ItemsControl.AlternationIndex" Value="1">
-                                        <Setter Property="Background" Value="{DynamicResource MaterialDesignDivider}"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                             </Style>
-                         </ListView.Resources>
-                        <ListView.View>
-                            <GridView>
-                                <GridViewColumn Header="ID" DisplayMemberBinding="{Binding NodeId}" Width="150"/>
-                                <GridViewColumn Header="Адрес" DisplayMemberBinding="{Binding Address}" Width="200"/>
-                                <GridViewColumn Header="Статус" Width="100">
-                                    <GridViewColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding Status}" Style="{StaticResource StatusTextBlockStyle}"/>
-                                        </DataTemplate>
-                                    </GridViewColumn.CellTemplate>
-                                </GridViewColumn>
-                                <GridViewColumn Header="Детали" DisplayMemberBinding="{Binding StatusDetails}" Width="300"/>
-                            </GridView>
-                        </ListView.View>
-                    </ListView>
-                </Grid>
-            </TabItem>
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch" Background="#DDDDDD"/>
 
-            <TabItem Header="Настройки">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="5">
-                <StackPanel Margin="10">
-                    <GroupBox Header="Настройки соединения" Padding="10" Margin="0,0,0,15">
-                        <StackPanel Orientation="Vertical">
-                            <TextBlock Text="Целевой узел для подключения (пр., http://localhost:5004):" Margin="0,0,0,5"/>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBox Text="{Binding TargetNodeAddress, UpdateSourceTrigger=PropertyChanged}" MinWidth="300" VerticalAlignment="Center" Margin="0,0,10,0">
-                                     <TextBox.InputBindings>
-                                         <KeyBinding Key="Enter" Command="{Binding ConnectCommand}" />
-                                     </TextBox.InputBindings>
-                                </TextBox>
-                                <Button Content="Подключиться / Отключиться" Command="{Binding ConnectCommand}" Padding="8,3" />
-                            </StackPanel>
-                            <TextBlock Text="{Binding ConnectionStatus}" Foreground="{Binding ConnectionStatusColor}" Margin="0,10,0,0" FontWeight="Bold"/>
-                        </StackPanel>
-                    </GroupBox>
+            <Frame Grid.Column="2" x:Name="ContentFrame" NavigationUIVisibility="Hidden"/>
+        </Grid>
 
-                    <GroupBox Header="Управление локальным узлом" Padding="10" Margin="0,0,0,15">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <TextBlock Text="Статус узла:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock x:Name="txtNodeStatus" Text="Не запущен" Foreground="Red" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <TextBlock Text="ID локального узла:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock x:Name="txtNodeId" Text="Не настроен" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <TextBlock Text="Конфигурация:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <ComboBox x:Name="cmbNodeConfigs" Width="250" Margin="0,0,10,0" 
-                                          SelectionChanged="CmbNodeConfigs_SelectionChanged"/>
-                            </StackPanel>
-                            
-                            <StackPanel Orientation="Horizontal" Margin="0,5,0,10">
-                                <Button x:Name="btnStartNode" Content="Запустить узел" 
-                                        Margin="0,0,10,0" Padding="8,3" Click="BtnStartNode_Click"/>
-                                <Button x:Name="btnStopNode" Content="Остановить узел" IsEnabled="False" 
-                                        Margin="0,0,10,0" Padding="8,3" Click="BtnStopNode_Click"/>
-                                <Button x:Name="btnCreateConfig" Content="Создать конфигурацию" 
-                                        Margin="0,0,10,0" Padding="8,3" Click="BtnCreateConfig_Click"/>
-                                <Button x:Name="btnEditConfig" Content="Редактировать" 
-                                        Padding="8,3" Click="BtnEditConfig_Click"/>
-                            </StackPanel>
-                            
-                            <!-- Node Console Output -->
-                            <GroupBox Header="Вывод консоли узла" Padding="5" Margin="0,5,0,0">
-                                <TextBox x:Name="txtNodeOutput" 
-                                         IsReadOnly="True" 
-                                         Height="150"
-                                         FontFamily="Consolas"
-                                         Background="#F0F0F0"
-                                         VerticalScrollBarVisibility="Auto"/>
-                            </GroupBox>
-                            
-                            <StatusBar Margin="0,10,0,0">
-                                <StatusBarItem>
-                                    <TextBlock x:Name="txtNodeStatusBar" Text="Ready"/>
-                                </StatusBarItem>
-                            </StatusBar>
-                        </StackPanel>
-                    </GroupBox>
-
-                    <!-- Connected Node Configuration (original) -->
-                    <GroupBox Header="Конфигурация подключенного узла" Padding="10">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0">
-                                <ProgressBar Style="{StaticResource SettingsProgressBarStyle}"/>
-                                <TextBlock Text="{Binding SettingsErrorMessage}" Style="{StaticResource SettingsErrorMessageStyle}"/>
-                            </StackPanel>
-                            <Grid Grid.Row="1" IsEnabled="{Binding IsSettingsInteractionEnabled}" Margin="0,10,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="180"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-
-                                <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="ID узла:"/>
-                                <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingNodeId}"/>
-
-                                <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Адрес прослушивания:"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingListenAddress}"/>
-
-                                <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Путь к хранилищу:"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingStorageBasePath}"/>
-
-                                <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Фактор репликации:"/>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingReplicationFactor}"/>
-
-                                <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Размер фрагмента (байт):"/>
-                                <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingDefaultChunkSize}"/>
-                                <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Использование ЦП:"/>
-                                <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal">
-                                    <TextBlock Style="{StaticResource SettingValue}">
-                                        <TextBlock.Text>
-                                            <Binding Path="SettingCpuUsage" StringFormat="{}{0:F1}%"/>
-                                        </TextBlock.Text>
-                                    </TextBlock>
-                                    <ProgressBar Width="100" Height="16" Margin="10,0,0,0" Minimum="0" Maximum="100" 
-                                                  Value="{Binding SettingCpuUsage}" VerticalAlignment="Center"/>
-                                </StackPanel>
-
-                                <TextBlock Grid.Row="6" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Использование RAM:"/>
-                                <TextBlock Grid.Row="6" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingMemoryUsage}"/>
-
-                                <TextBlock Grid.Row="7" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Дисковое пространство:"/>
-                                <TextBlock Grid.Row="7" Grid.Column="1" Style="{StaticResource SettingValue}" Text="{Binding SettingDiskSpace}"/>
-                            </Grid>
-                            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
-                                <Button Content="Обновить конфигурацию" Command="{Binding RefreshSettingsCommand}" />
-                            </StackPanel>
-                        </Grid>
-                    </GroupBox>
-                </StackPanel>
-            </ScrollViewer>
-        </TabItem>
-
-            <TabItem Header="Симуляция">
-                <Grid Margin="10">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    
-                    <GroupBox Grid.Row="0" Header="Управление симуляцией" Padding="10" Margin="0,0,0,10">
-                        <StackPanel>
-                            <TextBlock Text="Выберите узлы для отключения:" Margin="0,0,0,5"/>
-                            <ListView Name="SimNodesListView" 
-                                      ItemsSource="{Binding SimulationNodes}" 
-                                      SelectionMode="Multiple" 
-                                      Height="150" 
-                                      Margin="0,0,0,10">
-                                <ListView.ItemContainerStyle>
-                                    <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Type ListViewItem}}">
-                                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
-                                    </Style>
-                                </ListView.ItemContainerStyle>
-                                <ListView.View>
-                                    <GridView>
-                                        <GridViewColumn Header="ID узла" DisplayMemberBinding="{Binding NodeId}" Width="150"/>
-                                        <GridViewColumn Header="Адрес" DisplayMemberBinding="{Binding Address}" Width="200"/>
-                                        <GridViewColumn Header="Статус" Width="100">
-                                            <GridViewColumn.CellTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding Status}" Style="{StaticResource StatusTextBlockStyle}"/>
-                                                </DataTemplate>
-                                            </GridViewColumn.CellTemplate>
-                                        </GridViewColumn>
-                                    </GridView>
-                                </ListView.View>
-                            </ListView>
-                            
-                            <StackPanel Orientation="Horizontal">
-                                <Button Content="Отключить выбранные узлы" 
-                                        Command="{Binding DisableSelectedNodesCommand}" 
-                                        IsEnabled="{Binding CanSimulateNodeFailure}"/>
-                                <Button Content="Восстановить все узлы" 
-                                        Command="{Binding RestoreAllNodesCommand}" 
-                                        Margin="10,0,0,0"
-                                        IsEnabled="{Binding CanRestoreNodes}"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </GroupBox>
-                    
-                    <!-- Simulation Results -->
-                    <GroupBox Grid.Row="1" Header="Результаты симуляции" Padding="10">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            
-                            <GroupBox Grid.Column="0" Header="Статус файлов" Margin="0,0,5,0" Padding="5">
-                                <ListView ItemsSource="{Binding SimulationFileStatuses}">
-                                    <ListView.View>
-                                        <GridView>
-                                            <GridViewColumn Header="Файл" DisplayMemberBinding="{Binding FileName}" Width="150"/>
-                                            <GridViewColumn Header="Доступность" DisplayMemberBinding="{Binding Availability}" Width="100"/>
-                                            <GridViewColumn Header="Репликации" DisplayMemberBinding="{Binding ReplicationStatus}" Width="100"/>
-                                        </GridView>
-                                    </ListView.View>
-                                </ListView>
-                            </GroupBox>
-                            
-                            <GroupBox Grid.Column="1" Header="Распределение фрагментов" Margin="5,0,0,0" Padding="5">
-                                <ListView ItemsSource="{Binding SimulationChunkDistribution}">
-                                    <ListView.View>
-                                        <GridView>
-                                            <GridViewColumn Header="Фрагмент" DisplayMemberBinding="{Binding ChunkId}" Width="120"/>
-                                            <GridViewColumn Header="Файл" DisplayMemberBinding="{Binding FileName}" Width="120"/>
-                                            <GridViewColumn Header="Узлы" DisplayMemberBinding="{Binding NodeLocations}" Width="150"/>
-                                        </GridView>
-                                    </ListView.View>
-                                </ListView>
-                            </GroupBox>
-                        </Grid>
-                    </GroupBox>
-                    
-                    <!-- Activity Log -->
-                    <GroupBox Grid.Row="2" Header="Журнал активности" Padding="5" Margin="0,10,0,0">
-                        <TextBox Text="{Binding SimulationLog}" 
-                                 IsReadOnly="True" 
-                                 VerticalScrollBarVisibility="Auto" 
-                                 Height="100"/>
-                    </GroupBox>
-                    
-                    <!-- Simulation Status -->
-                    <StackPanel Grid.Row="3" Margin="0,10,0,0">
-                        <TextBlock Text="{Binding SimulationStatus}" 
-                                   FontWeight="SemiBold" 
-                                   Foreground="{Binding SimulationStatusColor}"/>
-                        <ProgressBar Value="{Binding SimulationProgress}" 
-                                     Visibility="{Binding IsSimulationInProgress, Converter={StaticResource BoolToVis}}" 
-                                     Height="10" 
-                                     Margin="0,5,0,0"/>
-                    </StackPanel>
-                </Grid>
-            </TabItem>
-
-            <TabItem Header="Журнал событий" IsEnabled="True" x:Name="LogEventsTab">
-                <local:LogViewer />
-            </TabItem>
-            
-            <TabItem Header="Документация" x:Name="DocumentationTab">
-                <Frame x:Name="DocumentationFrame" NavigationUIVisibility="Hidden"/>
-            </TabItem>
-
-            <TabItem Header="О программе" x:Name="AboutTab">
-                <Frame x:Name="AboutFrame" NavigationUIVisibility="Hidden"/>
-            </TabItem>
-
-        </TabControl>
-
-        <StatusBar Grid.Row="1" Background="{DynamicResource MaterialDesignDivider}"> <StatusBarItem>
-                <TextBlock Text="{Binding StatusBarText}" Margin="5,0"/>
+        <StatusBar Grid.Row="2" Background="#007ACC">
+            <StatusBarItem>
+                <TextBlock Text="{Binding StatusBarText}" Foreground="White"/>
             </StatusBarItem>
         </StatusBar>
-
     </Grid>
 </Window>

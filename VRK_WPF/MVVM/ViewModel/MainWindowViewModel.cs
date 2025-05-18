@@ -19,7 +19,7 @@ using VRK_WPF.MVVM.View;
 
 namespace VRK_WPF.MVVM.ViewModel
 {
-    public partial class MainWindowViewModel : ObservableObject
+    public partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         private readonly ILogger<MainWindowViewModel> _logger;
         private StorageService.StorageServiceClient? _storageClient;
@@ -211,7 +211,7 @@ namespace VRK_WPF.MVVM.ViewModel
         {
             if (!string.IsNullOrEmpty(CurrentUserName))
             {
-                StatusBarText = $"Пользователь: {CurrentUserName} | Роль: {CurrentUserRole} | Готов к работе";
+                StatusBarText = $"Пользователь: {CurrentUserName} | Готов к работе";
             }
             else
             {
@@ -1153,6 +1153,23 @@ namespace VRK_WPF.MVVM.ViewModel
         private void AppendToSimulationLog(string message)
         {
             SimulationLog += $"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}";
+        }
+        
+        public void Dispose()
+        {
+            _uploadCts?.Cancel();
+            _uploadCts?.Dispose();
+            _uploadCts = null;
+
+            _downloadCts?.Cancel();
+            _downloadCts?.Dispose();
+            _downloadCts = null;
+
+            _currentChannel?.Dispose();
+            _currentChannel = null;
+            _storageClient = null;
+
+            _logger.LogInformation("MainWindowViewModel disposed.");
         }
 
     }

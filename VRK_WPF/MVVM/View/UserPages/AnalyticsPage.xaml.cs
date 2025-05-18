@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -15,7 +12,6 @@ namespace VRK_WPF.MVVM.View.UserPages
         private readonly LogManager _logManager;
         private readonly Random _random = new Random();
         
-        // Sample log data for visualization
         private List<LogEntry> _logs = new List<LogEntry>();
         
         public AnalyticsPage()
@@ -27,6 +23,7 @@ namespace VRK_WPF.MVVM.View.UserPages
             FromDatePicker.SelectedDate = DateTime.Now.AddDays(-7);
             
             Loaded += AnalyticsPage_Loaded;
+            SizeChanged += AnalyticsPage_SizeChanged;
         }
         
         private async void AnalyticsPage_Loaded(object sender, RoutedEventArgs e)
@@ -46,20 +43,26 @@ namespace VRK_WPF.MVVM.View.UserPages
             DrawCharts();
         }
         
+        private void AnalyticsPage_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            // Redraw charts when container size changes for responsive layout
+            DrawCharts();
+        }
+        
         private void GenerateSampleLogData()
         {
             _logs.Clear();
             string[] levels = { "INFO", "WARNING", "ERROR", "DEBUG" };
             string[] nodes = { "Node1", "Node2", "Node3", "Node4", "Node5" };
             string[] messages = { 
-                "Система запущена успешно",
-                "Подключение к узлу установлено",
-                "Ошибка при загрузке файла",
-                "Отключение узла",
-                "Фрагмент данных реплицирован успешно",
-                "Изменена конфигурация узла",
-                "Предупреждение: высокая загрузка сети",
-                "Ошибка доступа к базе данных" 
+                "System started successfully",
+                "Connected to node",
+                "Error loading file",
+                "Node disconnected",
+                "Data chunk replicated successfully",
+                "Node configuration changed",
+                "Warning: high network load",
+                "Database access error" 
             };
             
             // Generate 200 sample log entries
@@ -136,7 +139,7 @@ namespace VRK_WPF.MVVM.View.UserPages
             // Add axes labels
             TextBlock yLabel = new TextBlock
             {
-                Text = "Количество событий",
+                Text = "Event Count",
                 RenderTransform = new RotateTransform(-90),
                 FontSize = 10
             };
@@ -146,7 +149,7 @@ namespace VRK_WPF.MVVM.View.UserPages
             
             TextBlock xLabel = new TextBlock
             {
-                Text = "Дата",
+                Text = "Date",
                 FontSize = 10
             };
             Canvas.SetLeft(xLabel, width / 2);
@@ -160,7 +163,7 @@ namespace VRK_WPF.MVVM.View.UserPages
                 StrokeThickness = 2
             };
             
-            PointCollection points = new PointCollection();
+            var points = new PointCollection();
             
             // Calculate the spacing between points
             double xInterval = (width - 2 * padding) / (groupedLogs.Count - 1 > 0 ? groupedLogs.Count - 1 : 1);
@@ -188,7 +191,7 @@ namespace VRK_WPF.MVVM.View.UserPages
                 {
                     TextBlock dateLabel = new TextBlock
                     {
-                        Text = groupedLogs[i].Date.ToString("dd.MM"),
+                        Text = groupedLogs[i].Date.ToString("MM/dd"),
                         FontSize = 8
                     };
                     Canvas.SetLeft(dateLabel, x - 10);
@@ -243,7 +246,7 @@ namespace VRK_WPF.MVVM.View.UserPages
             // Add title
             TextBlock title = new TextBlock
             {
-                Text = "Распределение по типам",
+                Text = "Event Type Distribution",
                 FontSize = 12,
                 FontWeight = FontWeights.Bold
             };
@@ -251,14 +254,12 @@ namespace VRK_WPF.MVVM.View.UserPages
             Canvas.SetTop(title, 10);
             EventTypeChart.Children.Add(title);
             
-            // Draw segments and labels
             for (int i = 0; i < groupedLogs.Count; i++)
             {
                 var item = groupedLogs[i];
                 double percentage = (double)item.Count / totalCount;
                 double sweepAngle = percentage * 360;
                 
-                // Draw pie segment
                 PathFigure figure = new PathFigure();
                 figure.StartPoint = new Point(centerX, centerY);
                 
@@ -380,7 +381,7 @@ namespace VRK_WPF.MVVM.View.UserPages
             // Add axes labels
             TextBlock yLabel = new TextBlock
             {
-                Text = "Количество событий",
+                Text = "Event Count",
                 RenderTransform = new RotateTransform(-90),
                 FontSize = 10
             };
@@ -390,7 +391,7 @@ namespace VRK_WPF.MVVM.View.UserPages
             
             TextBlock xLabel = new TextBlock
             {
-                Text = "Узлы",
+                Text = "Nodes",
                 FontSize = 10
             };
             Canvas.SetLeft(xLabel, width / 2);
@@ -456,26 +457,23 @@ namespace VRK_WPF.MVVM.View.UserPages
             if (_logs.Count == 0)
                 return;
             
-            // Filter and group error logs by message type
             var errorLogs = _logs
                 .Where(l => l.Level.Contains("ERR") || l.Level.Contains("FAIL"))
                 .GroupBy(l => GetErrorCategory(l.Message))
                 .Select(g => new { Category = g.Key, Count = g.Count() })
                 .OrderByDescending(g => g.Count)
-                .Take(5)  // Top 5 error categories
+                .Take(5)  
                 .ToList();
             
-            // Define chart dimensions
             double width = ErrorAnalysisChart.ActualWidth > 0 ? ErrorAnalysisChart.ActualWidth : 300;
             double height = ErrorAnalysisChart.ActualHeight > 0 ? ErrorAnalysisChart.ActualHeight : 200;
             double padding = 40;
             
-            // Add title and info text if no errors
             if (errorLogs.Count == 0)
             {
                 TextBlock noErrorsText = new TextBlock
                 {
-                    Text = "Нет ошибок для анализа",
+                    Text = "No errors to analyze",
                     FontSize = 12,
                     TextAlignment = TextAlignment.Center,
                     Width = width
@@ -485,12 +483,9 @@ namespace VRK_WPF.MVVM.View.UserPages
                 return;
             }
             
-            // Find max count for scaling
             int maxCount = errorLogs.Max(g => g.Count);
             
-            // Draw horizontal bar chart
             
-            // Draw axes
             Line xAxis = new Line
             {
                 X1 = padding,
@@ -514,32 +509,27 @@ namespace VRK_WPF.MVVM.View.UserPages
             ErrorAnalysisChart.Children.Add(xAxis);
             ErrorAnalysisChart.Children.Add(yAxis);
             
-            // Add axes labels
             TextBlock xLabel = new TextBlock
             {
-                Text = "Количество",
+                Text = "Count",
                 FontSize = 10
             };
             Canvas.SetLeft(xLabel, width / 2);
             Canvas.SetTop(xLabel, height - 15);
             ErrorAnalysisChart.Children.Add(xLabel);
             
-            // Calculate bar height and spacing
             int numBars = errorLogs.Count;
             double totalBarHeight = height - 2 * padding;
-            double barHeight = totalBarHeight / (numBars * 1.5); // Allow space between bars
+            double barHeight = totalBarHeight / (numBars * 1.5); 
             
-            // Draw bars
             for (int i = 0; i < numBars; i++)
             {
                 var item = errorLogs[i];
                 double barWidth = (item.Count * (width - 2 * padding) / maxCount);
                 
-                // Calculate position
                 double x = padding;
                 double y = padding + i * (barHeight * 1.5);
                 
-                // Draw bar
                 Rectangle bar = new Rectangle
                 {
                     Width = barWidth,
@@ -550,7 +540,6 @@ namespace VRK_WPF.MVVM.View.UserPages
                 Canvas.SetTop(bar, y);
                 ErrorAnalysisChart.Children.Add(bar);
                 
-                // Add category label
                 TextBlock categoryLabel = new TextBlock
                 {
                     Text = TruncateText(item.Category, 20),
@@ -562,7 +551,6 @@ namespace VRK_WPF.MVVM.View.UserPages
                 Canvas.SetTop(categoryLabel, y);
                 ErrorAnalysisChart.Children.Add(categoryLabel);
                 
-                // Add count label
                 TextBlock countLabel = new TextBlock
                 {
                     Text = item.Count.ToString(),
@@ -576,19 +564,18 @@ namespace VRK_WPF.MVVM.View.UserPages
         
         private string GetErrorCategory(string message)
         {
-            // Simple categorization of error messages - in a real app, this would be more sophisticated
-            if (message.Contains("база") || message.Contains("БД") || message.Contains("database"))
-                return "Ошибка базы данных";
-            else if (message.Contains("сеть") || message.Contains("соединение") || message.Contains("connect"))
-                return "Ошибка сети";
-            else if (message.Contains("файл") || message.Contains("file"))
-                return "Ошибка файловой системы";
-            else if (message.Contains("память") || message.Contains("memory"))
-                return "Ошибка памяти";
-            else if (message.Contains("доступ") || message.Contains("permission") || message.Contains("access"))
-                return "Ошибка доступа";
+            if (message.Contains("database") || message.Contains("DB") || message.Contains("database"))
+                return "Database error";
+            else if (message.Contains("network") || message.Contains("connection") || message.Contains("connect"))
+                return "Network error";
+            else if (message.Contains("file") || message.Contains("file"))
+                return "File system error";
+            else if (message.Contains("memory") || message.Contains("memory"))
+                return "Memory error";
+            else if (message.Contains("access") || message.Contains("permission") || message.Contains("access"))
+                return "Access error";
             else
-                return "Прочие ошибки";
+                return "Other errors";
         }
         
         private string TruncateText(string text, int maxLength)
@@ -601,23 +588,20 @@ namespace VRK_WPF.MVVM.View.UserPages
         
         private void ApplyFiltersButton_Click(object sender, RoutedEventArgs e)
         {
-            // Get filter values
-            string selectedLevel = (LogLevelComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Все";
+            string selectedLevel = (LogLevelComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "All";
             DateTime? fromDate = FromDatePicker.SelectedDate;
             string searchText = SearchTextBox.Text;
             
-            // Apply filters to logs
             var filteredLogs = _logs;
             
-            // Filter by level
-            if (selectedLevel != "Все")
+            if (selectedLevel != "All")
             {
                 string levelFilter = selectedLevel switch
                 {
-                    "Ошибка" => "ERROR",
-                    "Предупреждение" => "WARN",
-                    "Информация" => "INFO",
-                    "Отладка" => "DEBUG",
+                    "Error" => "ERROR",
+                    "Warning" => "WARN",
+                    "Information" => "INFO",
+                    "Debug" => "DEBUG",
                     _ => ""
                 };
                 
@@ -627,13 +611,11 @@ namespace VRK_WPF.MVVM.View.UserPages
                 }
             }
             
-            // Filter by date
             if (fromDate.HasValue)
             {
                 filteredLogs = filteredLogs.Where(l => l.Timestamp >= fromDate.Value).ToList();
             }
             
-            // Filter by search text
             if (!string.IsNullOrWhiteSpace(searchText))
             {
                 filteredLogs = filteredLogs.Where(l => 
@@ -641,7 +623,6 @@ namespace VRK_WPF.MVVM.View.UserPages
                     l.NodeId.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
             }
             
-            // Update charts with filtered data
             _logs = filteredLogs;
             DrawCharts();
         }
