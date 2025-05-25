@@ -440,6 +440,7 @@ namespace VRK_WPF.MVVM.ViewModel
 
                 long totalBytesSent = 0;
                 int chunkIndex = 0;
+                int totalChunks = 0;
 
                 if (preferredChunkSize <= 0)
                 {
@@ -448,7 +449,7 @@ namespace VRK_WPF.MVVM.ViewModel
 
                 if (fileSize > 100 * 1024 * 1024) // > 100 MB
                 {
-                    preferredChunkSize = 20 * 1024 * 1024; // 4 MB
+                    preferredChunkSize = 4 * 1024 * 1024; // 4 MB
                 }
                 if (fileSize > 1 * 1024 * 1024 * 1024) // > 1 GB
                 {
@@ -456,6 +457,11 @@ namespace VRK_WPF.MVVM.ViewModel
                 }
 
                 int bufferSize = preferredChunkSize;
+                
+                if (fileSize > 0 && bufferSize > 0)
+                {
+                    totalChunks = (int)Math.Ceiling((double)fileSize / bufferSize);
+                }
 
                 await using (var fileStream = File.OpenRead(SelectedFilePath))
                 {
@@ -477,6 +483,7 @@ namespace VRK_WPF.MVVM.ViewModel
                         };
 
                         _logger.LogTrace("Отправка фрагмента: {Index}, размер: {Size}", chunkIndex, bytesRead);
+                        
                         await call.RequestStream.WriteAsync(new UploadFileRequest { Chunk = chunk });
 
                         totalBytesSent += bytesRead;
@@ -485,7 +492,14 @@ namespace VRK_WPF.MVVM.ViewModel
                         if (fileSize > 0)
                         {
                              UploadProgress = (double)totalBytesSent / fileSize * 100;
-                             UploadStatus = $"Загрузка фрагмента {chunkIndex}... ({UploadProgress:F1}%)";
+                             if (totalChunks > 0)
+                             {
+                                 UploadStatus = $"Загрузка фрагмента {chunkIndex}/{totalChunks}... ({UploadProgress:F1}%)";
+                             }
+                             else
+                             {
+                                 UploadStatus = $"Загрузка фрагмента {chunkIndex}... ({UploadProgress:F1}%)";
+                             }
                         } else {
                              UploadProgress = 100;
                              UploadStatus = $"Загрузка пустого файла...";

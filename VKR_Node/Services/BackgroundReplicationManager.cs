@@ -152,7 +152,7 @@ namespace VKR_Node.Services
                 throw;
             }
         }
-        
+
         public async Task ReplicateChunkAsync(
             ChunkModel chunkInfo, 
             Func<Task<Stream>> sourceDataStreamFactory, 
@@ -172,12 +172,15 @@ namespace VKR_Node.Services
             
             try
             {
+                
                 await _replicationSemaphore.WaitAsync(cancellationToken);
                 
                 try
                 {
+                    
                     var existingNodeIds = await GetChunkStorageNodesAsync(
                         chunkInfo.FileId, chunkInfo.ChunkId, cancellationToken);
+                    
                     
                     if (existingNodeIds.Count >= effectiveReplicationFactor)
                     {
@@ -185,8 +188,11 @@ namespace VKR_Node.Services
                             chunkInfo.ChunkId, existingNodeIds.Count, effectiveReplicationFactor);
                         return;
                     }
+
                     
                     var allOnlineNodes = await FindAllOnlineNodesAsync(cancellationToken);
+                    
+                    
                     var availableNodes = allOnlineNodes
                         .Where(n => !existingNodeIds.Contains(n.NodeId))
                         .ToList();
@@ -203,6 +209,7 @@ namespace VKR_Node.Services
                     
                     if (replicasToAdd <= 0) return;
                     
+                    
                     byte[] chunkData;
                     await using (var dataStream = await sourceDataStreamFactory())
                     {
@@ -213,8 +220,10 @@ namespace VKR_Node.Services
                         }
                     }
                     
+                    
                     var fileMetadata = await _metadataManager.GetFileMetadataAsync(
                         chunkInfo.FileId, cancellationToken);
+                    
                     
                     var targetNodes = ReplicationUtility.SelectReplicaTargets(
                         availableNodes, chunkInfo.ChunkId, replicasToAdd);
@@ -224,22 +233,32 @@ namespace VKR_Node.Services
                     
                     var successfulReplicationNodes = new ConcurrentBag<string>();
                     
+                    
                     var replicationTasks = targetNodes.Select(async node => 
                     {
-                        bool success = await ReplicateToNodeAsync(
-                            node, 
-                            chunkInfo, 
-                            chunkData, 
-                            fileMetadata, 
-                            cancellationToken);
-                            
-                        if (success)
+                        try
                         {
-                            successfulReplicationNodes.Add(node.NodeId);
+                            bool success = await ReplicateToNodeAsync(
+                                node, 
+                                chunkInfo, 
+                                chunkData, 
+                                fileMetadata, 
+                                cancellationToken);
+                                
+                            if (success)
+                            {
+                                successfulReplicationNodes.Add(node.NodeId);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error replicating to node {NodeId}", node.NodeId);
                         }
                     }).ToList();
                     
+                    
                     await Task.WhenAll(replicationTasks);
+                    
                     
                     if (successfulReplicationNodes.Any())
                     {
@@ -493,15 +512,39 @@ namespace VKR_Node.Services
         private async Task<List<KnownNodeOptions>> FindAllOnlineNodesAsync(CancellationToken cancellationToken)
         {
             var onlineNodes = new ConcurrentBag<KnownNodeOptions>();
+            var nodesToCheck = new List<KnownNodeOptions>();
             
-            
-            await Task.WhenAll(_networkOptions.KnownNodes.Select(async node => {
-                if (await IsNodeOnlineAsync(node.NodeId, cancellationToken))
+            foreach (var node in _networkOptions.KnownNodes)
+            {
+                if (_nodeStatusCache.TryGetValue(node.NodeId, out var status) && 
+                    (DateTime.UtcNow - status.LastChecked) < _nodeStatusCacheTtl)
                 {
-                    onlineNodes.Add(node);
+                    if (status.IsOnline)
+                    {
+                        onlineNodes.Add(node);
+                    }
                 }
-            }));
+                else
+                {
+                    nodesToCheck.Add(node);
+                }
+            }
+    
+            if (nodesToCheck.Any())
+            {
+                var pingTasks = nodesToCheck.Select(async node => {
+                    bool isOnline = await IsNodeOnlineAsync(node.NodeId, cancellationToken);
+                    _nodeStatusCache[node.NodeId] = (isOnline, DateTime.UtcNow);
             
+                    if (isOnline)
+                    {
+                        onlineNodes.Add(node);
+                    }
+                });
+        
+                await Task.WhenAll(pingTasks);
+            }
+    
             return onlineNodes.ToList();
         }
         private async Task CreateAdditionalReplicasAsync(
@@ -639,30 +682,33 @@ namespace VKR_Node.Services
             try
             {
                 
-                var replicateRequest = new ReplicateChunkRequest
+                var metadata = new ReplicateChunkMetadata
                 {
                     FileId = chunkInfo.FileId,
                     ChunkId = chunkInfo.ChunkId,
                     ChunkIndex = chunkInfo.ChunkIndex,
-                    Data = ByteString.CopyFrom(chunkData),
+                    Size = chunkInfo.Size,
                     OriginalNodeId = _localNodeId,
-                    
                     ParentFileMetadata = fileMetadata != null ? _mapper.Map<FileMetadata>(fileMetadata) : null
                 };
                 
                 
-                var reply = await _nodeClient.ReplicateChunkToNodeAsync(
-                    targetNode.Address, 
-                    replicateRequest, 
-                    cts.Token);
-                
-                if (!reply.Success)
+                using (var dataStream = new MemoryStream(chunkData))
                 {
-                    _logger.LogWarning("Failed to replicate Chunk {ChunkId} to Node {NodeId}: {Message}", 
-                        chunkInfo.ChunkId, targetNode.NodeId, reply.Message);
-                    return false;
+                    var reply = await _nodeClient.ReplicateChunkToNodeStreamingAsync(
+                        targetNode.Address, 
+                        metadata,
+                        dataStream,
+                        cts.Token);
+            
+                    if (!reply.Success)
+                    {
+                        _logger.LogWarning("Failed to replicate Chunk {ChunkId} to Node {NodeId}: {Message}", 
+                            chunkInfo.ChunkId, targetNode.NodeId, reply.Message);
+                        return false;
+                    }
                 }
-                
+        
                 _logger.LogInformation("Successfully replicated Chunk {ChunkId} to Node {NodeId}", 
                     chunkInfo.ChunkId, targetNode.NodeId);
                 return true;

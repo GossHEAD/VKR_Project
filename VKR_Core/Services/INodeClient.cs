@@ -19,6 +19,11 @@ namespace VKR_Core.Services
         /// <returns>The reply from the target node.</returns>
         Task<ReplicateChunkReply> ReplicateChunkToNodeAsync(string targetNodeAddress, ReplicateChunkRequest request, CancellationToken cancellationToken = default); // Add token
 
+        Task<ReplicateChunkReply> ReplicateChunkToNodeStreamingAsync(
+            string targetNodeAddress,
+            ReplicateChunkMetadata metadata,
+            Stream dataStream,
+            CancellationToken cancellationToken = default);
         /// <summary>
         /// Sends a request to delete a chunk replica on a specified target node.
         /// </summary>

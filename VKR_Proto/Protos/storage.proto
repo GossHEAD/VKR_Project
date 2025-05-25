@@ -74,6 +74,7 @@ service NodeInternalService {
   rpc FindSuccessor (FindSuccessorRequest) returns (FindSuccessorReply);
   rpc GetPredecessor (GetPredecessorRequest) returns (GetPredecessorReply);
   rpc Notify (NotifyRequest) returns (NotifyReply);
+  rpc ReplicateChunkStreaming(stream ReplicateChunkStreamingRequest) returns (ReplicateChunkReply);
 }
 
 service AdminService {
@@ -93,6 +94,22 @@ message UploadFileRequest {
     FileMetadata metadata = 1;
     FileChunk chunk = 2;
   }
+}
+
+message ReplicateChunkStreamingRequest {
+  oneof payload {
+    ReplicateChunkMetadata metadata = 1;
+    bytes data_chunk = 2;
+  }
+}
+
+message ReplicateChunkMetadata {
+  string file_id = 1;
+  string chunk_id = 2;
+  int32 chunk_index = 3;
+  int64 size = 4;
+  string original_node_id = 5;
+  FileMetadata parent_file_metadata = 6;
 }
 
 message UploadFileReply {

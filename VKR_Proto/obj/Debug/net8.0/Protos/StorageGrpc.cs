@@ -604,6 +604,8 @@ namespace VKR.Protos {
     static readonly grpc::Marshaller<global::VKR.Protos.NotifyRequest> __Marshaller_storage_NotifyRequest = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.NotifyRequest.Parser));
     [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
     static readonly grpc::Marshaller<global::VKR.Protos.NotifyReply> __Marshaller_storage_NotifyReply = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.NotifyReply.Parser));
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Marshaller<global::VKR.Protos.ReplicateChunkStreamingRequest> __Marshaller_storage_ReplicateChunkStreamingRequest = grpc::Marshallers.Create(__Helper_SerializeMessage, context => __Helper_DeserializeMessage(context, global::VKR.Protos.ReplicateChunkStreamingRequest.Parser));
 
     [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
     static readonly grpc::Method<global::VKR.Protos.ReplicateChunkRequest, global::VKR.Protos.ReplicateChunkReply> __Method_ReplicateChunk = new grpc::Method<global::VKR.Protos.ReplicateChunkRequest, global::VKR.Protos.ReplicateChunkReply>(
@@ -677,6 +679,14 @@ namespace VKR.Protos {
         __Marshaller_storage_NotifyRequest,
         __Marshaller_storage_NotifyReply);
 
+    [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+    static readonly grpc::Method<global::VKR.Protos.ReplicateChunkStreamingRequest, global::VKR.Protos.ReplicateChunkReply> __Method_ReplicateChunkStreaming = new grpc::Method<global::VKR.Protos.ReplicateChunkStreamingRequest, global::VKR.Protos.ReplicateChunkReply>(
+        grpc::MethodType.ClientStreaming,
+        __ServiceName,
+        "ReplicateChunkStreaming",
+        __Marshaller_storage_ReplicateChunkStreamingRequest,
+        __Marshaller_storage_ReplicateChunkReply);
+
     /// <summary>Service descriptor</summary>
     public static global::Google.Protobuf.Reflection.ServiceDescriptor Descriptor
     {
@@ -737,6 +747,12 @@ namespace VKR.Protos {
 
       [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
       public virtual global::System.Threading.Tasks.Task<global::VKR.Protos.NotifyReply> Notify(global::VKR.Protos.NotifyRequest request, grpc::ServerCallContext context)
+      {
+        throw new grpc::RpcException(new grpc::Status(grpc::StatusCode.Unimplemented, ""));
+      }
+
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual global::System.Threading.Tasks.Task<global::VKR.Protos.ReplicateChunkReply> ReplicateChunkStreaming(grpc::IAsyncStreamReader<global::VKR.Protos.ReplicateChunkStreamingRequest> requestStream, grpc::ServerCallContext context)
       {
         throw new grpc::RpcException(new grpc::Status(grpc::StatusCode.Unimplemented, ""));
       }
@@ -940,6 +956,16 @@ namespace VKR.Protos {
       {
         return CallInvoker.AsyncUnaryCall(__Method_Notify, null, options, request);
       }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual grpc::AsyncClientStreamingCall<global::VKR.Protos.ReplicateChunkStreamingRequest, global::VKR.Protos.ReplicateChunkReply> ReplicateChunkStreaming(grpc::Metadata headers = null, global::System.DateTime? deadline = null, global::System.Threading.CancellationToken cancellationToken = default(global::System.Threading.CancellationToken))
+      {
+        return ReplicateChunkStreaming(new grpc::CallOptions(headers, deadline, cancellationToken));
+      }
+      [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
+      public virtual grpc::AsyncClientStreamingCall<global::VKR.Protos.ReplicateChunkStreamingRequest, global::VKR.Protos.ReplicateChunkReply> ReplicateChunkStreaming(grpc::CallOptions options)
+      {
+        return CallInvoker.AsyncClientStreamingCall(__Method_ReplicateChunkStreaming, null, options);
+      }
       /// <summary>Creates a new instance of client from given <c>ClientBaseConfiguration</c>.</summary>
       [global::System.CodeDom.Compiler.GeneratedCode("grpc_csharp_plugin", null)]
       protected override NodeInternalServiceClient NewInstance(ClientBaseConfiguration configuration)
@@ -962,7 +988,8 @@ namespace VKR.Protos {
           .AddMethod(__Method_AcknowledgeReplica, serviceImpl.AcknowledgeReplica)
           .AddMethod(__Method_FindSuccessor, serviceImpl.FindSuccessor)
           .AddMethod(__Method_GetPredecessor, serviceImpl.GetPredecessor)
-          .AddMethod(__Method_Notify, serviceImpl.Notify).Build();
+          .AddMethod(__Method_Notify, serviceImpl.Notify)
+          .AddMethod(__Method_ReplicateChunkStreaming, serviceImpl.ReplicateChunkStreaming).Build();
     }
 
     /// <summary>Register service method with a service binder with or without implementation. Useful when customizing the service binding logic.
@@ -981,6 +1008,7 @@ namespace VKR.Protos {
       serviceBinder.AddMethod(__Method_FindSuccessor, serviceImpl == null ? null : new grpc::UnaryServerMethod<global::VKR.Protos.FindSuccessorRequest, global::VKR.Protos.FindSuccessorReply>(serviceImpl.FindSuccessor));
       serviceBinder.AddMethod(__Method_GetPredecessor, serviceImpl == null ? null : new grpc::UnaryServerMethod<global::VKR.Protos.GetPredecessorRequest, global::VKR.Protos.GetPredecessorReply>(serviceImpl.GetPredecessor));
       serviceBinder.AddMethod(__Method_Notify, serviceImpl == null ? null : new grpc::UnaryServerMethod<global::VKR.Protos.NotifyRequest, global::VKR.Protos.NotifyReply>(serviceImpl.Notify));
+      serviceBinder.AddMethod(__Method_ReplicateChunkStreaming, serviceImpl == null ? null : new grpc::ClientStreamingServerMethod<global::VKR.Protos.ReplicateChunkStreamingRequest, global::VKR.Protos.ReplicateChunkReply>(serviceImpl.ReplicateChunkStreaming));
     }
 
   }

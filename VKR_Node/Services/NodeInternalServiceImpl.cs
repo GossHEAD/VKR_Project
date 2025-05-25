@@ -38,7 +38,8 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         _metadataManager = metadataManager;
         _dataManager = dataManager;
         _nodeClient = nodeClient;
-        _nodeOptions = nodeOptions.Value;
+        _nodeOptions = nodeOptions.Value ?? 
+                       throw new ArgumentNullException(nameof(nodeOptions));
         _mapper = mapper;
         _replicationManager = replicationManager;
     }
@@ -155,6 +156,124 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         {
             sw.Stop();
             _logger.LogError(ex, "Error processing ReplicateChunk request for Chunk {ChunkId}", request.ChunkId);
+            return new ReplicateChunkReply { Success = false, Message = $"Error: {ex.Message}" };
+        }
+    }
+    
+    public override async Task<ReplicateChunkReply> ReplicateChunkStreaming(
+        IAsyncStreamReader<ReplicateChunkStreamingRequest> requestStream,
+        ServerCallContext context)
+    {
+        var sw = Stopwatch.StartNew();
+        ReplicateChunkMetadata? metadata = null;
+        ChunkModel? chunkInfo = null;
+        string tempFilePath = Path.GetTempFileName();
+        long totalBytesReceived = 0;
+        string localNodeId = _nodeOptions.NodeId;
+        
+        try
+        {
+            await using (var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write))
+            {
+                await foreach (var request in requestStream.ReadAllAsync(context.CancellationToken))
+                {
+                    if (request.PayloadCase == ReplicateChunkStreamingRequest.PayloadOneofCase.Metadata)
+                    {
+                        metadata = request.Metadata;
+                        
+                        _logger.LogInformation(
+                            "Node {NodeId} received streaming ReplicateChunk request for Chunk {ChunkId} of File {FileId} from Node {OriginalNodeId}",
+                            _nodeOptions.NodeId, metadata.ChunkId, metadata.FileId, metadata.OriginalNodeId);
+                            
+                        chunkInfo = new ChunkModel
+                        {
+                            FileId = metadata.FileId,
+                            ChunkId = metadata.ChunkId,
+                            ChunkIndex = metadata.ChunkIndex,
+                            Size = metadata.Size,
+                            StoredNodeId = localNodeId 
+                        };
+                    }
+                    else if (request.PayloadCase == ReplicateChunkStreamingRequest.PayloadOneofCase.DataChunk)
+                    {
+                        if (metadata == null || chunkInfo == null)
+                        {
+                            throw new RpcException(new Status(StatusCode.InvalidArgument, "Received data before metadata"));
+                        }
+                        
+                        var data = request.DataChunk;
+                        await fileStream.WriteAsync(data.Memory, context.CancellationToken);
+                        totalBytesReceived += data.Length;
+                    }
+                }
+            }
+            
+            if (metadata == null || chunkInfo == null)
+            {
+                File.Delete(tempFilePath);
+                return new ReplicateChunkReply { Success = false, Message = "No metadata received" };
+            }
+            
+            if (metadata.Size > 0 && totalBytesReceived != metadata.Size)
+            {
+                _logger.LogWarning("Size mismatch for Chunk {ChunkId}. Expected: {Expected}, Received: {Received}",
+                    metadata.ChunkId, metadata.Size, totalBytesReceived);
+            }
+            
+            chunkInfo.Size = totalBytesReceived;
+            
+            long availableSpace = await _dataManager.GetFreeDiskSpaceAsync(context.CancellationToken);
+            long requiredSpace = (long)(totalBytesReceived * 1.1);
+            
+            if (availableSpace < requiredSpace)
+            {
+                File.Delete(tempFilePath);
+                return new ReplicateChunkReply { 
+                    Success = false, 
+                    Message = $"Insufficient disk space. Required: {FormatBytes(requiredSpace)}, Available: {FormatBytes(availableSpace)}" 
+                };
+            }
+            
+            await using (var fileStream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read))
+            {
+                await _dataManager.StoreChunkAsync(chunkInfo, fileStream, context.CancellationToken);
+            }
+            
+            File.Delete(tempFilePath);
+            
+            await _metadataManager.SaveChunkMetadataAsync(
+                chunkInfo,
+                new[] { localNodeId  },
+                context.CancellationToken);
+            
+            if (metadata.ParentFileMetadata != null)
+            {
+                await ProcessParentFileMetadataAsync(metadata.FileId, metadata.ParentFileMetadata, context.CancellationToken);
+            }
+            
+            if (!string.IsNullOrEmpty(metadata.OriginalNodeId) && metadata.OriginalNodeId != localNodeId )
+            {
+                _ = SendReplicaAcknowledgementAsync(metadata.OriginalNodeId, metadata.FileId, metadata.ChunkId, localNodeId );
+            }
+            
+            sw.Stop();
+            _logger.LogInformation("Successfully processed streaming replica for Chunk {ChunkId} in {ElapsedMs}ms", 
+                metadata.ChunkId, sw.ElapsedMilliseconds);
+                
+            return new ReplicateChunkReply { Success = true, Message = "Chunk replicated successfully" };
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            
+            if (File.Exists(tempFilePath))
+            {
+                try { File.Delete(tempFilePath); } catch { }
+            }
+            
+            _logger.LogError(ex, "Error processing streaming ReplicateChunk request for Chunk {ChunkId}", 
+                metadata?.ChunkId ?? "unknown");
+                
             return new ReplicateChunkReply { Success = false, Message = $"Error: {ex.Message}" };
         }
     }

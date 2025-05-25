@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using Google.Protobuf;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
@@ -165,6 +166,7 @@ namespace VKR_Node.Services
 
             var channel = _channels.GetOrAdd(formattedAddress, addr => {
                 _logger.LogDebug("Creating gRPC channel for address: {Address}", addr);
+                /*
                 return GrpcChannel.ForAddress(addr, new GrpcChannelOptions
                 {
                     HttpHandler = new SocketsHttpHandler
@@ -173,6 +175,19 @@ namespace VKR_Node.Services
                         EnableMultipleHttp2Connections = true
                     }
                 });
+                */
+                var options = new GrpcChannelOptions
+                {
+                    MaxReceiveMessageSize = 100 * 1024 * 1024, 
+                    MaxSendMessageSize = 100 * 1024 * 1024,    
+                    HttpHandler = new SocketsHttpHandler
+                    {
+                        ConnectTimeout = TimeSpan.FromSeconds(30),
+                        EnableMultipleHttp2Connections = true
+                    }
+                };
+        
+                return GrpcChannel.ForAddress(addr, options);
             });
             
             _channelLastUsed[formattedAddress] = DateTime.UtcNow;
@@ -305,7 +320,47 @@ namespace VKR_Node.Services
                     Message = "Connection to target node failed" 
                 };
         }
+        
+        public async Task<ReplicateChunkReply> ReplicateChunkToNodeStreamingAsync(
+            string targetNodeAddress,
+            ReplicateChunkMetadata metadata,
+            Stream dataStream,
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Sending streaming ReplicateChunk request for Chunk {ChunkId} to Node {TargetAddress}", 
+                metadata.ChunkId, targetNodeAddress);
 
+            return await ExecuteWithErrorHandlingAsync(
+                "ReplicateChunkStreaming",
+                targetNodeAddress,
+                async () => {
+                    var channel = GetOrCreateChannel(targetNodeAddress);
+                    var client = new NodeInternalService.NodeInternalServiceClient(channel);
+            
+                    using var call = client.ReplicateChunkStreaming(cancellationToken: cancellationToken);
+                    
+                    await call.RequestStream.WriteAsync(new ReplicateChunkStreamingRequest { 
+                        Metadata = metadata 
+                    });
+                    
+                    byte[] buffer = new byte[64 * 1024]; 
+                    int bytesRead;
+                    while ((bytesRead = await dataStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
+                    {
+                        await call.RequestStream.WriteAsync(new ReplicateChunkStreamingRequest {
+                            DataChunk = ByteString.CopyFrom(buffer, 0, bytesRead)
+                        });
+                    }
+            
+                    await call.RequestStream.CompleteAsync();
+                    return await call.ResponseAsync;
+                },
+                cancellationToken) ?? new ReplicateChunkReply { 
+                Success = false, 
+                Message = "Подключение к узлу не удалось" 
+            };
+        }
+        
         public async Task<DeleteChunkReply> DeleteChunkOnNodeAsync(
             string targetNodeAddress, 
             DeleteChunkRequest request, 
