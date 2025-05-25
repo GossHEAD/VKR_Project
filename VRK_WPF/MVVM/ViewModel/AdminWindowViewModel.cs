@@ -11,11 +11,12 @@ using VRK_WPF.MVVM.View;
 
 namespace VRK_WPF.MVVM.ViewModel
 {
-    public partial class AdminWindowViewModel : ObservableObject
+    public partial class AdminWindowViewModel : ObservableObject, IDisposable
     {
         private readonly ILogger<AdminWindowViewModel> _logger;
         private GrpcChannel? _currentChannel;
         private StorageService.StorageServiceClient? _storageClient;
+        private bool _disposed = false;
 
         [ObservableProperty]
         private ObservableCollection<NodeViewModel> _availableNodes = new();
@@ -238,6 +239,29 @@ namespace VRK_WPF.MVVM.ViewModel
 
                     break;
                 }
+            }
+        }
+        
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+    
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    _currentChannel?.ShutdownAsync().Wait(TimeSpan.FromSeconds(2));
+                    _currentChannel?.Dispose();
+                    _currentChannel = null;
+                    _storageClient = null;
+                
+                    AvailableNodes?.Clear();
+                }
+                _disposed = true;
             }
         }
     }

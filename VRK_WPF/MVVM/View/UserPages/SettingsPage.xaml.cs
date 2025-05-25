@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -6,11 +7,12 @@ using VRK_WPF.MVVM.Services;
 
 namespace VRK_WPF.MVVM.View.UserPages
 {
-    public partial class SettingsPage : Page
+    public partial class SettingsPage : Page, IDisposable
     {
         private NodeConfigurationManager _configManager;
         private NodeProcessManager _processManager;
         private bool _isNodeManagerSet = false;
+        private bool _disposed = false;
         
         public SettingsPage()
         {
@@ -49,13 +51,24 @@ namespace VRK_WPF.MVVM.View.UserPages
                 return;
                 
             var configs = _configManager.GetAvailableConfigs();
-            cmbNodeConfigs.ItemsSource = configs;
+            var configsCollection = new ObservableCollection<NodeConfig>(configs);
+            cmbNodeConfigs.ItemsSource = configsCollection;
             
-            var currentConfig = configs.Find(c => c.IsCurrentNode);
-            if (currentConfig != null)
+            //var currentConfig = configs.Find(c => c.IsCurrentNode);
+            var currentSelection = cmbNodeConfigs.SelectedItem as NodeConfig;
+            
+            if (currentSelection != null)
             {
-                cmbNodeConfigs.SelectedItem = currentConfig;
+                var matchingConfig = configsCollection.FirstOrDefault(c => c.ConfigPath == currentSelection.ConfigPath);
+                if (matchingConfig != null)
+                {
+                    cmbNodeConfigs.SelectedItem = matchingConfig;
+                }
             }
+            // if (currentConfig != null)
+            // {
+            //     cmbNodeConfigs.SelectedItem = currentConfig;
+            // }
         }
         
         private void CmbNodeConfigs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -146,6 +159,24 @@ namespace VRK_WPF.MVVM.View.UserPages
         {
             txtNodeOutput.AppendText("Процесс узла завершился." + Environment.NewLine);
             UpdateNodeStatusUI();
+        }
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+    
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    _configManager = null;
+                    _processManager = null;
+                }
+                _disposed = true;
+            }
         }
     }
 }

@@ -579,18 +579,28 @@ namespace VKR_Node.Services
             _disposed = true;
             
             _cleanupCts.Cancel();
-            try { _cleanupTask.Wait(TimeSpan.FromSeconds(1)); } catch { /* Ignore */ }
+            try { _cleanupTask.Wait(TimeSpan.FromSeconds(1)); } 
+            catch (AggregateException ex) when (ex.InnerException is OperationCanceledException) 
+            { 
+            }
+            catch {}
+            
             _cleanupCts.Dispose();
             
             var channelsToDispose = _channels.Values.ToList();
             _channels.Clear();
             _channelLastUsed.Clear();
+            _channelFailureCount.Clear();
+            _channelCircuitBreakers.Clear();
+            _metrics.Clear();
+
 
             foreach (var channel in channelsToDispose)
             {
                 try
                 {
                     channel.ShutdownAsync().Wait(TimeSpan.FromSeconds(2));
+                    channel.Dispose();
                 }
                 catch (Exception ex)
                 {

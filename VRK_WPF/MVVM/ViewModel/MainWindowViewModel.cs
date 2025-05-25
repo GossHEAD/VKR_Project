@@ -27,6 +27,10 @@ namespace VRK_WPF.MVVM.ViewModel
         private CancellationTokenSource? _uploadCts;
         private CancellationTokenSource? _downloadCts;
 
+        private readonly System.Timers.Timer _progressUpdateTimer;
+        private double _pendingUploadProgress;
+        private string _pendingUploadStatus;
+        
         [ObservableProperty]
         private ObservableCollection<FileViewModel> _files = new();
 
@@ -205,6 +209,16 @@ namespace VRK_WPF.MVVM.ViewModel
                 Files.Add(new FileViewModel { FileId = "design-1", FileName = "DesignFile1.txt", FileSize = 1024, CreationTime = DateTime.Now, State = "Доступен" });
                 Nodes.Add(new NodeViewModel { NodeId = "Узел1-Дизайн", Address = "localhost:5001", Status = "Онлайн", StatusDetails = "Режим дизайна" });
             }
+            
+            _progressUpdateTimer = new System.Timers.Timer(100); 
+            _progressUpdateTimer.Elapsed += (s, e) =>
+            {
+                Application.Current?.Dispatcher.InvokeAsync(() =>
+                {
+                    UploadProgress = _pendingUploadProgress;
+                    UploadStatus = _pendingUploadStatus;
+                });
+            };
         }
 
         private void UpdateStatusBarWithUserInfo()
@@ -312,13 +326,21 @@ namespace VRK_WPF.MVVM.ViewModel
             Files.Clear();
             Nodes.Clear();
 
+            var tasks = new[]
+            {
+                RefreshFilesListAsync(),
+                RefreshNodeStatusAsync(),
+                LoadSettingsAsync()
+            };
+            
             if (ConnectToNode())
             {
-                await RefreshFilesListAsync();
-                await RefreshNodeStatusAsync();
-                await LoadSettingsAsync();
-                await UpdateSimulationNodesAsync();
-                await UpdateFileAndChunkStatusAsync();
+                await Task.WhenAll(tasks);
+                
+                await Task.WhenAll(
+                    UpdateSimulationNodesAsync(),
+                    UpdateFileAndChunkStatusAsync()
+                );
 
                 CanRestoreNodes = true;
                 UpdateStatusBar($"Подключено к {TargetNodeAddress}. Конфигурация загружена.");
@@ -467,44 +489,45 @@ namespace VRK_WPF.MVVM.ViewModel
                 {
                     byte[] buffer = new byte[bufferSize];
                     int bytesRead;
-                    while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length, _uploadCts.Token)) > 0)
+                    await Task.Run(async () =>
                     {
-                         _uploadCts.Token.ThrowIfCancellationRequested();
-
-                        var chunkData = ByteString.CopyFrom(buffer, 0, bytesRead);
-
-                        var chunkId = $"chunk_{Guid.NewGuid()}_{chunkIndex}";
-                        var chunk = new FileChunk
+                        while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length, _uploadCts.Token)) > 0)
                         {
-                            ChunkId = chunkId,
-                            ChunkIndex = chunkIndex,
-                            Data = chunkData,
-                            Size = bytesRead
-                        };
+                            _uploadCts.Token.ThrowIfCancellationRequested();
 
-                        _logger.LogTrace("Отправка фрагмента: {Index}, размер: {Size}", chunkIndex, bytesRead);
+                            var chunkData = ByteString.CopyFrom(buffer, 0, bytesRead);
+
+                            var chunkId = $"chunk_{Guid.NewGuid()}_{chunkIndex}";
+                            var chunk = new FileChunk
+                            {
+                                ChunkId = chunkId,
+                                ChunkIndex = chunkIndex,
+                                Data = chunkData,
+                                Size = bytesRead
+                            };
+
+                            _logger.LogTrace("Отправка фрагмента: {Index}, размер: {Size}", chunkIndex, bytesRead);
                         
-                        await call.RequestStream.WriteAsync(new UploadFileRequest { Chunk = chunk });
+                            await call.RequestStream.WriteAsync(new UploadFileRequest { Chunk = chunk });
 
-                        totalBytesSent += bytesRead;
-                        chunkIndex++;
+                            totalBytesSent += bytesRead;
+                            chunkIndex++;
 
-                        if (fileSize > 0)
-                        {
-                             UploadProgress = (double)totalBytesSent / fileSize * 100;
-                             if (totalChunks > 0)
-                             {
-                                 UploadStatus = $"Загрузка фрагмента {chunkIndex}/{totalChunks}... ({UploadProgress:F1}%)";
-                             }
-                             else
-                             {
-                                 UploadStatus = $"Загрузка фрагмента {chunkIndex}... ({UploadProgress:F1}%)";
-                             }
-                        } else {
-                             UploadProgress = 100;
-                             UploadStatus = $"Загрузка пустого файла...";
+                            if (fileSize > 0)
+                            {
+                                UploadProgress = (double)totalBytesSent / fileSize * 100;
+                                await Application.Current.Dispatcher.InvokeAsync(() =>
+                                {
+                                    UploadProgress = (double)totalBytesSent / fileSize * 100;
+                                    UploadStatus = $"Загрузка фрагмента {chunkIndex}/{totalChunks}... ({UploadProgress:F1}%)";
+                                });
+                            } else {
+                                UploadProgress = 100;
+                                UploadStatus = $"Загрузка пустого файла...";
+                            }
                         }
-                    }
+                    });
+                   
                 }
                 _logger.LogInformation("Завершение отправки {ChunkCount} фрагментов. Отправлено байт: {TotalBytes}", chunkIndex, totalBytesSent);
 
@@ -554,6 +577,17 @@ namespace VRK_WPF.MVVM.ViewModel
                 _uploadCts?.Dispose();
                 _uploadCts = null;
                 _logger.LogInformation("Операция загрузки завершена.");
+            }
+        }
+        
+        private void UpdateUploadProgress(double progress, string status)
+        {
+            _pendingUploadProgress = progress;
+            _pendingUploadStatus = status;
+    
+            if (!_progressUpdateTimer.Enabled)
+            {
+                _progressUpdateTimer.Start();
             }
         }
 

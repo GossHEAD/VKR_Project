@@ -4,11 +4,12 @@ using System.Windows;
 
 namespace VRK_WPF.MVVM.Services
 {
-    public class NodeProcessManager
+    public class NodeProcessManager : IDisposable
     {
         private const string NodeExecutableName = "VKR_Node.exe";
         private Process _nodeProcess;
         private readonly NodeConfigurationManager _configManager;
+        private bool _disposed = false;
         
         public bool IsNodeRunning => _nodeProcess != null && !_nodeProcess.HasExited;
         public event EventHandler<string> NodeOutputReceived;
@@ -151,5 +152,24 @@ namespace VRK_WPF.MVVM.Services
             
             return string.Empty;
         }
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+    
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    StopNode();
+                    _nodeProcess?.Dispose();
+                }
+                _disposed = true;
+            }
+        }
     }
+    
 }

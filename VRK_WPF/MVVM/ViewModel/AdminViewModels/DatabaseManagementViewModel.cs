@@ -383,21 +383,23 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         
         private async Task LoadFilesDataAsync()
         {
-            StatusMessage = "Загрузка данных таблицы Файлов"; // Translated
+            StatusMessage = "Загрузка данных таблицы Файлов"; 
 
             try
             {
                 if (_dbContext == null || !_dbContext.Database.CanConnect())
                 {
-                    StatusMessage = "Контекст базы данных равен null или невозможно подключиться"; // Translated
+                    StatusMessage = "Контекст базы данных равен null или невозможно подключиться"; 
                     return;
                 }
 
                 var files = await _dbContext.FilesMetadata
-                    .AsNoTracking()
+                    .AsNoTracking() 
+                    .OrderBy(f => f.FileName)
+                    .Take(1000) 
                     .ToListAsync();
 
-                StatusMessage = $"Получено {files.Count} записей из таблицы FilesMetadata"; // Translated
+                StatusMessage = $"Получено {files.Count} записей из таблицы FilesMetadata"; 
 
                 if (files.Count > 0)
                 {
@@ -405,23 +407,44 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                     StatusMessage = $"Пример записи - FileId: {first.FileId}, FileName: {first.FileName}, Size: {first.FileSize}"; // Translated
                 }
 
-                foreach (var file in files)
+                // foreach (var file in files)
+                // {
+                //     var viewModel = new FileRowViewModel
+                //     {
+                //         FileId = file.FileId,
+                //         FileName = file.FileName,
+                //         FileSize = file.FileSize,
+                //         CreationTime = file.CreationTime,
+                //         ModificationTime = file.ModificationTime,
+                //         ContentType = file.ContentType,
+                //         ChunkSize = file.ChunkSize,
+                //         TotalChunks = file.TotalChunks,
+                //         State = file.State
+                //     };
+                //
+                //     TableData.Add(viewModel);
+                // }
+                var viewModels = files.Select(file => new FileRowViewModel
                 {
-                    var viewModel = new FileRowViewModel
+                    FileId = file.FileId,
+                    FileName = file.FileName,
+                    FileSize = file.FileSize,
+                    CreationTime = file.CreationTime,
+                    ModificationTime = file.ModificationTime,
+                    ContentType = file.ContentType,
+                    ChunkSize = file.ChunkSize,
+                    TotalChunks = file.TotalChunks,
+                    State = file.State
+                }).ToList();
+                
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    TableData.Clear();
+                    foreach (var vm in viewModels)
                     {
-                        FileId = file.FileId,
-                        FileName = file.FileName,
-                        FileSize = file.FileSize,
-                        CreationTime = file.CreationTime,
-                        ModificationTime = file.ModificationTime,
-                        ContentType = file.ContentType,
-                        ChunkSize = file.ChunkSize,
-                        TotalChunks = file.TotalChunks,
-                        State = file.State
-                    };
-
-                    TableData.Add(viewModel);
-                }
+                        TableData.Add(vm);
+                    }
+                });
             }
             catch (Exception ex)
             {

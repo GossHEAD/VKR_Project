@@ -5,7 +5,7 @@ using System.Windows.Threading;
 
 namespace VRK_WPF.MVVM.Services
 {
-    public class LogManager
+    public class LogManager : IDisposable
     {
         private readonly Dispatcher _dispatcher;
         private readonly ObservableCollection<Model.LogEntry> _logs = new();
@@ -13,6 +13,7 @@ namespace VRK_WPF.MVVM.Services
         private long _lastPosition = 0;
         private FileSystemWatcher? _fileWatcher;
         private string _currentNodeId = string.Empty;
+        private bool _disposed = false;
         
         public ObservableCollection<Model.LogEntry> Logs => _logs;
         
@@ -391,6 +392,27 @@ namespace VRK_WPF.MVVM.Services
             Debug.WriteLine("LogManager: Stopping monitoring");
             _fileWatcher?.Dispose();
             _fileWatcher = null;
+        }
+        
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    StopMonitoring();
+                    _fileWatcher?.Dispose();
+                    _fileWatcher = null;
+                    _logs.Clear();
+                }
+                _disposed = true;
+            }
         }
         
         public void ClearLogs()

@@ -14,6 +14,7 @@ namespace VRK_WPF.MVVM.View
         private NodeConfigurationManager _nodeConfigManager;
         private NodeProcessManager _nodeProcessManager;
         private Button _currentActiveButton;
+        private bool _isClosing = false;
 
         public MainWindow()
         {
@@ -243,15 +244,28 @@ namespace VRK_WPF.MVVM.View
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
-            if (_nodeProcessManager != null && _nodeProcessManager.IsNodeRunning)
+            if (_isClosing) return;
+            _isClosing = true;
+
+            if (_nodeProcessManager != null)
             {
-                _nodeProcessManager.StopNode();
+                _nodeProcessManager.NodeOutputReceived -= NodeProcess_OutputReceived;
+                _nodeProcessManager.NodeErrorReceived -= NodeProcess_ErrorReceived;
+                _nodeProcessManager.NodeExited -= NodeProcess_Exited;
+            
+                if (_nodeProcessManager.IsNodeRunning)
+                {
+                    _nodeProcessManager.StopNode();
+                }
             }
 
             if (DataContext is IDisposable disposableViewModel)
             {
                 disposableViewModel.Dispose();
             }
+
+            ContentFrame.Content = null;
+            ContentFrame.NavigationService?.RemoveBackEntry();
 
             base.OnClosing(e);
         }

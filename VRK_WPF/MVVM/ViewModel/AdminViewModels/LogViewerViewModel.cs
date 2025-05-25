@@ -10,10 +10,11 @@ using VRK_WPF.MVVM.Services;
 
 namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
 {
-    public partial class LogViewerViewModel : ObservableObject
+    public partial class LogViewerViewModel : ObservableObject, IDisposable
     {
         private readonly LogManager _logManager;
         private readonly List<LogEntry> _allLogs = new();
+        private bool _disposed = false;
 
         
         [ObservableProperty] private ObservableCollection<LogEntry> _logs = new();
@@ -277,6 +278,24 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             
             Application.Current.Dispatcher.InvokeAsync(() => ApplyFilters(), 
                 System.Windows.Threading.DispatcherPriority.Background);
+        }
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+    
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    _logManager?.StopMonitoring();
+                    _logManager?.Dispose();
+                }
+                _disposed = true;
+            }
         }
     }
 }

@@ -2,28 +2,35 @@
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using VRK_WPF.MVVM.Model;
 using VRK_WPF.MVVM.Services;
 
 namespace VRK_WPF.MVVM.View.UserPages
 {
-    public partial class AnalyticsPage : Page
+    public partial class AnalyticsPage : Page, IDisposable
     {
         private readonly LogManager _logManager;
         private readonly Random _random = new Random();
-        
         private List<LogEntry> _logs = new List<LogEntry>();
+        private System.Windows.Threading.DispatcherTimer _resizeTimer;
+        private bool _disposed = false;
         
         public AnalyticsPage()
         {
             InitializeComponent();
             _logManager = new LogManager(Dispatcher);
             
-            // Initialize with current date
             FromDatePicker.SelectedDate = DateTime.Now.AddDays(-7);
             
             Loaded += AnalyticsPage_Loaded;
             SizeChanged += AnalyticsPage_SizeChanged;
+            Unloaded += AnalyticsPage_Unloaded;
+        }
+        
+        private void AnalyticsPage_Unloaded(object sender, RoutedEventArgs e)
+        {
+            Dispose();
         }
         
         private async void AnalyticsPage_Loaded(object sender, RoutedEventArgs e)
@@ -45,8 +52,14 @@ namespace VRK_WPF.MVVM.View.UserPages
         
         private void AnalyticsPage_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            // Redraw charts when container size changes for responsive layout
-            DrawCharts();
+            _resizeTimer?.Stop();
+            _resizeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+            _resizeTimer.Tick += async (s, args) =>
+            {
+                _resizeTimer.Stop();
+                DrawCharts();
+            };
+            _resizeTimer.Start();
         }
         
         private void GenerateSampleLogData()
@@ -625,6 +638,41 @@ namespace VRK_WPF.MVVM.View.UserPages
             
             _logs = filteredLogs;
             DrawCharts();
+        }
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+    
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    _resizeTimer?.Stop();
+                    _resizeTimer = null;
+                
+                    _logManager?.StopMonitoring();
+                    _logManager?.Dispose();
+                
+                    _logs?.Clear();
+                    _logs = null;
+                
+                    // Очистка Canvas
+                    LogEventChart?.Children.Clear();
+                    EventTypeChart?.Children.Clear();
+                    NodeActivityChart?.Children.Clear();
+                    ErrorAnalysisChart?.Children.Clear();
+                
+                    // Отписка от событий
+                    Loaded -= AnalyticsPage_Loaded;
+                    SizeChanged -= AnalyticsPage_SizeChanged;
+                    Unloaded -= AnalyticsPage_Unloaded;
+                }
+                _disposed = true;
+            }
         }
     }
 }

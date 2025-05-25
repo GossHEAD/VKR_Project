@@ -53,11 +53,37 @@ namespace VRK_WPF.MVVM.View
 
         private void AdminWindow_Closing(object sender, CancelEventArgs e)
         {
-            if (_databaseManagementPage != null &&
-                _databaseManagementPage.DataContext is IDisposable disposableViewModel)
+            if (_databaseManagementPage != null)
             {
-                disposableViewModel.Dispose();
+                if (_databaseManagementPage.DataContext is IDisposable disposableViewModel)
+                {
+                    disposableViewModel.Dispose();
+                }
+                _databaseManagementPage = null;
             }
+    
+            if (_nodeConfigPage != null)
+            {
+                _nodeConfigPage = null;
+            }
+    
+            if (_logViewerPage != null)
+            {
+                _logViewerPage = null;
+            }
+    
+            if (_nodeStatusPage != null)
+            {
+                _nodeStatusPage = null;
+            }
+    
+            if (DataContext is IDisposable mainViewModel)
+            {
+                mainViewModel.Dispose();
+            }
+    
+            AdminContentFrame.Content = null;
+            AdminContentFrame.NavigationService?.RemoveBackEntry();
         }
 
         private void InitializePages()
