@@ -8,12 +8,12 @@ using VRK_WPF.MVVM.Services;
 
 namespace VRK_WPF.MVVM.View.UserPages
 {
-    public partial class AnalyticsPage : Page, IDisposable
+    public sealed partial class AnalyticsPage : Page, IDisposable
     {
         private readonly LogManager _logManager;
         private readonly Random _random = new Random();
         private List<LogEntry> _logs = new List<LogEntry>();
-        private System.Windows.Threading.DispatcherTimer _resizeTimer;
+        private DispatcherTimer _resizeTimer;
         private bool _disposed = false;
         
         public AnalyticsPage()
@@ -65,9 +65,10 @@ namespace VRK_WPF.MVVM.View.UserPages
         private void GenerateSampleLogData()
         {
             _logs.Clear();
-            string[] levels = { "INFO", "WARNING", "ERROR", "DEBUG" };
-            string[] nodes = { "Node1", "Node2", "Node3", "Node4", "Node5" };
-            string[] messages = { 
+            string[] levels = ["INFO", "WARNING", "ERROR", "DEBUG"];
+            string[] nodes = ["Node1", "Node2", "Node3", "Node4", "Node5"];
+            string[] messages =
+            [
                 "System started successfully",
                 "Connected to node",
                 "Error loading file",
@@ -75,10 +76,9 @@ namespace VRK_WPF.MVVM.View.UserPages
                 "Data chunk replicated successfully",
                 "Node configuration changed",
                 "Warning: high network load",
-                "Database access error" 
-            };
+                "Database access error"
+            ];
             
-            // Generate 200 sample log entries
             DateTime startDate = DateTime.Now.AddDays(-14);
             for (int i = 0; i < 200; i++)
             {
@@ -267,15 +267,16 @@ namespace VRK_WPF.MVVM.View.UserPages
             Canvas.SetTop(title, 10);
             EventTypeChart.Children.Add(title);
             
-            for (int i = 0; i < groupedLogs.Count; i++)
+            foreach (var item in groupedLogs)
             {
-                var item = groupedLogs[i];
                 double percentage = (double)item.Count / totalCount;
                 double sweepAngle = percentage * 360;
                 
-                PathFigure figure = new PathFigure();
-                figure.StartPoint = new Point(centerX, centerY);
-                
+                PathFigure figure = new PathFigure
+                {
+                    StartPoint = new Point(centerX, centerY)
+                };
+
                 double startRad = startAngle * Math.PI / 180;
                 double endRad = (startAngle + sweepAngle) * Math.PI / 180;
                 
@@ -300,12 +301,14 @@ namespace VRK_WPF.MVVM.View.UserPages
                 PathGeometry geometry = new PathGeometry();
                 geometry.Figures.Add(figure);
                 
-                Path path = new Path();
-                path.Data = geometry;
-                path.Fill = levelColors.ContainsKey(item.Level) ? levelColors[item.Level] : Brushes.Gray;
-                path.Stroke = Brushes.White;
-                path.StrokeThickness = 1;
-                
+                Path path = new Path
+                {
+                    Data = geometry,
+                    Fill = levelColors.TryGetValue(item.Level, out var color) ? color : Brushes.Gray,
+                    Stroke = Brushes.White,
+                    StrokeThickness = 1
+                };
+
                 EventTypeChart.Children.Add(path);
                 
                 // Add label
@@ -644,8 +647,8 @@ namespace VRK_WPF.MVVM.View.UserPages
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-    
-        protected virtual void Dispose(bool disposing)
+
+        private void Dispose(bool disposing)
         {
             if (!_disposed)
             {
@@ -660,13 +663,11 @@ namespace VRK_WPF.MVVM.View.UserPages
                     _logs?.Clear();
                     _logs = null;
                 
-                    // Очистка Canvas
                     LogEventChart?.Children.Clear();
                     EventTypeChart?.Children.Clear();
                     NodeActivityChart?.Children.Clear();
                     ErrorAnalysisChart?.Children.Clear();
                 
-                    // Отписка от событий
                     Loaded -= AnalyticsPage_Loaded;
                     SizeChanged -= AnalyticsPage_SizeChanged;
                     Unloaded -= AnalyticsPage_Unloaded;
