@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VKR_Proto")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a3e4c9f3dd47eb924e2eec71240f48255f8e34ce")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2ba99d39d7674b8ce81a1c2da2f8373f7ba62898")]
 [assembly: System.Reflection.AssemblyProductAttribute("VKR_Proto")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VKR_Proto")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

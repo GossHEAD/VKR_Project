@@ -106,7 +106,7 @@
         
         <!-- Data Grid -->
         <DataGrid Grid.Row="2" 
-                  ItemsSource="{Binding TableData}" 
+                  ItemsSource="{Binding CurrentTableData}" 
                   SelectedItem="{Binding SelectedRow}"
                   AutoGenerateColumns="True"
                   IsReadOnly="False"

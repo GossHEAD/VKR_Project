@@ -6,15 +6,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VKR_Core.Models;
 using VKR_Core.Services;
-using VKR_Node.Services.Utilities;
 using VKR.Protos;
 
 namespace VKR_Node.Services
 {
-    /// <summary>
-    /// Client implementation for making gRPC calls to other nodes in the network.
-    /// Provides methods to send requests, manage channels, and handle responses.
-    /// </summary>
     public class GrpcNodeClient : INodeClient
     {
         private readonly ILogger<GrpcNodeClient> _logger;
@@ -166,16 +161,6 @@ namespace VKR_Node.Services
 
             var channel = _channels.GetOrAdd(formattedAddress, addr => {
                 _logger.LogDebug("Creating gRPC channel for address: {Address}", addr);
-                /*
-                return GrpcChannel.ForAddress(addr, new GrpcChannelOptions
-                {
-                    HttpHandler = new SocketsHttpHandler
-                    {
-                        ConnectTimeout = TimeSpan.FromSeconds(10),
-                        EnableMultipleHttp2Connections = true
-                    }
-                });
-                */
                 var options = new GrpcChannelOptions
                 {
                     MaxReceiveMessageSize = 100 * 1024 * 1024, 

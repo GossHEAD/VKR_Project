@@ -36,7 +36,7 @@ public partial class NodeViewModel : ObservableObject
     
     public override string ToString()
     {
-        return $"Node: {NodeId ?? "N/A"} ({Address ?? "N/A"}) - Status: {Status ?? "N/A"}";
+        return $"Узел: {NodeId ?? "N/A"} ({Address ?? "N/A"}) - Статус: {Status ?? "N/A"}";
     }
     
     partial void OnIsSelectedChanged(bool value)

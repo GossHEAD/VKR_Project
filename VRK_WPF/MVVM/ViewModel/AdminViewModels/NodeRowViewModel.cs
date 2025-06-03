@@ -2,7 +2,7 @@
 
 namespace VRK_WPF.MVVM.ViewModel.AdminViewModels;
 
-public partial class NodeRowViewModel : ObservableObject, IModifiableRow
+public partial class NodeRowViewModel : BaseRowViewModel
 {
     [ObservableProperty] private string _nodeId = string.Empty;
     [ObservableProperty] private string _address = string.Empty;

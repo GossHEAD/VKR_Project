@@ -67,7 +67,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         {
             _configManager = new NodeConfigurationManager();
             
-            
             RefreshConfigCommand = new RelayCommand(RefreshConfig, CanRefreshConfig);
             ApplyConfigCommand = new RelayCommand(ApplyConfig, CanApplyConfig);
             OpenConfigCommand = new RelayCommand(OpenConfig);

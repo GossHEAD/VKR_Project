@@ -1,4 +1,5 @@
 ﻿using System.Windows.Controls;
+using VRK_WPF.MVVM.Services;
 using VRK_WPF.MVVM.ViewModel.AdminViewModels;
 
 namespace VRK_WPF.MVVM.View.AdminPages;
@@ -6,7 +7,6 @@ namespace VRK_WPF.MVVM.View.AdminPages;
 public partial class DatabaseManagementPage : Page
 {
     private readonly DatabaseManagementViewModel _viewModel;
-        
     public DatabaseManagementPage()
     {
         InitializeComponent();
@@ -18,6 +18,6 @@ public partial class DatabaseManagementPage : Page
         
     private void DatabaseManagementPage_Unloaded(object sender, System.Windows.RoutedEventArgs e)
     {
-        _viewModel.Dispose();
+        //_viewModel.Dispose();
     }
 }

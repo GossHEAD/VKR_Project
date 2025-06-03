@@ -1,23 +1,25 @@
-﻿using System.Collections.ObjectModel;
+﻿using System.Collections;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Microsoft.Win32;
 using VKR_Core.Enums;
-using VKR_Node.Configuration;
 using VKR_Node.Persistance;
-using VKR_Node.Persistance.Entities;
+using VRK_WPF.MVVM.Services;
 
 namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
 {
-    public partial class DatabaseManagementViewModel : ObservableObject
+    public partial class DatabaseManagementViewModel : ObservableObject, IDisposable
     {
+        private NodeDbContext? _dbContext;
+        private ICollectionView? _currentView;
+        private readonly Dictionary<string, Type> _tableTypeMap;
+        private AdminDatabaseService? _adminDbService;
+
         [ObservableProperty]
         private ObservableCollection<NodeDatabaseInfo> _availableNodeDatabases = new();
         
@@ -31,7 +33,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         private TableViewModel? _selectedTable;
         
         [ObservableProperty]
-        private ObservableCollection<object> _tableData = new();
+        private IList? _currentTableData;
         
         [ObservableProperty]
         private object? _selectedRow;
@@ -43,30 +45,48 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         private string _statusMessage = "Готов";
         
         [ObservableProperty]
-        private bool _isEditing;
-        
-        [ObservableProperty]
         private string _searchText = string.Empty;
         
-        private NodeDbContext? _dbContext;
+        [ObservableProperty]
+        private bool _hasUnsavedChanges;
         
-        public ICollectionView TableDataView { get; }
+        public ICollectionView? CurrentView
+        {
+            get => _currentView;
+            private set => SetProperty(ref _currentView, value);
+        }
         
-        public RelayCommand RefreshNodeListCommand { get; }
-        public RelayCommand RefreshDataCommand { get; }
-        public RelayCommand SaveChangesCommand { get; }
-        public RelayCommand DeleteRowCommand { get; }
-        public RelayCommand AddRowCommand { get; }
-        public RelayCommand BackupDatabaseCommand { get; }
-        public RelayCommand OpenDatabaseCommand { get; }
-        
+        public RelayCommand RefreshNodeListCommand { get; set; }
+        public RelayCommand RefreshDataCommand { get; set; }
+        public RelayCommand SaveChangesCommand { get; set; }
+        public RelayCommand DeleteRowCommand { get; set; }
+        public RelayCommand AddRowCommand { get; set; }
+        public RelayCommand BackupDatabaseCommand { get; set; }
+        public RelayCommand OpenDatabaseCommand { get; set; }
+
         public DatabaseManagementViewModel()
         {
+            _tableTypeMap = new Dictionary<string, Type>
+            {
+                ["Files"] = typeof(ObservableCollection<FileRowViewModel>),
+                ["Chunks"] = typeof(ObservableCollection<ChunkRowViewModel>),
+                ["ChunkLocations"] = typeof(ObservableCollection<ChunkLocationRowViewModel>),
+                ["Nodes"] = typeof(ObservableCollection<NodeRowViewModel>),
+                ["Users"] = typeof(ObservableCollection<UserRowViewModel>),
+                ["Logs"] = typeof(ObservableCollection<LogRowViewModel>)
+            };
+            
+            InitializeCommands();
             InitializeTableList();
-            
-            TableDataView = CollectionViewSource.GetDefaultView(TableData);
-            TableDataView.Filter = FilterTableData;
-            
+            if (AvailableTables.Any())
+            {
+                SelectedTable = AvailableTables.FirstOrDefault(); 
+            }
+            RefreshNodeList();
+        }
+        
+        private void InitializeCommands()
+        {
             RefreshNodeListCommand = new RelayCommand(RefreshNodeList);
             RefreshDataCommand = new RelayCommand(async () => await RefreshTableDataAsync(), CanRefreshData);
             SaveChangesCommand = new RelayCommand(async () => await SaveChangesAsync(), CanSaveChanges);
@@ -74,28 +94,23 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             AddRowCommand = new RelayCommand(AddNewRow, CanAddRow);
             BackupDatabaseCommand = new RelayCommand(async () => await BackupDatabaseAsync(), CanBackupDatabase);
             OpenDatabaseCommand = new RelayCommand(OpenDatabase);
-            
-            InitializeTableList();
-            RefreshNodeList();
         }
         
         private void InitializeTableList()
         {
             AvailableTables.Clear();
-            AvailableTables.Add(new TableViewModel { TableName = "Files", DisplayName = "Данные файлов", CanEdit = true });
-            AvailableTables.Add(new TableViewModel { TableName = "Chunks", DisplayName = "Данные фрагментов", CanEdit = true });
-            AvailableTables.Add(new TableViewModel { TableName = "ChunkLocations", DisplayName = "Местоположение фрагментов", CanEdit = true });
-            AvailableTables.Add(new TableViewModel { TableName = "Nodes", DisplayName = "Состояние узлов", CanEdit = true });
+            AvailableTables.Add(new TableViewModel { TableName = "Files", DisplayName = "Файлы", CanEdit = true });
+            AvailableTables.Add(new TableViewModel { TableName = "Chunks", DisplayName = "Фрагменты", CanEdit = true });
+            AvailableTables.Add(new TableViewModel { TableName = "ChunkLocations", DisplayName = "Расположение фрагментов", CanEdit = true });
+            AvailableTables.Add(new TableViewModel { TableName = "Nodes", DisplayName = "Узлы", CanEdit = true });
             AvailableTables.Add(new TableViewModel { TableName = "Users", DisplayName = "Пользователи", CanEdit = true });
-            AvailableTables.Add(new TableViewModel { TableName = "Logs", DisplayName = "Журнал событий", CanEdit = false });
-            
-            //SelectedTable = AvailableTables.FirstOrDefault();
+            AvailableTables.Add(new TableViewModel { TableName = "Logs", DisplayName = "Журнал", CanEdit = false });
         }
         
         private void RefreshNodeList()
         {
             IsLoading = true;
-            StatusMessage = "Поиск баз данных узла...";
+            StatusMessage = "Поиск баз данных узлов...";
             
             try
             {
@@ -103,20 +118,23 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 
                 var searchPaths = new[]
                 {
-                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Storage", "Data"),
                     Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data"),
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VKR_Network", "Data"),
+                    "C:\\VKR_Network\\Storage\\Data"
                 };
                 
-                foreach (var basePath in searchPaths)
+                foreach (var basePath in searchPaths.Where(Directory.Exists))
                 {
-                    if (Directory.Exists(basePath))
+                    var dbFiles = Directory.GetFiles(basePath, "*.db", SearchOption.AllDirectories);
+                    
+                    foreach (var file in dbFiles)
                     {
-                        foreach (var file in Directory.GetFiles(basePath, "node_*.db"))
+                        var fileName = Path.GetFileName(file);
+                        var nodeId = ExtractNodeIdFromFileName(fileName);
+                        
+                        if (!AvailableNodeDatabases.Any(db => db.DbPath == file))
                         {
-                            var fileName = Path.GetFileName(file);
-                            var nodeId = ExtractNodeIdFromFileName(fileName);
-                            
                             AvailableNodeDatabases.Add(new NodeDatabaseInfo
                             {
                                 NodeId = nodeId,
@@ -127,19 +145,18 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                     }
                 }
                 
+                StatusMessage = AvailableNodeDatabases.Count > 0 
+                    ? $"Найдено {AvailableNodeDatabases.Count} баз данных" 
+                    : "Базы данных не найдены";
+                    
                 if (AvailableNodeDatabases.Count > 0)
                 {
                     SelectedNodeDatabase = AvailableNodeDatabases[0];
-                    StatusMessage = $"Найдено {AvailableNodeDatabases.Count} баз данных узла";
-                }
-                else
-                {
-                    StatusMessage = "Не найдено баз данных. Используйте операцию открытия файла базы данных.";
                 }
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Ошибка поиск базы данных: {ex.Message}";
+                StatusMessage = $"Ошибка: {ex.Message}";
             }
             finally
             {
@@ -149,19 +166,8 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         
         private string ExtractNodeIdFromFileName(string fileName)
         {
-            try
-            {
-                var match = System.Text.RegularExpressions.Regex.Match(fileName, @"node[_-](\w+)\.db$");
-                if (match.Success && match.Groups.Count > 1)
-                {
-                    return match.Groups[1].Value;
-                }
-            }
-            catch
-            {
-            }
-            
-            return Path.GetFileNameWithoutExtension(fileName).Replace("node_", "").Replace("node-", "");
+            var name = Path.GetFileNameWithoutExtension(fileName);
+            return name.Replace("node_storage", "node").Replace("_storage", "");
         }
         
         private void OpenDatabase()
@@ -170,66 +176,263 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             {
                 Filter = "SQLite Database (*.db)|*.db|All Files (*.*)|*.*",
                 DefaultExt = ".db",
-                Title = "Открытие базы данных"
+                Title = "Выберите базу данных"
             };
             
             if (dialog.ShowDialog() == true)
             {
-                IsLoading = true;
-                StatusMessage = "Открытие базы данных...";
+                var dbInfo = new NodeDatabaseInfo
+                {
+                    NodeId = ExtractNodeIdFromFileName(dialog.FileName),
+                    DbPath = dialog.FileName,
+                    LastModified = File.GetLastWriteTime(dialog.FileName)
+                };
                 
-                try
+                if (!AvailableNodeDatabases.Any(db => db.DbPath == dbInfo.DbPath))
                 {
-                    var dbPath = dialog.FileName;
-                    var fileName = Path.GetFileName(dbPath);
-                    var nodeId = ExtractNodeIdFromFileName(fileName);
-                    
-                    var existingDatabase = AvailableNodeDatabases.FirstOrDefault(db => db.DbPath == dbPath);
-                    if (existingDatabase == null)
-                    {
-                        var dbInfo = new NodeDatabaseInfo
-                        {
-                            NodeId = nodeId,
-                            DbPath = dbPath,
-                            LastModified = File.GetLastWriteTime(dbPath)
-                        };
-                        
-                        AvailableNodeDatabases.Add(dbInfo);
-                        SelectedNodeDatabase = dbInfo;
-                    }
-                    else
-                    {
-                        SelectedNodeDatabase = existingDatabase;
-                    }
-                    
-                    StatusMessage = $"Открыта база данных узла {nodeId}";
+                    AvailableNodeDatabases.Add(dbInfo);
                 }
-                catch (Exception ex)
-                {
-                    StatusMessage = $"Ошибка открытия базы данных: {ex.Message}";
-                }
-                finally
-                {
-                    IsLoading = false;
-                }
+                
+                SelectedNodeDatabase = dbInfo;
             }
         }
         
-        partial void OnSelectedNodeDatabaseChanged(NodeDatabaseInfo? oldValue, NodeDatabaseInfo? newValue)
+        partial void OnSelectedNodeDatabaseChanged(NodeDatabaseInfo? value)
         {
-            if (newValue != null)
+            if (value != null)
             {
-                ConnectToDatabase(newValue.DbPath);
+                ConnectToDatabase(value.DbPath);
             }
             else
             {
-                _dbContext?.Dispose();
-                _dbContext = null;
+                DisconnectDatabase();
+            }
+        }
+        
+        partial void OnSelectedTableChanged(TableViewModel? value)
+        {
+            if (value != null && _dbContext != null)
+            {
+                _ = RefreshTableDataAsync();
+            }
+        }
+        
+        partial void OnSearchTextChanged(string value)
+        {
+            CurrentView?.Refresh();
+        }
+        
+        private void ConnectToDatabase(string dbPath)
+        {
+            try
+            {
+                DisconnectDatabase();
                 
-                TableData.Clear();
-                StatusMessage = "База данных не выбрана";
+                // var optionsBuilder = new DbContextOptionsBuilder<NodeDbContext>();
+                // optionsBuilder.UseSqlite($"Data Source={dbPath}");
+
+                string connectionString = $"Data Source={dbPath}";
+                var _adminDbService = new AdminDatabaseService(connectionString);
+                
+                StatusMessage = $"База данных {Path.GetFileName(dbPath)} подключена";
+
+                if (SelectedTable != null)
+                {
+                    _ = RefreshTableDataAsync();
+                }
+                else if (AvailableTables.Any())
+                {
+                    SelectedTable = AvailableTables.First(); // This should trigger OnSelectedTableChanged
+                }
+                UpdateCommandStates();
+                
+                // var dbOptions = Options.Create(new DatabaseOptions 
+                // { 
+                //     DatabasePath = dbPath,
+                //     ConnectionString = $"Data Source={dbPath}"
+                // });
+                //
+                // _dbContext = new NodeDbContext(optionsBuilder.Options, dbOptions);
+                // _dbContext.Database.EnsureCreated();
+                //
+                // StatusMessage = "База данных подключена";
+                //
+                // if (SelectedTable != null)
+                // {
+                //     _ = RefreshTableDataAsync();
+                // }
+            }
+            catch (Exception ex)
+            {
+                // StatusMessage = $"Ошибка подключения: {ex.Message}";
+                // _dbContext = null;
+                _adminDbService = null;
+                StatusMessage = $"Ошибка подключения: {ex.Message}";
+                MessageBox.Show($"Ошибка подключения к базе данных: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                UpdateCommandStates();
+                
+                CurrentTableData = null; 
+                CurrentView = null;
+                UpdateCommandStates();
+            }
+        }
+        
+        private void DisconnectDatabase()
+        {
+            CurrentView = null;
+            CurrentTableData = null;
+            _adminDbService = null;
+            //UpdateCommandStates();
+            // _dbContext?.Dispose();
+            // _dbContext = null;
+        }
+        
+        private bool CanRefreshData() => !IsLoading && _adminDbService != null && SelectedTable != null;
+        private bool CanSaveChanges() => !IsLoading && _adminDbService != null && SelectedTable?.CanEdit == true && HasUnsavedChanges;
+        private bool CanDeleteRow() => !IsLoading && _adminDbService != null && SelectedTable?.CanEdit == true && SelectedRow != null;
+        private bool CanAddRow() => !IsLoading && _adminDbService != null && SelectedTable?.CanEdit == true;
+        private bool CanBackupDatabase() => !IsLoading && _adminDbService != null;
+        
+        private async Task RefreshTableDataAsync()
+        {
+            if (_adminDbService == null || SelectedTable == null)
+            {
+                StatusMessage = _adminDbService == null ? "Сервис базы данных не инициализирован." : "Таблица не выбрана.";
+                CurrentTableData = null;
+                CurrentView = null;
+                UpdateCommandStates();
+                return;
+            }
+
+            IsLoading = true;
+            StatusMessage = $"Загрузка {SelectedTable.DisplayName}...";
+
+            try
+            {
+                CurrentTableData = null; 
+                CurrentView = null;
+                SelectedRow = null;
+
+                var data = await _adminDbService.GetTableDataAsync(SelectedTable);
+                CurrentTableData = data;
+
+                if (CurrentTableData != null)
+                {
+                    foreach (var item in CurrentTableData.OfType<INotifyPropertyChanged>())
+                    {
+                        item.PropertyChanged -= OnRowPropertyChanged; // Avoid multiple subscriptions
+                        item.PropertyChanged += OnRowPropertyChanged;
+                    }
+
+                    CurrentView = CollectionViewSource.GetDefaultView(CurrentTableData);
+                    if (CurrentView != null) CurrentView.Filter = FilterData;
+                    StatusMessage = $"Загружено {CurrentTableData.Count} записей";
+                }
+                else
+                {
+                    StatusMessage = $"Данные для таблицы {SelectedTable.DisplayName} не загружены.";
+                }
+                HasUnsavedChanges = false;
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Ошибка загрузки данных: {ex.Message}";
+                MessageBox.Show($"Ошибка загрузки данных для таблицы {SelectedTable.DisplayName}: {ex.Message}", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                CurrentTableData = new ObservableCollection<object>(); // Ensure it's an empty collection on error
+                CurrentView = CollectionViewSource.GetDefaultView(CurrentTableData);
+            }
+            finally
+            {
+                IsLoading = false;
+                UpdateCommandStates();
+            }
+            // if (_dbContext == null || SelectedTable == null)
+            //     return;
+            //     
+            // IsLoading = true;
+            // StatusMessage = $"Загрузка {SelectedTable.DisplayName}...";
+            //
+            // try
+            // {
+            //     CurrentView = null;
+            //     CurrentTableData = null;
+            //     SelectedRow = null;
+            //     
+            //     switch (SelectedTable.TableName)
+            //     {
+            //         case "Files":
+            //             CurrentTableData = await LoadFilesAsync();
+            //             break;
+            //         case "Chunks":
+            //             CurrentTableData = await LoadChunksAsync();
+            //             break;
+            //         case "ChunkLocations":
+            //             CurrentTableData = await LoadChunkLocationsAsync();
+            //             break;
+            //         case "Nodes":
+            //             CurrentTableData = await LoadNodesAsync();
+            //             break;
+            //         case "Users":
+            //             CurrentTableData = await LoadUsersAsync();
+            //             break;
+            //     }
+            //     
+            //     if (CurrentTableData != null)
+            //     {
+            //         CurrentView = CollectionViewSource.GetDefaultView(CurrentTableData);
+            //         CurrentView.Filter = FilterData;
+            //         StatusMessage = $"Загружено {CurrentTableData.Count} записей";
+            //     }
+            //     
+            //     HasUnsavedChanges = false;
+            //     UpdateCommandStates();
+            // }
+            // catch (Exception ex)
+            // {
+            //     StatusMessage = $"Ошибка: {ex.Message}";
+            //     MessageBox.Show($"Ошибка загрузки данных: {ex.Message}", "Ошибка", 
+            //         MessageBoxButton.OK, MessageBoxImage.Error);
+            // }
+            // finally
+            // {
+            //     IsLoading = false;
+            // }
+        }
+        
+        private bool FilterData(object item)
+        {
+            if (string.IsNullOrWhiteSpace(SearchText) || item == null)
+                return true;
+                
+            var type = item.GetType();
+            var properties = type.GetProperties()
+                .Where(p => p.CanRead && (p.PropertyType == typeof(string) || 
+                                         p.PropertyType == typeof(int) || 
+                                         p.PropertyType == typeof(long)));
+                
+            foreach (var prop in properties)
+            {
+                var value = prop.GetValue(item)?.ToString();
+                if (!string.IsNullOrEmpty(value) && 
+                    value.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                    return true;
             }
             
+            return false;
+        }
+        
+        private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(IModifiableRow.IsModified))
+            {
+                HasUnsavedChanges = CurrentTableData?.Cast<IModifiableRow>().Any(r => r.IsModified) ?? false;
+                UpdateCommandStates();
+            }
+        }
+        
+        private void UpdateCommandStates()
+        {
             RefreshDataCommand.NotifyCanExecuteChanged();
             SaveChangesCommand.NotifyCanExecuteChanged();
             DeleteRowCommand.NotifyCanExecuteChanged();
@@ -237,749 +440,279 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             BackupDatabaseCommand.NotifyCanExecuteChanged();
         }
         
-        private void ConnectToDatabase(string dbPath)
-        {
-            IsLoading = true;
-            StatusMessage = $"Подключение к базе данных...";
-            
-            try
-            {
-                _dbContext?.Dispose();
-                
-                var optionsBuilder = new DbContextOptionsBuilder<NodeDbContext>();
-                optionsBuilder.UseSqlite($"Data Source={dbPath}");
-                optionsBuilder.EnableSensitiveDataLogging();
-                
-                var dbOptions = Options.Create(new DatabaseOptions 
-                { 
-                    DatabasePath = dbPath,
-                    ConnectionString = $"Data Source={dbPath}",
-                    HasExplicitConnectionString = false
-                });
-                
-                _dbContext = new NodeDbContext(optionsBuilder.Options, dbOptions);
-                
-                
-                TableData.Clear();
-                
-                if (SelectedTable != null)
-                {
-                    _ = RefreshTableDataAsync();
-                }
-                else
-                {
-                    StatusMessage = "База данных подключена. Выберите таблицу для просмотра.";
-                }
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"Ошибка подключени к базе данных: {ex.Message}";
-                _dbContext = null;
-            }
-            finally
-            {
-                IsLoading = false;
-            }
-        }
-        
-        partial void OnSelectedTableChanged(TableViewModel? oldValue, TableViewModel? newValue)
-        {
-            if (newValue != null && _dbContext != null)
-            {
-                _ = RefreshTableDataAsync();
-            }
-            else
-            {
-                TableData.Clear();
-            }
-    
-            RefreshDataCommand.NotifyCanExecuteChanged();
-            SaveChangesCommand.NotifyCanExecuteChanged();
-            DeleteRowCommand.NotifyCanExecuteChanged();
-            AddRowCommand.NotifyCanExecuteChanged();
-        }
-        
-        partial void OnSearchTextChanged(string value)
-        {
-            TableDataView.Refresh();
-        }
-        
-        private bool FilterTableData(object item)
-        {
-            if (string.IsNullOrWhiteSpace(SearchText))
-                return true;
-                
-            var properties = item.GetType().GetProperties()
-                .Where(p => p.PropertyType == typeof(string) || p.PropertyType == typeof(int) || p.PropertyType == typeof(long));
-                
-            foreach (var property in properties)
-            {
-                var value = property.GetValue(item)?.ToString();
-                if (!string.IsNullOrEmpty(value) && value.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-            
-            return false;
-        }
-        
-        private bool CanRefreshData() => !IsLoading && _dbContext != null && SelectedTable != null;
-        private bool CanSaveChanges() => !IsLoading && _dbContext != null && SelectedTable?.CanEdit == true && TableData.OfType<IModifiableRow>().Any(r => r.IsModified);
-        private bool CanDeleteRow() => !IsLoading && _dbContext != null && SelectedTable?.CanEdit == true && SelectedRow != null;
-        private bool CanAddRow() => !IsLoading && _dbContext != null && SelectedTable?.CanEdit == true;
-        private bool CanBackupDatabase() => !IsLoading && _dbContext != null;
-        
-        private async Task RefreshTableDataAsync()
-        {
-            if (_dbContext == null || SelectedTable == null)
-                return;
-                
-            IsLoading = true;
-            StatusMessage = $"Загрузка данных {SelectedTable.DisplayName}...";
-            
-            try
-            {
-                TableData.Clear();
-                
-                switch (SelectedTable.TableName)
-                {
-                    case "Files":
-                        await LoadFilesDataAsync();
-                        break;
-                    case "Chunks":
-                        await LoadChunksDataAsync();
-                        break;
-                    case "ChunkLocations":
-                        await LoadChunkLocationsDataAsync();
-                        break;
-                    case "Nodes":
-                        await LoadNodesDataAsync();
-                        break;
-                    case "Users":
-                        await LoadUsersDataAsync();
-                        break;
-                    case "Logs":
-                        await LoadLogsDataAsync();
-                        break;
-                    default:
-                        StatusMessage = $"Неизвестная таблица: {SelectedTable.TableName}";
-                        break;
-                }
-                
-                StatusMessage = $"Загружено {TableData.Count} строк из {SelectedTable.DisplayName}.";
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"Ошибка загрузки таблицы: {ex.Message}";
-            }
-            finally
-            {
-                IsLoading = false;
-                RefreshDataCommand.NotifyCanExecuteChanged();
-                SaveChangesCommand.NotifyCanExecuteChanged();
-                DeleteRowCommand.NotifyCanExecuteChanged();
-                AddRowCommand.NotifyCanExecuteChanged();
-            }
-        }
-        
-        private async Task LoadFilesDataAsync()
-        {
-            StatusMessage = "Загрузка данных таблицы Файлов"; 
-
-            try
-            {
-                if (_dbContext == null || !_dbContext.Database.CanConnect())
-                {
-                    StatusMessage = "Контекст базы данных равен null или невозможно подключиться"; 
-                    return;
-                }
-
-                var files = await _dbContext.FilesMetadata
-                    .AsNoTracking() 
-                    .OrderBy(f => f.FileName)
-                    .Take(1000) 
-                    .ToListAsync();
-
-                StatusMessage = $"Получено {files.Count} записей из таблицы FilesMetadata"; 
-
-                if (files.Count > 0)
-                {
-                    var first = files[0];
-                    StatusMessage = $"Пример записи - FileId: {first.FileId}, FileName: {first.FileName}, Size: {first.FileSize}"; // Translated
-                }
-
-                // foreach (var file in files)
-                // {
-                //     var viewModel = new FileRowViewModel
-                //     {
-                //         FileId = file.FileId,
-                //         FileName = file.FileName,
-                //         FileSize = file.FileSize,
-                //         CreationTime = file.CreationTime,
-                //         ModificationTime = file.ModificationTime,
-                //         ContentType = file.ContentType,
-                //         ChunkSize = file.ChunkSize,
-                //         TotalChunks = file.TotalChunks,
-                //         State = file.State
-                //     };
-                //
-                //     TableData.Add(viewModel);
-                // }
-                var viewModels = files.Select(file => new FileRowViewModel
-                {
-                    FileId = file.FileId,
-                    FileName = file.FileName,
-                    FileSize = file.FileSize,
-                    CreationTime = file.CreationTime,
-                    ModificationTime = file.ModificationTime,
-                    ContentType = file.ContentType,
-                    ChunkSize = file.ChunkSize,
-                    TotalChunks = file.TotalChunks,
-                    State = file.State
-                }).ToList();
-                
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    TableData.Clear();
-                    foreach (var vm in viewModels)
-                    {
-                        TableData.Add(vm);
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"Error in LoadFilesDataAsync: {ex}";
-                throw;
-            }
-        }
-
-        private async Task LoadChunksDataAsync()
-        {
-            var chunks = await _dbContext!.ChunksMetadata.ToListAsync();
-            foreach (var chunk in chunks)
-            {
-                TableData.Add(new ChunkRowViewModel
-                {
-                    FileId = chunk.FileId,
-                    ChunkId = chunk.ChunkId,
-                    ChunkIndex = chunk.ChunkIndex,
-                    Size = chunk.Size,
-                    ChunkHash = chunk.ChunkHash
-                });
-            }
-        }
-
-        private async Task LoadChunkLocationsDataAsync()
-        {
-            var locations = await _dbContext!.ChunkLocations.ToListAsync();
-            foreach (var location in locations)
-            {
-                TableData.Add(new ChunkLocationRowViewModel
-                {
-                    FileId = location.FileId,
-                    ChunkId = location.ChunkId,
-                    StoredNodeId = location.StoredNodeId,
-                    ReplicationTime = location.ReplicationTime ?? DateTime.MinValue
-                });
-            }
-        }
-
-        private async Task LoadNodesDataAsync()
-        {
-            var nodes = await _dbContext!.NodeStates.ToListAsync();
-            foreach (var node in nodes)
-            {
-                TableData.Add(new NodeRowViewModel
-                {
-                    NodeId = node.NodeId,
-                    Address = node.Address,
-                    State = node.State,
-                    LastSeen = node.LastSeen,
-                    DiskSpaceAvailableBytes = node.DiskSpaceAvailableBytes,
-                    DiskSpaceTotalBytes = node.DiskSpaceTotalBytes,
-                    StoredChunkCount = node.StoredChunkCount
-                });
-            }
-        }
-
-        private async Task LoadUsersDataAsync()
-        {
-            var users = await _dbContext!.Users.ToListAsync();
-            foreach (var user in users)
-            {
-                TableData.Add(new UserRowViewModel
-                {
-                    UserId = user.UserId,
-                    Username = user.Username,
-                    Role = (int)user.Role,
-                    IsActive = user.IsActive,
-                    CreationTime = user.CreationTime
-                });
-            }
-        }
-
-        private async Task LoadLogsDataAsync()
-        {
-            // Add code to load logs if there's a logs table
-            // This would depend on the structure of your logs table
-            StatusMessage = "Просмотр логов пока не реализован"; // Translated
-        }
-
         private async Task SaveChangesAsync()
         {
-            if (_dbContext == null || SelectedTable == null || !SelectedTable.CanEdit)
+            if (_adminDbService == null || CurrentTableData == null || SelectedTable == null || !SelectedTable.CanEdit || !HasUnsavedChanges)
                 return;
 
             IsLoading = true;
-            StatusMessage = $"Сохранение изменений в {SelectedTable.DisplayName}..."; // Translated
+            StatusMessage = "Сохранение изменений...";
 
             try
             {
-                var modifiedRows = TableData.OfType<IModifiableRow>().Where(r => r.IsModified).ToList();
+                var modifiedRows = CurrentTableData.OfType<IModifiableRow>()
+                    .Where(r => r.IsModified)
+                    .Cast<object>()
+                    .ToList();
 
-                if (!modifiedRows.Any())
+                if (modifiedRows.Any())
                 {
-                    StatusMessage = "Нет изменений для сохранения."; // Translated
-                    IsLoading = false;
-                    return;
+                    bool success = await _adminDbService.UpdateTableRowsAsync(SelectedTable, modifiedRows);
+                    if (success)
+                    {
+                        foreach (var row in modifiedRows.Cast<IModifiableRow>())
+                        {
+                            row.IsModified = false;
+                        }
+                        HasUnsavedChanges = false;
+                        StatusMessage = $"Сохранено {modifiedRows.Count} изменений";
+                    }
+                    else
+                    {
+                        StatusMessage = "Не удалось сохранить изменения (сервис вернул false).";
+                        MessageBox.Show(StatusMessage, "Ошибка сохранения", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
                 }
-
-                using var transaction = await _dbContext.Database.BeginTransactionAsync();
-
-                switch (SelectedTable.TableName)
-                {
-                    case "Files":
-                        await SaveFilesChangesAsync(modifiedRows.Cast<FileRowViewModel>().ToList());
-                        break;
-                    case "Chunks":
-                        await SaveChunksChangesAsync(modifiedRows.Cast<ChunkRowViewModel>().ToList());
-                        break;
-                    case "ChunkLocations":
-                        await SaveChunkLocationsChangesAsync(modifiedRows.Cast<ChunkLocationRowViewModel>().ToList());
-                        break;
-                    case "Nodes":
-                        await SaveNodesChangesAsync(modifiedRows.Cast<NodeRowViewModel>().ToList());
-                        break;
-                    case "Users":
-                        await SaveUsersChangesAsync(modifiedRows.Cast<UserRowViewModel>().ToList());
-                        break;
-                    default:
-                        throw new InvalidOperationException($"Невозможно сохранить изменения в {SelectedTable.TableName}"); // Translated
-                }
-
-                await _dbContext.SaveChangesAsync();
-                await transaction.CommitAsync();
-
-                foreach (var row in modifiedRows)
-                {
-                    row.IsModified = false;
-                }
-
-                StatusMessage = $"Сохранено {modifiedRows.Count} изменений в {SelectedTable.DisplayName}."; // Translated
+                else { StatusMessage = "Нет изменений для сохранения."; }
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Ошибка сохранения изменений: {ex.Message}"; // Translated
-                MessageBox.Show($"Ошибка сохранения изменений: {ex.Message}", "Ошибка сохранения изменений", MessageBoxButton.OK, MessageBoxImage.Error); // Translated
+                StatusMessage = $"Ошибка сохранения: {ex.Message}";
+                MessageBox.Show($"Ошибка сохранения: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
                 IsLoading = false;
-                SaveChangesCommand.NotifyCanExecuteChanged();
+                UpdateCommandStates();
             }
         }
-
-        private async Task SaveFilesChangesAsync(List<FileRowViewModel> modifiedRows)
-        {
-            foreach (var row in modifiedRows)
-            {
-                var entity = await _dbContext!.FilesMetadata.FindAsync(row.FileId);
-                if (entity != null)
-                {
-                    entity.FileName = row.FileName;
-                    entity.FileSize = row.FileSize;
-                    entity.ContentType = row.ContentType;
-                    entity.ChunkSize = row.ChunkSize;
-                    entity.TotalChunks = row.TotalChunks;
-                    entity.State = row.State;
-                    entity.ModificationTime = DateTime.UtcNow;
-                }
-                else
-                {
-                    _dbContext!.FilesMetadata.Add(new FileEntity
-                    {
-                        FileId = row.FileId,
-                        FileName = row.FileName,
-                        FileSize = row.FileSize,
-                        CreationTime = row.CreationTime,
-                        ModificationTime = DateTime.UtcNow,
-                        ContentType = row.ContentType,
-                        ChunkSize = row.ChunkSize,
-                        TotalChunks = row.TotalChunks,
-                        State = row.State
-                    });
-                }
-            }
-        }
-
-        private async Task SaveChunksChangesAsync(List<ChunkRowViewModel> modifiedRows)
-        {
-            foreach (var row in modifiedRows)
-            {
-                var entity = await _dbContext!.ChunksMetadata.FindAsync(row.FileId, row.ChunkId);
-                if (entity != null)
-                {
-                    entity.ChunkIndex = row.ChunkIndex;
-                    entity.Size = row.Size;
-                    entity.ChunkHash = row.ChunkHash;
-                }
-                else
-                {
-                    _dbContext!.ChunksMetadata.Add(new ChunkEntity
-                    {
-                        FileId = row.FileId,
-                        ChunkId = row.ChunkId,
-                        ChunkIndex = row.ChunkIndex,
-                        Size = row.Size,
-                        ChunkHash = row.ChunkHash
-                    });
-                }
-            }
-        }
-
-        private async Task SaveChunkLocationsChangesAsync(List<ChunkLocationRowViewModel> modifiedRows)
-        {
-            foreach (var row in modifiedRows)
-            {
-                var entity = await _dbContext!.ChunkLocations.FindAsync(row.FileId, row.ChunkId, row.StoredNodeId);
-                if (entity != null)
-                {
-                    entity.ReplicationTime = row.ReplicationTime;
-                }
-                else
-                {
-                    _dbContext!.ChunkLocations.Add(new ChunkLocationEntity
-                    {
-                        FileId = row.FileId,
-                        ChunkId = row.ChunkId,
-                        StoredNodeId = row.StoredNodeId,
-                        ReplicationTime = row.ReplicationTime
-                    });
-                }
-            }
-        }
-
-        private async Task SaveNodesChangesAsync(List<NodeRowViewModel> modifiedRows)
-        {
-            foreach (var row in modifiedRows)
-            {
-                var entity = await _dbContext!.NodeStates.FindAsync(row.NodeId);
-                if (entity != null)
-                {
-                    entity.Address = row.Address;
-                    entity.State = row.State;
-                    entity.LastSeen = row.LastSeen;
-                    entity.DiskSpaceAvailableBytes = row.DiskSpaceAvailableBytes;
-                    entity.DiskSpaceTotalBytes = row.DiskSpaceTotalBytes;
-                    entity.StoredChunkCount = row.StoredChunkCount;
-                }
-                else
-                {
-                    _dbContext!.NodeStates.Add(new NodeEntity
-                    {
-                        NodeId = row.NodeId,
-                        Address = row.Address,
-                        State = row.State,
-                        LastSeen = row.LastSeen,
-                        DiskSpaceAvailableBytes = row.DiskSpaceAvailableBytes,
-                        DiskSpaceTotalBytes = row.DiskSpaceTotalBytes,
-                        StoredChunkCount = row.StoredChunkCount
-                    });
-                }
-            }
-        }
-
-        private async Task SaveUsersChangesAsync(List<UserRowViewModel> modifiedRows)
-        {
-            foreach (var row in modifiedRows)
-            {
-                var entity = await _dbContext!.Users.FindAsync(row.UserId);
-                if (entity != null)
-                {
-                    entity.Username = row.Username;
-                    entity.Role = (UserRole)row.Role;
-                    entity.IsActive = row.IsActive;
-                }
-                else
-                {
-                    _dbContext!.Users.Add(new UserEntity
-                    {
-                        UserId = row.UserId,
-                        Username = row.Username,
-                        Role = (UserRole)row.Role,
-                        IsActive = row.IsActive,
-                        CreationTime = row.CreationTime
-                    });
-                }
-            }
-        }
-
-        private async Task DeleteRowAsync()
-        {
-            if (_dbContext == null || SelectedTable == null || !SelectedTable.CanEdit || SelectedRow == null)
-                return;
-
-            var result = MessageBox.Show($"Вы уверены, что хотите удалить эту запись из таблицы {SelectedTable.TableName}?", // Translated
-                "Подтверждение удаления", MessageBoxButton.YesNo, MessageBoxImage.Warning); // Translated
-
-            if (result != MessageBoxResult.Yes)
-                return;
-
-            IsLoading = true;
-            StatusMessage = $"Удаление записи из {SelectedTable.DisplayName}..."; // Translated
-
-            try
-            {
-                bool deleted = false;
-
-                using var transaction = await _dbContext.Database.BeginTransactionAsync();
-
-                switch (SelectedTable.TableName)
-                {
-                    case "Files":
-                        deleted = await DeleteFileRowAsync((FileRowViewModel)SelectedRow);
-                        break;
-                    case "Chunks":
-                        deleted = await DeleteChunkRowAsync((ChunkRowViewModel)SelectedRow);
-                        break;
-                    case "ChunkLocations":
-                        deleted = await DeleteChunkLocationRowAsync((ChunkLocationRowViewModel)SelectedRow);
-                        break;
-                    case "Nodes":
-                        deleted = await DeleteNodeRowAsync((NodeRowViewModel)SelectedRow);
-                        break;
-                    case "Users":
-                        deleted = await DeleteUserRowAsync((UserRowViewModel)SelectedRow);
-                        break;
-                    default:
-                        throw new InvalidOperationException($"Невозможно удалить из {SelectedTable.TableName}"); // Translated
-                }
-
-                if (deleted)
-                {
-                    await _dbContext.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    TableData.Remove(SelectedRow);
-
-                    StatusMessage = $"Запись удалена из {SelectedTable.DisplayName}."; // Translated
-                }
-                else
-                {
-                    await transaction.RollbackAsync();
-                    StatusMessage = "Операция удаления не удалась"; // Translated
-                }
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"Ошибка удаления записи: {ex.Message}"; // Translated
-                MessageBox.Show($"Ошибка удаления записи: {ex.Message}", "Ошибка удаления записи", MessageBoxButton.OK, MessageBoxImage.Error); // Translated
-            }
-            finally
-            {
-                IsLoading = false;
-                DeleteRowCommand.NotifyCanExecuteChanged();
-            }
-        }
-
-        private async Task<bool> DeleteFileRowAsync(FileRowViewModel row)
+        
+        private async Task SaveFileChangesAsync(FileRowViewModel row)
         {
             var entity = await _dbContext!.FilesMetadata.FindAsync(row.FileId);
             if (entity != null)
             {
-                _dbContext.FilesMetadata.Remove(entity);
-                return true;
+                entity.FileName = row.FileName;
+                entity.FileSize = row.FileSize;
+                entity.ContentType = row.ContentType;
+                entity.ChunkSize = row.ChunkSize;
+                entity.TotalChunks = row.TotalChunks;
+                entity.State = row.State;
+                entity.ModificationTime = DateTime.UtcNow;
             }
-            return false;
         }
-
-        private async Task<bool> DeleteChunkRowAsync(ChunkRowViewModel row)
+        
+        private async Task SaveChunkChangesAsync(ChunkRowViewModel row)
         {
             var entity = await _dbContext!.ChunksMetadata.FindAsync(row.FileId, row.ChunkId);
             if (entity != null)
             {
-                _dbContext.ChunksMetadata.Remove(entity);
-                return true;
+                entity.ChunkIndex = row.ChunkIndex;
+                entity.Size = row.Size;
+                entity.ChunkHash = row.ChunkHash;
             }
-            return false;
         }
-
-        private async Task<bool> DeleteChunkLocationRowAsync(ChunkLocationRowViewModel row)
+        
+        private async Task SaveLocationChangesAsync(ChunkLocationRowViewModel row)
         {
-            var entity = await _dbContext!.ChunkLocations.FindAsync(row.FileId, row.ChunkId, row.StoredNodeId);
+            var entity = await _dbContext!.ChunkLocations
+                .FindAsync(row.FileId, row.ChunkId, row.StoredNodeId);
             if (entity != null)
             {
-                _dbContext.ChunkLocations.Remove(entity);
-                return true;
+                entity.ReplicationTime = row.ReplicationTime;
             }
-            return false;
         }
-
-        private async Task<bool> DeleteNodeRowAsync(NodeRowViewModel row)
+        
+        private async Task SaveNodeChangesAsync(NodeRowViewModel row)
         {
             var entity = await _dbContext!.NodeStates.FindAsync(row.NodeId);
             if (entity != null)
             {
-                _dbContext.NodeStates.Remove(entity);
-                return true;
+                entity.Address = row.Address;
+                entity.State = row.State;
             }
-            return false;
         }
-
-        private async Task<bool> DeleteUserRowAsync(UserRowViewModel row)
+        
+        private async Task SaveUserChangesAsync(UserRowViewModel row)
         {
             var entity = await _dbContext!.Users.FindAsync(row.UserId);
             if (entity != null)
             {
-                _dbContext.Users.Remove(entity);
-                return true;
+                entity.Username = row.Username;
+                entity.Role = (UserRole)row.Role;
+                entity.IsActive = row.IsActive;
+                
+                if (!string.IsNullOrEmpty(row.NewPassword))
+                {
+                    entity.PasswordHash = HashPassword(row.NewPassword);
+                }
             }
-            return false;
         }
-
-        private void AddNewRow()
+        
+        private string HashPassword(string password)
         {
-            if (_dbContext == null || SelectedTable == null || !SelectedTable.CanEdit)
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            byte[] bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password + "salt"));
+            return Convert.ToBase64String(bytes);
+        }
+        
+        private async Task DeleteRowAsync()
+        {
+            if (SelectedRow == null || _adminDbService == null || SelectedTable == null || !SelectedTable.CanEdit)
                 return;
 
-            object newRow;
+            var result = MessageBox.Show("Вы уверены, что хотите удалить эту запись?",
+                "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (result != MessageBoxResult.Yes) return;
 
+            IsLoading = true;
+            StatusMessage = "Удаление записи...";
+
+            try
+            {
+                bool success = await _adminDbService.DeleteRowAsync(SelectedTable, SelectedRow);
+                if (success)
+                {
+                    CurrentTableData?.Remove(SelectedRow); // Assumes CurrentTableData is ObservableCollection<object>
+                    SelectedRow = null;
+                    StatusMessage = "Запись удалена";
+                }
+                else
+                {
+                    StatusMessage = "Не удалось удалить запись (сервис вернул false).";
+                    MessageBox.Show(StatusMessage, "Ошибка удаления", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Ошибка удаления: {ex.Message}";
+                MessageBox.Show($"Ошибка удаления: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsLoading = false;
+                UpdateCommandStates();
+            }
+        }
+        
+        private void AddNewRow()
+        {
+            if (CurrentTableData == null || SelectedTable == null || !SelectedTable.CanEdit)
+                return;
+                
+            BaseRowViewModel? newRow = null;
+            
             switch (SelectedTable.TableName)
             {
                 case "Files":
                     newRow = new FileRowViewModel
                     {
                         FileId = Guid.NewGuid().ToString(),
-                        FileName = "NewFile",
+                        FileName = "Новый файл",
+                        FileSize = 0,
                         CreationTime = DateTime.UtcNow,
                         ModificationTime = DateTime.UtcNow,
-                        State = 0,
+                        State = (int)FileStateCore.Unknown,
                         IsModified = true
                     };
                     break;
-
-                case "Chunks":
-                    newRow = new ChunkRowViewModel
+                    
+                case "Users":
+                    var dialog = new UserPasswordDialog();
+                    if (dialog.ShowDialog() == true)
                     {
-                        FileId = TableData.OfType<FileRowViewModel>().FirstOrDefault()?.FileId ?? Guid.NewGuid().ToString(),
-                        ChunkId = Guid.NewGuid().ToString(),
-                        ChunkIndex = 0,
-                        Size = 0,
-                        IsModified = true
-                    };
-                    break;
-
-                case "ChunkLocations":
-                    var chunks = TableData.OfType<ChunkRowViewModel>().ToList();
-                    if (chunks.Count == 0)
-                    {
-                        MessageBox.Show("Невозможно создать местоположение фрагмента без существующих фрагментов.", // Translated
-                            "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning); // Translated
-                        return;
+                        newRow = new UserRowViewModel
+                        {
+                            UserId = GetNextUserId(),
+                            Username = dialog.Username,
+                            NewPassword = dialog.Password,
+                            Role = (int)UserRole.ITSpecialist,
+                            IsActive = true,
+                            CreationTime = DateTime.UtcNow,
+                            IsModified = true
+                        };
                     }
-
-                    var firstChunk = chunks.First();
-                    newRow = new ChunkLocationRowViewModel
-                    {
-                        FileId = firstChunk.FileId,
-                        ChunkId = firstChunk.ChunkId,
-                        StoredNodeId = "NewNode",
-                        ReplicationTime = DateTime.UtcNow,
-                        IsModified = true
-                    };
                     break;
-
+                    
                 case "Nodes":
                     newRow = new NodeRowViewModel
                     {
-                        NodeId = $"Node{TableData.Count + 1}",
+                        NodeId = $"Node{GetNextNodeNumber()}",
                         Address = "localhost:5000",
-                        State = 0,
+                        State = (int)NodeStateCore.Offline,
                         LastSeen = DateTime.UtcNow,
-                        DiskSpaceAvailableBytes = 1000000000,
-                        DiskSpaceTotalBytes = 10000000000,
-                        StoredChunkCount = 0,
                         IsModified = true
                     };
                     break;
-
-                case "Users":
-                    newRow = new UserRowViewModel
-                    {
-                        UserId = TableData.Count > 0 ?
-                            TableData.OfType<UserRowViewModel>().Max(u => u.UserId) + 1 : 1,
-                        Username = "NewUser",
-                        Role = (int)UserRole.ITSpecialist,
-                        IsActive = true,
-                        CreationTime = DateTime.UtcNow,
-                        IsModified = true
-                    };
-                    break;
-
-                default:
-                    MessageBox.Show($"Добавление новых строк в {SelectedTable.TableName} в настоящее время не поддерживается.", // Translated
-                        "Не поддерживается", MessageBoxButton.OK, MessageBoxImage.Information); // Translated
-                    return;
             }
-
-            TableData.Add(newRow);
-            SelectedRow = newRow;
-
-            StatusMessage = $"Добавлена новая строка в {SelectedTable.DisplayName}. Не забудьте сохранить изменения."; // Translated
-            SaveChangesCommand.NotifyCanExecuteChanged();
+            
+            if (newRow != null)
+            {
+                newRow.PropertyChanged += OnRowPropertyChanged;
+                CurrentTableData.Add(newRow);
+                SelectedRow = newRow;
+                HasUnsavedChanges = true;
+                UpdateCommandStates();
+            }
         }
-
+        
+        private int GetNextUserId()
+        {
+            if (CurrentTableData is ObservableCollection<UserRowViewModel> users && users.Any())
+            {
+                return users.Max(u => u.UserId) + 1;
+            }
+            return 1;
+        }
+        
+        private int GetNextNodeNumber()
+        {
+            if (CurrentTableData is ObservableCollection<NodeRowViewModel> nodes && nodes.Any())
+            {
+                var numbers = nodes
+                    .Select(n => System.Text.RegularExpressions.Regex.Match(n.NodeId, @"\d+"))
+                    .Where(m => m.Success)
+                    .Select(m => int.Parse(m.Value))
+                    .DefaultIfEmpty(0);
+                return numbers.Max() + 1;
+            }
+            return 1;
+        }
+        
         private async Task BackupDatabaseAsync()
         {
-            if (_dbContext == null || SelectedNodeDatabase == null)
+            if (_adminDbService == null || SelectedNodeDatabase == null) // Check _adminDbService
                 return;
 
             var dialog = new SaveFileDialog
             {
-                Filter = "База данных SQLite (*.db)|*.db|Все файлы (*.*)|*.*", // Translated
+                Filter = "SQLite Database (*.db)|*.db",
                 DefaultExt = ".db",
-                FileName = $"backup_{Path.GetFileName(SelectedNodeDatabase.DbPath)}"
+                FileName = $"backup_{Path.GetFileNameWithoutExtension(SelectedNodeDatabase.DbPath)}_{DateTime.Now:yyyyMMdd_HHmmss}.db"
             };
 
             if (dialog.ShowDialog() == true)
             {
                 IsLoading = true;
-                StatusMessage = "Создание резервной копии базы данных..."; // Translated
-
+                StatusMessage = "Создание резервной копии...";
                 try
                 {
-                    await _dbContext.Database.CloseConnectionAsync();
-
-                    using var sourceConnection = new SqliteConnection($"Data Source={SelectedNodeDatabase.DbPath}");
-                    await sourceConnection.OpenAsync();
-
-                    using var destinationConnection = new SqliteConnection($"Data Source={dialog.FileName}");
-                    await destinationConnection.OpenAsync();
-
-                    sourceConnection.BackupDatabase(destinationConnection);
-
-                    StatusMessage = $"Резервная копия базы данных успешно создана в {dialog.FileName}"; // Translated
-
-                    MessageBox.Show($"Резервное копирование базы данных успешно завершено.\nРасположение: {dialog.FileName}", // Translated
-                        "Резервное копирование успешно", MessageBoxButton.OK, MessageBoxImage.Information); // Translated
-
-                    ConnectToDatabase(SelectedNodeDatabase.DbPath);
+                    bool success = await _adminDbService.BackupDatabaseAsync(dialog.FileName);
+                    if (success)
+                    {
+                        StatusMessage = "Резервная копия создана";
+                        MessageBox.Show("Резервная копия успешно создана", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        StatusMessage = "Не удалось создать резервную копию (сервис вернул false).";
+                        MessageBox.Show(StatusMessage, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
                 }
                 catch (Exception ex)
                 {
-                    StatusMessage = $"Ошибка создания резервной копии базы данных: {ex.Message}"; // Translated
-                    MessageBox.Show($"Ошибка создания резервной копии базы данных: {ex.Message}",
-                        "Ошибка резервного копирования", MessageBoxButton.OK, MessageBoxImage.Error); // Translated
+                    StatusMessage = $"Ошибка создания резервной копии: {ex.Message}";
+                    MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 finally
                 {
@@ -987,22 +720,19 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 }
             }
         }
-
+        
         public void Dispose()
         {
-            _dbContext?.Dispose();
+            DisconnectDatabase();
         }
     }
-
+    
     public class NodeDatabaseInfo
     {
         public string NodeId { get; set; } = string.Empty;
         public string DbPath { get; set; } = string.Empty;
         public DateTime LastModified { get; set; }
-
-        public override string ToString()
-        {
-            return $"Узел {NodeId} (Последнее изменение: {LastModified:g})"; // Translated
-        }
+        
+        public override string ToString() => $"{NodeId} ({LastModified:g})";
     }
 }

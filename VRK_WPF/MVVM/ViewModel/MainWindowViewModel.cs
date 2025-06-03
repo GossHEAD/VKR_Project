@@ -778,12 +778,6 @@ namespace VRK_WPF.MVVM.ViewModel
                 UpdateStatusBar($"Не удалось удалить {fileToDelete.FileName} (Ошибка)");
                 MessageBox.Show($"Произошла неожиданная ошибка во время удаления:\n{ex.Message}", "Ошибка удаления", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-            finally
-            {
-                 // IsDeleting = false;
-                 // Clear selection after attempt? Or keep it?
-                 // SelectedFileForDelete = null;
-            }
         }
 
 
