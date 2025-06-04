@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VKR_Node")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+25f0648209156c8c5afad1df28d042938ea17065")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a678d34be4b57b4517aa51e64bc7120665fc7b25")]
 [assembly: System.Reflection.AssemblyProductAttribute("VKR_Node")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VKR_Node")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

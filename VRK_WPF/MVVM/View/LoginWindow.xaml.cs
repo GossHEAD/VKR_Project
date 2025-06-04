@@ -18,35 +18,31 @@ namespace VRK_WPF.MVVM.View
             _viewModel = new LoginWindowViewModel();
             DataContext = _viewModel;
             
-            _viewModel.LoginSucceeded += (sender, e) =>
-            {
-                if (AuthService.CurrentUser != null)
-                {
-                    LoginSucceeded?.Invoke(this, new LoginEventArgs(
-                        AuthService.CurrentUser.Username,
-                        AuthService.CurrentUser.Role));
-                }
-            
-                if (_viewModel.LoginSuccessful)
-                {
-                    DialogResult = true;
-                }
-            };
-            
+            _viewModel.LoginSucceeded += ViewModel_LoginSucceeded;
             
             Loaded += (s, e) => {
                 UsernameTextBox.Focus();
             };
         }
         
-        private void OnLoginSucceeded(object sender, EventArgs e)
+        private void ViewModel_LoginSucceeded(object sender, EventArgs e)
         {
-            LoginSucceeded?.Invoke(this, EventArgs.Empty);
+            if (AuthService.CurrentUser != null)
+            {
+                LoginSucceeded?.Invoke(this, new LoginEventArgs(
+                    AuthService.CurrentUser.Username,
+                    AuthService.CurrentUser.Role));
+            }
+            
+            if (_viewModel.LoginSuccessful && IsLoaded)
+            {
+                DialogResult = true;
+            }
         }
         
         protected override void OnClosed(EventArgs e)
         {
-            _viewModel.LoginSucceeded -= OnLoginSucceeded;
+            _viewModel.LoginSucceeded -= ViewModel_LoginSucceeded;
             
             base.OnClosed(e);
         }

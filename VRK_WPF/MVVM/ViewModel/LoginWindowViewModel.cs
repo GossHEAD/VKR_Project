@@ -20,7 +20,7 @@ namespace VRK_WPF.MVVM.ViewModel
         
         public bool LoginSuccessful { get; private set; } = false;
 
-        public event EventHandler LoginSucceeded;
+        public event EventHandler? LoginSucceeded;
 
         public LoginWindowViewModel()
         {

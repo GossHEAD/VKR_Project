@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -49,6 +50,8 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         
         [ObservableProperty]
         private bool _hasUnsavedChanges;
+        
+        public DataGrid? DataGridControl { get; set; }
         
         public ICollectionView? CurrentView
         {
@@ -116,15 +119,22 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             {
                 AvailableNodeDatabases.Clear();
                 
+                // Expanded search paths to find database files
                 var searchPaths = new[]
                 {
                     Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data"),
                     Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data"),
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VKR_Network", "Data"),
-                    "C:\\VKR_Network\\Storage\\Data"
+                    "C:\\VKR_Network\\Storage\\Data",
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..\\..\\Data"),
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..\\..\\..\\Data"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VKR_Network", "Data"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "VKR_Network", "Data"),
+                    "C:\\Data", 
+                    "D:\\Data"
                 };
                 
-                foreach (var basePath in searchPaths.Where(Directory.Exists))
+                foreach (var basePath in searchPaths.Where(p => Directory.Exists(p)))
                 {
                     var dbFiles = Directory.GetFiles(basePath, "*.db", SearchOption.AllDirectories);
                     
@@ -148,8 +158,15 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 StatusMessage = AvailableNodeDatabases.Count > 0 
                     ? $"Найдено {AvailableNodeDatabases.Count} баз данных" 
                     : "Базы данных не найдены";
-                    
-                if (AvailableNodeDatabases.Count > 0)
+                
+                // If no databases were found, suggest manual selection
+                if (AvailableNodeDatabases.Count == 0)
+                {
+                    MessageBox.Show("Не удалось найти базы данных автоматически. Пожалуйста, выберите файл базы данных вручную.", 
+                        "Базы данных не найдены", MessageBoxButton.OK, MessageBoxImage.Information);
+                    OpenDatabase();
+                }
+                else if (AvailableNodeDatabases.Count > 0)
                 {
                     SelectedNodeDatabase = AvailableNodeDatabases[0];
                 }
@@ -209,12 +226,29 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             }
         }
         
-        partial void OnSelectedTableChanged(TableViewModel? value)
+        partial void OnSelectedTableChanged(TableViewModel? oldValue, TableViewModel? newValue)
         {
-            if (value != null && _dbContext != null)
+            if (newValue != null && _adminDbService != null)
             {
-                _ = RefreshTableDataAsync();
+                // Reset the current view to null before refreshing to ensure we get fresh columns
+                CurrentView = null;
+                CurrentTableData = null;
+                
+                // Clear the auto-generated columns if we have a reference to the DataGrid
+                if (DataGridControl != null)
+                {
+                    DataGridControl.Columns.Clear();
+                    DataGridControl.AutoGenerateColumns = true;
+                }
+                
+                // Now load the data for the new table
+                RefreshTableDataAsync().ConfigureAwait(false);
             }
+            
+            RefreshDataCommand.NotifyCanExecuteChanged();
+            SaveChangesCommand.NotifyCanExecuteChanged();
+            DeleteRowCommand.NotifyCanExecuteChanged();
+            AddRowCommand.NotifyCanExecuteChanged();
         }
         
         partial void OnSearchTextChanged(string value)
@@ -228,44 +262,23 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             {
                 DisconnectDatabase();
                 
-                // var optionsBuilder = new DbContextOptionsBuilder<NodeDbContext>();
-                // optionsBuilder.UseSqlite($"Data Source={dbPath}");
-
                 string connectionString = $"Data Source={dbPath}";
-                var _adminDbService = new AdminDatabaseService(connectionString);
+                _adminDbService = new AdminDatabaseService(connectionString);
                 
                 StatusMessage = $"База данных {Path.GetFileName(dbPath)} подключена";
 
                 if (SelectedTable != null)
                 {
-                    _ = RefreshTableDataAsync();
+                    RefreshTableDataAsync().ConfigureAwait(false);
                 }
                 else if (AvailableTables.Any())
                 {
-                    SelectedTable = AvailableTables.First(); // This should trigger OnSelectedTableChanged
+                    SelectedTable = AvailableTables.First();
                 }
                 UpdateCommandStates();
-                
-                // var dbOptions = Options.Create(new DatabaseOptions 
-                // { 
-                //     DatabasePath = dbPath,
-                //     ConnectionString = $"Data Source={dbPath}"
-                // });
-                //
-                // _dbContext = new NodeDbContext(optionsBuilder.Options, dbOptions);
-                // _dbContext.Database.EnsureCreated();
-                //
-                // StatusMessage = "База данных подключена";
-                //
-                // if (SelectedTable != null)
-                // {
-                //     _ = RefreshTableDataAsync();
-                // }
             }
             catch (Exception ex)
             {
-                // StatusMessage = $"Ошибка подключения: {ex.Message}";
-                // _dbContext = null;
                 _adminDbService = null;
                 StatusMessage = $"Ошибка подключения: {ex.Message}";
                 MessageBox.Show($"Ошибка подключения к базе данных: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -282,9 +295,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             CurrentView = null;
             CurrentTableData = null;
             _adminDbService = null;
-            //UpdateCommandStates();
-            // _dbContext?.Dispose();
-            // _dbContext = null;
+            UpdateCommandStates();
         }
         
         private bool CanRefreshData() => !IsLoading && _adminDbService != null && SelectedTable != null;
@@ -327,6 +338,15 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                     CurrentView = CollectionViewSource.GetDefaultView(CurrentTableData);
                     if (CurrentView != null) CurrentView.Filter = FilterData;
                     StatusMessage = $"Загружено {CurrentTableData.Count} записей";
+                    
+                    // Force UI refresh if we have access to the DataGrid
+                    if (DataGridControl != null)
+                    {
+                        DataGridControl.ItemsSource = null;
+                        DataGridControl.Columns.Clear();
+                        DataGridControl.AutoGenerateColumns = true;
+                        DataGridControl.ItemsSource = CurrentTableData;
+                    }
                 }
                 else
                 {
@@ -347,57 +367,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 IsLoading = false;
                 UpdateCommandStates();
             }
-            // if (_dbContext == null || SelectedTable == null)
-            //     return;
-            //     
-            // IsLoading = true;
-            // StatusMessage = $"Загрузка {SelectedTable.DisplayName}...";
-            //
-            // try
-            // {
-            //     CurrentView = null;
-            //     CurrentTableData = null;
-            //     SelectedRow = null;
-            //     
-            //     switch (SelectedTable.TableName)
-            //     {
-            //         case "Files":
-            //             CurrentTableData = await LoadFilesAsync();
-            //             break;
-            //         case "Chunks":
-            //             CurrentTableData = await LoadChunksAsync();
-            //             break;
-            //         case "ChunkLocations":
-            //             CurrentTableData = await LoadChunkLocationsAsync();
-            //             break;
-            //         case "Nodes":
-            //             CurrentTableData = await LoadNodesAsync();
-            //             break;
-            //         case "Users":
-            //             CurrentTableData = await LoadUsersAsync();
-            //             break;
-            //     }
-            //     
-            //     if (CurrentTableData != null)
-            //     {
-            //         CurrentView = CollectionViewSource.GetDefaultView(CurrentTableData);
-            //         CurrentView.Filter = FilterData;
-            //         StatusMessage = $"Загружено {CurrentTableData.Count} записей";
-            //     }
-            //     
-            //     HasUnsavedChanges = false;
-            //     UpdateCommandStates();
-            // }
-            // catch (Exception ex)
-            // {
-            //     StatusMessage = $"Ошибка: {ex.Message}";
-            //     MessageBox.Show($"Ошибка загрузки данных: {ex.Message}", "Ошибка", 
-            //         MessageBoxButton.OK, MessageBoxImage.Error);
-            // }
-            // finally
-            // {
-            //     IsLoading = false;
-            // }
         }
         
         private bool FilterData(object item)
@@ -485,75 +454,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 IsLoading = false;
                 UpdateCommandStates();
             }
-        }
-        
-        private async Task SaveFileChangesAsync(FileRowViewModel row)
-        {
-            var entity = await _dbContext!.FilesMetadata.FindAsync(row.FileId);
-            if (entity != null)
-            {
-                entity.FileName = row.FileName;
-                entity.FileSize = row.FileSize;
-                entity.ContentType = row.ContentType;
-                entity.ChunkSize = row.ChunkSize;
-                entity.TotalChunks = row.TotalChunks;
-                entity.State = row.State;
-                entity.ModificationTime = DateTime.UtcNow;
-            }
-        }
-        
-        private async Task SaveChunkChangesAsync(ChunkRowViewModel row)
-        {
-            var entity = await _dbContext!.ChunksMetadata.FindAsync(row.FileId, row.ChunkId);
-            if (entity != null)
-            {
-                entity.ChunkIndex = row.ChunkIndex;
-                entity.Size = row.Size;
-                entity.ChunkHash = row.ChunkHash;
-            }
-        }
-        
-        private async Task SaveLocationChangesAsync(ChunkLocationRowViewModel row)
-        {
-            var entity = await _dbContext!.ChunkLocations
-                .FindAsync(row.FileId, row.ChunkId, row.StoredNodeId);
-            if (entity != null)
-            {
-                entity.ReplicationTime = row.ReplicationTime;
-            }
-        }
-        
-        private async Task SaveNodeChangesAsync(NodeRowViewModel row)
-        {
-            var entity = await _dbContext!.NodeStates.FindAsync(row.NodeId);
-            if (entity != null)
-            {
-                entity.Address = row.Address;
-                entity.State = row.State;
-            }
-        }
-        
-        private async Task SaveUserChangesAsync(UserRowViewModel row)
-        {
-            var entity = await _dbContext!.Users.FindAsync(row.UserId);
-            if (entity != null)
-            {
-                entity.Username = row.Username;
-                entity.Role = (UserRole)row.Role;
-                entity.IsActive = row.IsActive;
-                
-                if (!string.IsNullOrEmpty(row.NewPassword))
-                {
-                    entity.PasswordHash = HashPassword(row.NewPassword);
-                }
-            }
-        }
-        
-        private string HashPassword(string password)
-        {
-            using var sha256 = System.Security.Cryptography.SHA256.Create();
-            byte[] bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password + "salt"));
-            return Convert.ToBase64String(bytes);
         }
         
         private async Task DeleteRowAsync()
