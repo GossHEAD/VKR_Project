@@ -50,11 +50,31 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <TextBlock Grid.Row="0" Text="Аналитика системы" Style="{StaticResource HeaderStyle}"/>
+        <!-- Header and Log File Selection -->
+        <Grid Grid.Row="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            
+            <TextBlock Grid.Row="0" Text="Аналитика системы" Style="{StaticResource HeaderStyle}"/>
+            
+            <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,15">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <TextBlock Grid.Column="0" Text="Файл журнала:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Grid.Column="1" x:Name="SelectedFilePathText" Text="Не выбран" VerticalAlignment="Center" Margin="0,0,10,0" TextTrimming="CharacterEllipsis"/>
+                    <Button Grid.Column="2" Content="Выбрать файл..." Click="BrowseLogFile_Click" Style="{StaticResource ActionButtonStyle}"/>
+                </Grid>
+            </Border>
+        </Grid>
 
         <!-- Analytics Content -->
         <Grid Grid.Row="1">
@@ -104,7 +124,7 @@
             </Border>
             
             <!-- Node Activity Chart -->
-            <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0,7.5,7.5,0">
+            <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource CardStyle}" Margin="0,7.5,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -115,71 +135,11 @@
                     
                     <Border Grid.Row="1" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,5,0,0">
                         <Canvas x:Name="NodeActivityChart" Background="White">
-                            <!-- Chart will be drawn here programmatically -->
                         </Canvas>
                     </Border>
                 </Grid>
             </Border>
             
-            <!-- Error Analysis Chart -->
-            <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource CardStyle}" Margin="7.5,7.5,0,0">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    
-                    <TextBlock Grid.Row="0" Text="Анализ ошибок" Style="{StaticResource SubHeaderStyle}"/>
-                    
-                    <Border Grid.Row="1" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,5,0,0">
-                        <Canvas x:Name="ErrorAnalysisChart" Background="White">
-                            <!-- Chart will be drawn here programmatically -->
-                        </Canvas>
-                    </Border>
-                </Grid>
-            </Border>
         </Grid>
-
-        <!-- Log Filter Controls -->
-        <Border Grid.Row="2" Style="{StaticResource CardStyle}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="150"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="150"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                
-                <TextBlock Grid.Column="0" Text="Уровень:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                <ComboBox Grid.Column="1" 
-                          x:Name="LogLevelComboBox"
-                          SelectedIndex="0"
-                          Margin="0,0,10,0">
-                    <ComboBoxItem Content="Все"/>
-                    <ComboBoxItem Content="Ошибка"/>
-                    <ComboBoxItem Content="Предупреждение"/>
-                    <ComboBoxItem Content="Информация"/>
-                    <ComboBoxItem Content="Отладка"/>
-                </ComboBox>
-                
-                <TextBlock Grid.Column="2" Text="От:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                <DatePicker Grid.Column="3" x:Name="FromDatePicker" Margin="0,0,10,0"/>
-                
-                <TextBlock Grid.Column="4" Text="Содержит:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                <TextBox Grid.Column="5" 
-                         x:Name="SearchTextBox"
-                         VerticalAlignment="Center"
-                         Margin="0,0,10,0"/>
-                
-                <Button Grid.Column="6" 
-                        Content="Применить" 
-                        x:Name="ApplyFiltersButton"
-                        Click="ApplyFiltersButton_Click"
-                        Style="{StaticResource ActionButtonStyle}"/>
-            </Grid>
-        </Border>
     </Grid>
 </Page>

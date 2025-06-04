@@ -1,10 +1,13 @@
-﻿using System.Windows;
+﻿using System.IO;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using VRK_WPF.MVVM.Model;
 using VRK_WPF.MVVM.Services;
+using Path = System.Windows.Shapes.Path;
 
 namespace VRK_WPF.MVVM.View.UserPages
 {
@@ -15,13 +18,12 @@ namespace VRK_WPF.MVVM.View.UserPages
         private List<LogEntry> _logs = new List<LogEntry>();
         private DispatcherTimer _resizeTimer;
         private bool _disposed = false;
+        private string _currentLogFilePath = string.Empty;
         
         public AnalyticsPage()
         {
             InitializeComponent();
             _logManager = new LogManager(Dispatcher);
-            
-            FromDatePicker.SelectedDate = DateTime.Now.AddDays(-7);
             
             Loaded += AnalyticsPage_Loaded;
             SizeChanged += AnalyticsPage_SizeChanged;
@@ -33,20 +35,10 @@ namespace VRK_WPF.MVVM.View.UserPages
             Dispose();
         }
         
-        private async void AnalyticsPage_Loaded(object sender, RoutedEventArgs e)
+        private void AnalyticsPage_Loaded(object sender, RoutedEventArgs e)
         {
-            await _logManager.StartMonitoringAsync();
-            
-            if (_logManager.Logs.Count > 0)
-            {
-                _logs = _logManager.Logs.ToList();
-            }
-            else
-            {
-                // If no real logs are available, generate sample data for UI visualization
-                GenerateSampleLogData();
-            }
-            
+            // Start with sample data
+            GenerateSampleLogData();
             DrawCharts();
         }
         
@@ -54,7 +46,7 @@ namespace VRK_WPF.MVVM.View.UserPages
         {
             _resizeTimer?.Stop();
             _resizeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
-            _resizeTimer.Tick += async (s, args) =>
+            _resizeTimer.Tick += (s, args) =>
             {
                 _resizeTimer.Stop();
                 DrawCharts();
@@ -95,12 +87,79 @@ namespace VRK_WPF.MVVM.View.UserPages
             _logs = _logs.OrderBy(l => l.Timestamp).ToList();
         }
         
+        private async void BrowseLogFile_Click(object sender, RoutedEventArgs e)
+        {
+            var openFileDialog = new OpenFileDialog
+            {
+                Title = "Выберите файл журнала",
+                Filter = "Текстовые файлы (*.txt)|*.txt|Файлы журнала (*.log)|*.log|Все файлы (*.*)|*.*",
+                CheckFileExists = true
+            };
+            
+            if (openFileDialog.ShowDialog() == true)
+            {
+                _currentLogFilePath = openFileDialog.FileName;
+                SelectedFilePathText.Text = _currentLogFilePath;
+                
+                await LoadLogFile(_currentLogFilePath);
+            }
+        }
+        
+        private async Task LoadLogFile(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+                return;
+            
+            _logs.Clear();
+            
+            try
+            {
+                await _logManager.SwitchLogFileAsync(filePath);
+                
+                // If SwitchLogFileAsync didn't work, try manual load
+                if (_logManager.Logs.Count == 0)
+                {
+                    await _logManager.LoadLogsManuallyAsync(filePath);
+                }
+                
+                _logs = _logManager.Logs.ToList();
+                
+                // Update the charts with the new data
+                DrawCharts();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка загрузки файла журнала: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                
+                // Fall back to sample data if loading fails
+                GenerateSampleLogData();
+                DrawCharts();
+            }
+        }
+        
+        public class LogFileInfo
+        {
+            public string FilePath { get; set; } = string.Empty;
+            public string FileName { get; set; } = string.Empty;
+            public DateTime LastModified { get; set; }
+            
+            public override string ToString()
+            {
+                return FilePath;
+            }
+        }
+        
         private void DrawCharts()
         {
+            // Clear all charts first
+            LogEventChart.Children.Clear();
+            EventTypeChart.Children.Clear();
+            NodeActivityChart.Children.Clear();
+            
+            // Draw each chart
             DrawLogEventChart();
             DrawEventTypeChart();
             DrawNodeActivityChart();
-            DrawErrorAnalysisChart();
         }
         
         private void DrawLogEventChart()
@@ -311,7 +370,6 @@ namespace VRK_WPF.MVVM.View.UserPages
 
                 EventTypeChart.Children.Add(path);
                 
-                // Add label
                 double middleAngle = startAngle + (sweepAngle / 2);
                 double middleRad = middleAngle * Math.PI / 180;
                 
@@ -466,182 +524,6 @@ namespace VRK_WPF.MVVM.View.UserPages
             }
         }
         
-        private void DrawErrorAnalysisChart()
-        {
-            ErrorAnalysisChart.Children.Clear();
-            
-            if (_logs.Count == 0)
-                return;
-            
-            var errorLogs = _logs
-                .Where(l => l.Level.Contains("ERR") || l.Level.Contains("FAIL"))
-                .GroupBy(l => GetErrorCategory(l.Message))
-                .Select(g => new { Category = g.Key, Count = g.Count() })
-                .OrderByDescending(g => g.Count)
-                .Take(5)  
-                .ToList();
-            
-            double width = ErrorAnalysisChart.ActualWidth > 0 ? ErrorAnalysisChart.ActualWidth : 300;
-            double height = ErrorAnalysisChart.ActualHeight > 0 ? ErrorAnalysisChart.ActualHeight : 200;
-            double padding = 40;
-            
-            if (errorLogs.Count == 0)
-            {
-                TextBlock noErrorsText = new TextBlock
-                {
-                    Text = "No errors to analyze",
-                    FontSize = 12,
-                    TextAlignment = TextAlignment.Center,
-                    Width = width
-                };
-                Canvas.SetTop(noErrorsText, height / 2 - 10);
-                ErrorAnalysisChart.Children.Add(noErrorsText);
-                return;
-            }
-            
-            int maxCount = errorLogs.Max(g => g.Count);
-            
-            
-            Line xAxis = new Line
-            {
-                X1 = padding,
-                Y1 = height - padding,
-                X2 = width - padding,
-                Y2 = height - padding,
-                Stroke = Brushes.Black,
-                StrokeThickness = 1
-            };
-            
-            Line yAxis = new Line
-            {
-                X1 = padding,
-                Y1 = padding,
-                X2 = padding,
-                Y2 = height - padding,
-                Stroke = Brushes.Black,
-                StrokeThickness = 1
-            };
-            
-            ErrorAnalysisChart.Children.Add(xAxis);
-            ErrorAnalysisChart.Children.Add(yAxis);
-            
-            TextBlock xLabel = new TextBlock
-            {
-                Text = "Count",
-                FontSize = 10
-            };
-            Canvas.SetLeft(xLabel, width / 2);
-            Canvas.SetTop(xLabel, height - 15);
-            ErrorAnalysisChart.Children.Add(xLabel);
-            
-            int numBars = errorLogs.Count;
-            double totalBarHeight = height - 2 * padding;
-            double barHeight = totalBarHeight / (numBars * 1.5); 
-            
-            for (int i = 0; i < numBars; i++)
-            {
-                var item = errorLogs[i];
-                double barWidth = (item.Count * (width - 2 * padding) / maxCount);
-                
-                double x = padding;
-                double y = padding + i * (barHeight * 1.5);
-                
-                Rectangle bar = new Rectangle
-                {
-                    Width = barWidth,
-                    Height = barHeight,
-                    Fill = Brushes.Red
-                };
-                Canvas.SetLeft(bar, x);
-                Canvas.SetTop(bar, y);
-                ErrorAnalysisChart.Children.Add(bar);
-                
-                TextBlock categoryLabel = new TextBlock
-                {
-                    Text = TruncateText(item.Category, 20),
-                    FontSize = 9,
-                    TextWrapping = TextWrapping.Wrap,
-                    Width = 80
-                };
-                Canvas.SetLeft(categoryLabel, padding - 85);
-                Canvas.SetTop(categoryLabel, y);
-                ErrorAnalysisChart.Children.Add(categoryLabel);
-                
-                TextBlock countLabel = new TextBlock
-                {
-                    Text = item.Count.ToString(),
-                    FontSize = 9
-                };
-                Canvas.SetLeft(countLabel, x + barWidth + 5);
-                Canvas.SetTop(countLabel, y + barHeight / 2 - 5);
-                ErrorAnalysisChart.Children.Add(countLabel);
-            }
-        }
-        
-        private string GetErrorCategory(string message)
-        {
-            if (message.Contains("database") || message.Contains("DB") || message.Contains("database"))
-                return "Database error";
-            else if (message.Contains("network") || message.Contains("connection") || message.Contains("connect"))
-                return "Network error";
-            else if (message.Contains("file") || message.Contains("file"))
-                return "File system error";
-            else if (message.Contains("memory") || message.Contains("memory"))
-                return "Memory error";
-            else if (message.Contains("access") || message.Contains("permission") || message.Contains("access"))
-                return "Access error";
-            else
-                return "Other errors";
-        }
-        
-        private string TruncateText(string text, int maxLength)
-        {
-            if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
-                return text;
-                
-            return text.Substring(0, maxLength - 3) + "...";
-        }
-        
-        private void ApplyFiltersButton_Click(object sender, RoutedEventArgs e)
-        {
-            string selectedLevel = (LogLevelComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "All";
-            DateTime? fromDate = FromDatePicker.SelectedDate;
-            string searchText = SearchTextBox.Text;
-            
-            var filteredLogs = _logs;
-            
-            if (selectedLevel != "All")
-            {
-                string levelFilter = selectedLevel switch
-                {
-                    "Error" => "ERROR",
-                    "Warning" => "WARN",
-                    "Information" => "INFO",
-                    "Debug" => "DEBUG",
-                    _ => ""
-                };
-                
-                if (!string.IsNullOrEmpty(levelFilter))
-                {
-                    filteredLogs = filteredLogs.Where(l => l.Level.Contains(levelFilter)).ToList();
-                }
-            }
-            
-            if (fromDate.HasValue)
-            {
-                filteredLogs = filteredLogs.Where(l => l.Timestamp >= fromDate.Value).ToList();
-            }
-            
-            if (!string.IsNullOrWhiteSpace(searchText))
-            {
-                filteredLogs = filteredLogs.Where(l => 
-                    l.Message.Contains(searchText, StringComparison.OrdinalIgnoreCase) || 
-                    l.NodeId.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
-            }
-            
-            _logs = filteredLogs;
-            DrawCharts();
-        }
         public void Dispose()
         {
             Dispose(true);
@@ -666,7 +548,6 @@ namespace VRK_WPF.MVVM.View.UserPages
                     LogEventChart?.Children.Clear();
                     EventTypeChart?.Children.Clear();
                     NodeActivityChart?.Children.Clear();
-                    ErrorAnalysisChart?.Children.Clear();
                 
                     Loaded -= AnalyticsPage_Loaded;
                     SizeChanged -= AnalyticsPage_SizeChanged;

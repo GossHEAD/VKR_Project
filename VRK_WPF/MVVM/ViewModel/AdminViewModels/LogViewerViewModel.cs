@@ -1,7 +1,9 @@
 ﻿using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Text;
 using System.Windows;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -15,8 +17,9 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         private readonly LogManager _logManager;
         private readonly List<LogEntry> _allLogs = new();
         private bool _disposed = false;
-
         
+        private ICollectionViewLiveShaping? _logView;
+
         [ObservableProperty] private ObservableCollection<LogEntry> _logs = new();
 
         [ObservableProperty]
@@ -47,21 +50,19 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
 
         public LogViewerViewModel()
         {
-            
             _logManager = new LogManager(System.Windows.Threading.Dispatcher.CurrentDispatcher);
-            
             
             Logs = _logManager.Logs;
             
+            var view = CollectionViewSource.GetDefaultView(Logs);
+            _logView = view as ICollectionViewLiveShaping;
             
             RefreshLogsCommand = new RelayCommand(async () => await RefreshLogsAsync(), CanRefreshLogs);
             ClearLogsCommand = new RelayCommand(ClearLogs, CanClearLogs);
             ExportLogsCommand = new RelayCommand(ExportLogs, CanExportLogs);
             ApplyFiltersCommand = new RelayCommand(ApplyFilters, CanApplyFilters);
-
             
             LogCount = 0;
-            
             
             StartMonitoringLogs();
         }
@@ -102,13 +103,12 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             
             try
             {
-                
+                _allLogs.Clear();
                 _logManager.ClearLogs();
                 await _logManager.StartMonitoringAsync();
                 
                 LogCount = Logs.Count;
                 StatusMessage = $"Журнал обновлен. {LogCount} записей создано.";
-                
                 
                 ApplyFilters();
             }
@@ -230,38 +230,49 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         {
             if (Logs.Count == 0)
                 return;
-
             
-            var filteredLogs = Logs.Where(log => 
+            if (_allLogs.Count == 0)
+                _allLogs.AddRange(Logs);
+
+            CollectionViewSource.GetDefaultView(Logs).Filter = log =>
             {
-                
-                if (SelectedLogLevel != "All" && log.Level != SelectedLogLevel)
-                    return false;
+                if (log is LogEntry entry)
+                {
+                    if (SelectedLogLevel != "All")
+                    {
+                        string levelFilter = GetLevelFilter(SelectedLogLevel);
+                        if (!entry.Level.Contains(levelFilter, StringComparison.OrdinalIgnoreCase))
+                            return false;
+                    }
 
-                
-                if (!string.IsNullOrWhiteSpace(SearchText) && 
-                    !(log.Message?.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ?? false) &&
-                    !(log.NodeId?.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ?? false))
-                    return false;
+                    if (!string.IsNullOrWhiteSpace(SearchText) && 
+                        !entry.Message.Contains(SearchText, StringComparison.OrdinalIgnoreCase) &&
+                        !entry.NodeId.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                        return false;
 
-                
-                if (FromDate != DateTime.MinValue && log.Timestamp < FromDate)
-                    return false;
+                    if (FromDate != DateTime.MinValue && entry.Timestamp < FromDate)
+                        return false;
 
-                return true;
-            }).ToList();
+                    return true;
+                }
+                return false;
+            };
 
-            
-            _logManager.ClearLogs();
-            foreach (var log in filteredLogs)
-            {
-                Logs.Add(log);
-            }
-
-            
-            StatusMessage = $"Показ {filteredLogs.Count} событий {LogCount}";
+            StatusMessage = $"Фильтр применен. Показано {CollectionViewSource.GetDefaultView(Logs).Cast<LogEntry>().Count()} из {Logs.Count} записей.";
         }
-
+        
+        private string GetLevelFilter(string selectedLevel)
+        {
+            return selectedLevel switch
+            {
+                "Error" => "ERR",
+                "Warning" => "WARN",
+                "Information" => "INFO",
+                "Debug" => "DEBUG",
+                "Trace" => "TRACE",
+                _ => ""
+            };
+        }
         
         partial void OnSelectedLogLevelChanged(string value)
         {

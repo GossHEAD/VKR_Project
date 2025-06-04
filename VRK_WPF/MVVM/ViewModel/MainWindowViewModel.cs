@@ -325,17 +325,14 @@ namespace VRK_WPF.MVVM.ViewModel
             _logger.LogInformation("Попытка подключения: {Address}", TargetNodeAddress);
             Files.Clear();
             Nodes.Clear();
-
-            var tasks = new[]
-            {
-                RefreshFilesListAsync(),
-                RefreshNodeStatusAsync(),
-                LoadSettingsAsync()
-            };
             
             if (ConnectToNode())
             {
-                await Task.WhenAll(tasks);
+                await Task.WhenAll(
+                    RefreshFilesListAsync(),
+                    RefreshNodeStatusAsync(),
+                    LoadSettingsAsync()
+                );
                 
                 await Task.WhenAll(
                     UpdateSimulationNodesAsync(),
