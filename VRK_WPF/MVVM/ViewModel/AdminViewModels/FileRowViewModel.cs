@@ -13,5 +13,12 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         [ObservableProperty] private long _chunkSize;
         [ObservableProperty] private int _totalChunks;
         [ObservableProperty] private int _state;
+    
+        partial void OnFileNameChanged(string value) => IsModified = true;
+        partial void OnFileSizeChanged(long value) => IsModified = true;
+        partial void OnContentTypeChanged(string? value) => IsModified = true;
+        partial void OnChunkSizeChanged(long value) => IsModified = true;
+        partial void OnTotalChunksChanged(int value) => IsModified = true;
+        partial void OnStateChanged(int value) => IsModified = true;
     }
 }

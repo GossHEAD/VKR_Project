@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Windows.Controls;
 using VRK_WPF.MVVM.Services;
 
 namespace VRK_WPF.MVVM.ViewModel
@@ -24,16 +25,16 @@ namespace VRK_WPF.MVVM.ViewModel
 
         public LoginWindowViewModel()
         {
-            LoginCommand = new RelayCommand(ExecuteLogin, CanExecuteLogin);
+            LoginCommand = new RelayCommand<object>(ExecuteLogin, CanExecuteLogin);
         }
 
-        public RelayCommand LoginCommand { get; }
+        public RelayCommand<object> LoginCommand { get; }
 
-        private bool CanExecuteLogin() => 
+        private bool CanExecuteLogin(object? parameter) => 
             !string.IsNullOrWhiteSpace(Username) && 
             !IsLoggingIn;
 
-        private void ExecuteLogin()
+        private async void ExecuteLogin(object? parameter)
         {
             IsLoggingIn = true;
             IsErrorVisible = false;
@@ -41,7 +42,22 @@ namespace VRK_WPF.MVVM.ViewModel
             
             try
             {
-                if (AuthService.Login(Username, out string errorMsg))
+                string password = "";
+                if (parameter is PasswordBox passwordBox)
+                {
+                    password = passwordBox.Password;
+                }
+                
+                if (string.IsNullOrWhiteSpace(password))
+                {
+                    ErrorMessage = "Введите пароль";
+                    IsErrorVisible = true;
+                    return;
+                }
+                
+                bool loginSuccess = await AuthService.LoginAsync(Username, password);
+                
+                if (loginSuccess)
                 {
                     LoginSuccessful = true;
                     
@@ -55,7 +71,7 @@ namespace VRK_WPF.MVVM.ViewModel
                 }
                 else
                 {
-                    ErrorMessage = string.IsNullOrEmpty(errorMsg) ? "Неверное имя пользователя" : errorMsg;
+                    ErrorMessage = "Неверное имя пользователя или пароль";
                     IsErrorVisible = true;
                     LoginSuccessful = false;
                 }

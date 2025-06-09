@@ -98,6 +98,7 @@ namespace VRK_WPF.MVVM.Services
                             {
                                 UserId = user.UserId,
                                 Username = user.Username,
+                                Password = user.PasswordHash,
                                 Role = (int)user.Role,
                                 IsActive = user.IsActive,
                                 CreationTime = user.CreationTime
@@ -153,6 +154,7 @@ namespace VRK_WPF.MVVM.Services
                             if (entity != null)
                             {
                                 entity.Username = row.Username;
+                                entity.PasswordHash = row.Password;
                                 entity.Role = (VKR_Core.Enums.UserRole)row.Role;
                                 entity.IsActive = row.IsActive;
                             }

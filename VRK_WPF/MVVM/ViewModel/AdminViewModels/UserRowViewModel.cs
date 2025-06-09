@@ -6,6 +6,7 @@ public partial class UserRowViewModel : BaseRowViewModel
 {
     [ObservableProperty] private int _userId;
     [ObservableProperty] private string _username = string.Empty;
+    [ObservableProperty] private string _password = string.Empty;
     [ObservableProperty] private int _role;
     [ObservableProperty] private bool _isActive;
     [ObservableProperty] private DateTime _creationTime;
@@ -37,6 +38,7 @@ public partial class UserRowViewModel : BaseRowViewModel
     };
     
     partial void OnUsernameChanged(string value) => IsModified = true;
+    partial void OnPasswordChanged(string value) => IsModified = true;
     partial void OnRoleChanged(int value) => IsModified = true;
     partial void OnIsActiveChanged(bool value) => IsModified = true;
 }

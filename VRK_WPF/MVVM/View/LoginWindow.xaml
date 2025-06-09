@@ -3,10 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:local="clr-namespace:VRK_WPF.MVVM.View"
         xmlns:converters="clr-namespace:VRK_WPF.MVVM.Converters"
         mc:Ignorable="d"
-        Title="Авторизация" Height="330" Width="450" 
+        Title="Авторизация" Height="380" Width="450" 
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         Background="#F5F5F5">
@@ -32,11 +31,16 @@
             <TextBox x:Name="UsernameTextBox"
                      Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" 
                      Padding="5" 
-                     Margin="0,0,0,15">
-                <TextBox.InputBindings>
+                     Margin="0,0,0,15"/>
+            
+            <TextBlock Text="Пароль:" Margin="0,0,0,5"/>
+            <PasswordBox x:Name="PasswordBox"
+                         Padding="5" 
+                         Margin="0,0,0,15">
+                <PasswordBox.InputBindings>
                     <KeyBinding Key="Enter" Command="{Binding LoginCommand}"/>
-                </TextBox.InputBindings>
-            </TextBox>
+                </PasswordBox.InputBindings>
+            </PasswordBox>
             
             <TextBlock Foreground="Red" 
                        Visibility="{Binding IsErrorVisible, Converter={StaticResource BoolToVisibilityConverter}}" 
@@ -45,14 +49,9 @@
                        Margin="0,0,0,15"
                        HorizontalAlignment="Center"/>
             
-            <TextBlock Text="Доступные пользователи: admin, specialist, user" 
-                       HorizontalAlignment="Center"
-                       FontStyle="Italic"
-                       Margin="0,0,0,15"
-                       Foreground="Gray"/>
-            
             <Button Content="Войти" 
                     Command="{Binding LoginCommand}" 
+                    CommandParameter="{Binding ElementName=PasswordBox}"
                     Padding="20,8" 
                     HorizontalAlignment="Center" 
                     IsDefault="True"/>

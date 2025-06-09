@@ -119,7 +119,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
             {
                 AvailableNodeDatabases.Clear();
                 
-                // Expanded search paths to find database files
                 var searchPaths = new[]
                 {
                     Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data"),
@@ -159,7 +158,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                     ? $"Найдено {AvailableNodeDatabases.Count} баз данных" 
                     : "Базы данных не найдены";
                 
-                // If no databases were found, suggest manual selection
                 if (AvailableNodeDatabases.Count == 0)
                 {
                     MessageBox.Show("Не удалось найти базы данных автоматически. Пожалуйста, выберите файл базы данных вручную.", 
@@ -230,18 +228,15 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         {
             if (newValue != null && _adminDbService != null)
             {
-                // Reset the current view to null before refreshing to ensure we get fresh columns
                 CurrentView = null;
                 CurrentTableData = null;
                 
-                // Clear the auto-generated columns if we have a reference to the DataGrid
                 if (DataGridControl != null)
                 {
                     DataGridControl.Columns.Clear();
                     DataGridControl.AutoGenerateColumns = true;
                 }
                 
-                // Now load the data for the new table
                 RefreshTableDataAsync().ConfigureAwait(false);
             }
             
@@ -331,7 +326,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 {
                     foreach (var item in CurrentTableData.OfType<INotifyPropertyChanged>())
                     {
-                        item.PropertyChanged -= OnRowPropertyChanged; // Avoid multiple subscriptions
+                        item.PropertyChanged -= OnRowPropertyChanged; 
                         item.PropertyChanged += OnRowPropertyChanged;
                     }
 
@@ -339,7 +334,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                     if (CurrentView != null) CurrentView.Filter = FilterData;
                     StatusMessage = $"Загружено {CurrentTableData.Count} записей";
                     
-                    // Force UI refresh if we have access to the DataGrid
                     if (DataGridControl != null)
                     {
                         DataGridControl.ItemsSource = null;
@@ -359,7 +353,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 StatusMessage = $"Ошибка загрузки данных: {ex.Message}";
                 MessageBox.Show($"Ошибка загрузки данных для таблицы {SelectedTable.DisplayName}: {ex.Message}", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Error);
-                CurrentTableData = new ObservableCollection<object>(); // Ensure it's an empty collection on error
+                CurrentTableData = new ObservableCollection<object>();
                 CurrentView = CollectionViewSource.GetDefaultView(CurrentTableData);
             }
             finally
@@ -473,7 +467,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                 bool success = await _adminDbService.DeleteRowAsync(SelectedTable, SelectedRow);
                 if (success)
                 {
-                    CurrentTableData?.Remove(SelectedRow); // Assumes CurrentTableData is ObservableCollection<object>
+                    CurrentTableData?.Remove(SelectedRow);
                     SelectedRow = null;
                     StatusMessage = "Запись удалена";
                 }
@@ -581,7 +575,7 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         
         private async Task BackupDatabaseAsync()
         {
-            if (_adminDbService == null || SelectedNodeDatabase == null) // Check _adminDbService
+            if (_adminDbService == null || SelectedNodeDatabase == null)
                 return;
 
             var dialog = new SaveFileDialog
