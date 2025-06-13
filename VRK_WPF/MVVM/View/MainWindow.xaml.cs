@@ -24,7 +24,13 @@ namespace VRK_WPF.MVVM.View
             {
                 if (AuthService.CurrentUser == null)
                 {
-                    HandleLogin();
+                    MessageBox.Show(
+                        "Пользователь не аутентифицирован. Приложение будет закрыто.",
+                        "Ошибка аутентификации",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                    Application.Current.Shutdown();
+                    return;
                 }
 
                 InitializeNodeManager();
@@ -34,46 +40,22 @@ namespace VRK_WPF.MVVM.View
                 ILogger<MainWindowViewModel>? logger = null;
                 DataContext = new MainWindowViewModel(logger)
                 {
-                    CurrentUserName = AuthService.CurrentUser?.FullName ?? "Гость",
-                    CurrentUserRole = AuthService.CurrentUser?.Role.ToString() ?? "Гость"
+                    CurrentUserName = AuthService.CurrentUser.FullName,
+                    CurrentUserRole = AuthService.CurrentUser.Role.ToString()
                 };
 
                 SetActiveNavButton(FilesButton);
                 NavigateToPage("Файлы");
 
-                string roleName = AuthService.CurrentUser?.Role.ToString() ?? "Гость";
-                MessageBox.Show($"Добро пожаловать, {AuthService.CurrentUser?.FullName ?? "Гость"}!\nРоль: {roleName}",
-                    "Вход выполнен успешно",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-                
+                UpdateStatusBarWithUserInfo();
+        
                 ExitButton.Click += ExitButton_Click;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка инициализации приложения: {ex.Message}",
+                MessageBox.Show(
+                    $"Ошибка инициализации приложения: {ex.Message}",
                     "Ошибка",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-                Application.Current.Shutdown();
-            }
-        }
-
-        private void HandleLogin()
-        {
-            var loginWindow = new LoginWindow();
-            bool? loginResult = loginWindow.ShowDialog();
-
-            if (loginResult != true)
-            {
-                Application.Current.Shutdown();
-                return;
-            }
-
-            if (AuthService.CurrentUser == null)
-            {
-                MessageBox.Show("Аутентификация не удалась. Приложение будет закрыто.",
-                    "Ошибка аутентификации",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
                 Application.Current.Shutdown();
@@ -241,38 +223,111 @@ namespace VRK_WPF.MVVM.View
             SetActiveNavButton(AboutButton);
             NavigateToPage("О программе");
         }
+        
+        private void PerformLogout()
+        {
+            try
+            {
+                CleanupResources();
+        
+                AuthService.Logout();
+        
+                this.Hide();
+        
+                ShowLoginWindow();
+        
+                this.Close();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                Application.Current.Shutdown();
+            }
+        }
+        
+        private void ShowLoginWindow()
+        {
+            var loginWindow = new LoginWindow();
+    
+            loginWindow.LoginSucceeded += (s, e) =>
+            {
+                loginWindow.Close();
+            };
+    
+            loginWindow.Closed += (s, e) =>
+            {
+                if (AuthService.CurrentUser == null)
+                {
+                    Application.Current.Shutdown();
+                }
+            };
+    
+            loginWindow.Show();
+        }
+
+        private void CleanupResources()
+        {
+            try
+            {
+                if (_nodeProcessManager != null)
+                {
+                    _nodeProcessManager.NodeOutputReceived -= NodeProcess_OutputReceived;
+                    _nodeProcessManager.NodeErrorReceived -= NodeProcess_ErrorReceived;
+                    _nodeProcessManager.NodeExited -= NodeProcess_Exited;
+                    
+                    if (_nodeProcessManager.IsNodeRunning)
+                    {
+                        _nodeProcessManager.StopNode();
+                    }
+                    
+                    _nodeProcessManager.Dispose();
+                    _nodeProcessManager = null;
+                }
+
+                if (DataContext is IDisposable disposableViewModel)
+                {
+                    disposableViewModel.Dispose();
+                }
+
+                if (ContentFrame != null)
+                {
+                    ContentFrame.Content = null;
+                    ContentFrame.NavigationService?.RemoveBackEntry();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error during cleanup: {ex.Message}");
+            }
+        }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             if (_isClosing) return;
             _isClosing = true;
 
-            if (_nodeProcessManager != null)
+            if (AuthService.CurrentUser != null)
             {
-                _nodeProcessManager.NodeOutputReceived -= NodeProcess_OutputReceived;
-                _nodeProcessManager.NodeErrorReceived -= NodeProcess_ErrorReceived;
-                _nodeProcessManager.NodeExited -= NodeProcess_Exited;
-            
-                if (_nodeProcessManager.IsNodeRunning)
-                {
-                    _nodeProcessManager.StopNode();
-                }
+                CleanupResources();
+                AuthService.Logout();
             }
-
-            if (DataContext is IDisposable disposableViewModel)
-            {
-                disposableViewModel.Dispose();
-            }
-
-            ContentFrame.Content = null;
-            ContentFrame.NavigationService?.RemoveBackEntry();
 
             base.OnClosing(e);
         }
 
         private void ExitButton_Click(object sender, RoutedEventArgs e)
         {
-            Close();
+            var result = MessageBox.Show(
+                "Уверены, что хотите выйти?",
+                "Выход",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                PerformLogout();
+            }
         }
     }
 }

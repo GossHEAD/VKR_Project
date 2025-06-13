@@ -1196,19 +1196,51 @@ namespace VRK_WPF.MVVM.ViewModel
         
         public void Dispose()
         {
-            _uploadCts?.Cancel();
-            _uploadCts?.Dispose();
-            _uploadCts = null;
+            try
+            {
+                _uploadCts?.Cancel();
+                _uploadCts?.Dispose();
+                _uploadCts = null;
 
-            _downloadCts?.Cancel();
-            _downloadCts?.Dispose();
-            _downloadCts = null;
+                _downloadCts?.Cancel();
+                _downloadCts?.Dispose();
+                _downloadCts = null;
 
-            _currentChannel?.Dispose();
-            _currentChannel = null;
-            _storageClient = null;
+                _progressUpdateTimer?.Stop();
+                _progressUpdateTimer?.Dispose();
 
-            _logger.LogInformation("MainWindowViewModel disposed.");
+                if (_currentChannel != null)
+                {
+                    try
+                    {
+                        _currentChannel.ShutdownAsync().Wait(TimeSpan.FromSeconds(2));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Error during gRPC channel shutdown");
+                    }
+                    finally
+                    {
+                        _currentChannel.Dispose();
+                        _currentChannel = null;
+                    }
+                }
+        
+                _storageClient = null;
+
+                Files?.Clear();
+                Nodes?.Clear();
+                SimulationNodes?.Clear();
+                SimulationFileStatuses?.Clear();
+                SimulationChunkDistribution?.Clear();
+
+                _logger?.LogInformation("MainWindowViewModel disposed successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error during MainWindowViewModel disposal");
+                System.Diagnostics.Debug.WriteLine($"Disposal error: {ex.Message}");
+            }
         }
 
     }

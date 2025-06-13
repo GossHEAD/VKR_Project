@@ -1,49 +1,55 @@
 ﻿using System.Windows;
-using VRK_WPF.MVVM.Services;
 using VRK_WPF.MVVM.View;
+using VRK_WPF.MVVM.Services;
 
-namespace VRK_WPF;
-
-public partial class App : Application
+namespace VRK_WPF
 {
-    private void Application_Startup(object sender, StartupEventArgs e)
+    public partial class App : Application
     {
-        var loginWindow = new LoginWindow();
-        Current.MainWindow = loginWindow;
-    
-        loginWindow.Loaded += (s, args) => {
-            loginWindow.Activate(); 
-        };
-
-        loginWindow.LoginSucceeded += (s, args) => {
-            Dispatcher.BeginInvoke(new Action(() => {
-                try
-                {
-                    if (AuthService.CurrentUser != null && 
-                        AuthService.CurrentUser.Role == VKR_Core.Enums.UserRole.Administrator)
-                    {
-                        var adminWindow = new AdminWindow();
-                        Current.MainWindow = adminWindow;
-                        adminWindow.Show();
-                    }
-                    else
-                    {
-                        var mainWindow = new MainWindow();
-                        Current.MainWindow = mainWindow;
-                        mainWindow.Show();
-                    }
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            base.OnStartup(e);
+            
+            ShowLoginWindow();
+        }
+        
+        private void ShowLoginWindow()
+        {
+            try
+            {
+                var loginWindow = new LoginWindow();
                 
-                    loginWindow.Close();
-                }
-                catch (Exception ex)
+                loginWindow.LoginSucceeded += (sender, args) =>
                 {
-                    MessageBox.Show($"Ошибка при создании окна: {ex.Message}", "Ошибка", 
-                        MessageBoxButton.OK, MessageBoxImage.Error);
-                    Shutdown(1);
-                }
-            }));
-        };
-
-        loginWindow.Show(); 
+                    loginWindow.Close();
+                };
+                
+                loginWindow.Closed += (sender, args) =>
+                {
+                    if (AuthService.CurrentUser == null)
+                    {
+                        Shutdown();
+                    }
+                };
+                
+                loginWindow.Show();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Ошибка при запуске приложения: {ex.Message}",
+                    "Ошибка при запуске",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                    
+                Shutdown();
+            }
+        }
+        
+        protected override void OnExit(ExitEventArgs e)
+        {
+            AuthService.Logout();
+            base.OnExit(e);
+        }
     }
 }

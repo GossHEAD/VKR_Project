@@ -1,17 +1,32 @@
-﻿<Window x:Class="VRK_WPF.MVVM.View.LoginWindow"
+﻿<!-- LoginWindow.xaml -->
+<Window x:Class="VRK_WPF.MVVM.View.LoginWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:converters="clr-namespace:VRK_WPF.MVVM.Converters"
         mc:Ignorable="d"
-        Title="Авторизация" Height="380" Width="450" 
+        Title="Авторизация" Height="480" Width="500" 
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         Background="#F5F5F5">
 
     <Window.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        
+        <Style x:Key="DemoUserButtonStyle" TargetType="Button">
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Background" Value="#E3F2FD"/>
+            <Setter Property="BorderBrush" Value="#2196F3"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#BBDEFB"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -54,8 +69,103 @@
                     CommandParameter="{Binding ElementName=PasswordBox}"
                     Padding="20,8" 
                     HorizontalAlignment="Center" 
-                    IsDefault="True"/>
+                    IsDefault="True"
+                    Margin="0,0,0,20"/>
             
+            <!-- Demo Users Section -->
+            <Border BorderBrush="#DDDDDD" BorderThickness="1" Background="White" Padding="15" CornerRadius="4">
+                <StackPanel>
+                    <TextBlock Text="Демо-пользователи для тестирования:" 
+                               FontWeight="SemiBold" 
+                               Margin="0,0,0,10"
+                               HorizontalAlignment="Center"/>
+                    
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <!-- Admin User -->
+                        <Button Grid.Row="0" Grid.Column="0" 
+                                Content="admin" 
+                                Style="{StaticResource DemoUserButtonStyle}"
+                                Click="DemoUser_Click"
+                                Tag="admin|admin123"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" 
+                                   Text="admin123" 
+                                   VerticalAlignment="Center" 
+                                   Margin="10,0,15,0"
+                                   FontFamily="Consolas"/>
+                        <TextBlock Grid.Row="0" Grid.Column="2" 
+                                   Text="Администратор (полный доступ)" 
+                                   VerticalAlignment="Center"
+                                   FontWeight="Medium"/>
+                        
+                        <!-- Specialist User -->
+                        <Button Grid.Row="1" Grid.Column="0" 
+                                Content="specialist" 
+                                Style="{StaticResource DemoUserButtonStyle}"
+                                Click="DemoUser_Click"
+                                Tag="specialist|pass123"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" 
+                                   Text="pass123" 
+                                   VerticalAlignment="Center" 
+                                   Margin="10,0,15,0"
+                                   FontFamily="Consolas"/>
+                        <TextBlock Grid.Row="1" Grid.Column="2" 
+                                   Text="IT-специалист" 
+                                   VerticalAlignment="Center"/>
+                        
+                        <!-- Regular User -->
+                        <Button Grid.Row="2" Grid.Column="0" 
+                                Content="user" 
+                                Style="{StaticResource DemoUserButtonStyle}"
+                                Click="DemoUser_Click"
+                                Tag="user|user123"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" 
+                                   Text="user123" 
+                                   VerticalAlignment="Center" 
+                                   Margin="10,0,15,0"
+                                   FontFamily="Consolas"/>
+                        <TextBlock Grid.Row="2" Grid.Column="2" 
+                                   Text="Обычный пользователь" 
+                                   VerticalAlignment="Center"/>
+                        
+                        <!-- Inactive User -->
+                        <Button Grid.Row="3" Grid.Column="0" 
+                                Content="inactive" 
+                                Style="{StaticResource DemoUserButtonStyle}"
+                                Click="DemoUser_Click"
+                                Tag="inactive|inactive123"
+                                IsEnabled="False"
+                                Opacity="0.6"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" 
+                                   Text="inactive123" 
+                                   VerticalAlignment="Center" 
+                                   Margin="10,0,15,0"
+                                   FontFamily="Consolas"
+                                   Opacity="0.6"/>
+                        <TextBlock Grid.Row="3" Grid.Column="2" 
+                                   Text="Неактивный пользователь" 
+                                   VerticalAlignment="Center"
+                                   Opacity="0.6"/>
+                    </Grid>
+                    
+                    <TextBlock Text="Нажмите на имя пользователя для автозаполнения" 
+                               FontSize="11" 
+                               Foreground="Gray" 
+                               HorizontalAlignment="Center"
+                               Margin="0,10,0,0"/>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </Grid>
 </Window>

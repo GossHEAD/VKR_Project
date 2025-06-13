@@ -1,9 +1,4 @@
-﻿using System.IO;
-using Microsoft.EntityFrameworkCore;
-using VKR_Core.Enums;
-using VKR_Node.Configuration;
-using VKR_Node.Persistance;
-using VKR_Node.Persistance.Entities;
+﻿using VKR_Core.Enums;
 using VRK_WPF.MVVM.Model;
 
 namespace VRK_WPF.MVVM.Services
@@ -12,35 +7,45 @@ namespace VRK_WPF.MVVM.Services
     {
         public static UserModel? CurrentUser { get; private set; }
         
-        private static NodeDbContext CreateDbContext()
+        private static readonly List<HardcodedUser> _users = new List<HardcodedUser>
         {
-            // Try to find existing database
-            var possiblePaths = new[] 
+            new HardcodedUser
             {
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "node_storage.db"),
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data", "node_storage.db"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VKR_Network", "Data", "node_storage.db")
-            };
-            
-            string? dbPath = possiblePaths.FirstOrDefault(File.Exists);
-            
-            if (string.IsNullOrEmpty(dbPath))
+                UserId = 1,
+                Username = "admin",
+                Password = "admin123",
+                FullName = "Администратор системы",
+                Role = UserRole.Administrator,
+                IsActive = true
+            },
+            new HardcodedUser
             {
-                // Create default database in application directory
-                dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "node_storage.db");
-                Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+                UserId = 2,
+                Username = "specialist",
+                Password = "pass123",
+                FullName = "Иванов Иван Иванович",
+                Role = UserRole.ITSpecialist,
+                IsActive = true
+            },
+            new HardcodedUser
+            {
+                UserId = 3,
+                Username = "user",
+                Password = "user123",
+                FullName = "Петров Петр Петрович",
+                Role = UserRole.ITSpecialist,
+                IsActive = true
+            },
+            new HardcodedUser
+            {
+                UserId = 4,
+                Username = "inactive",
+                Password = "inactive123",
+                FullName = "Неактивный пользователь",
+                Role = UserRole.ITSpecialist,
+                IsActive = false
             }
-            
-            var optionsBuilder = new DbContextOptionsBuilder<NodeDbContext>();
-            optionsBuilder.UseSqlite($"Data Source={dbPath}");
-            
-            var dbOptions = Microsoft.Extensions.Options.Options.Create(new DatabaseOptions 
-            { 
-                DatabasePath = dbPath
-            });
-            
-            return new NodeDbContext(optionsBuilder.Options, dbOptions);
-        }
+        };
         
         public static async Task<bool> LoginAsync(string username, string password)
         {
@@ -51,28 +56,24 @@ namespace VRK_WPF.MVVM.Services
             
             try
             {
-                using var context = CreateDbContext();
+                await Task.Delay(100);
                 
-                // Ensure database exists and create default users if needed
-                await context.Database.EnsureCreatedAsync();
-                await EnsureDefaultUsersExist(context);
+                var user = _users.FirstOrDefault(u => 
+                    u.Username.Equals(username, StringComparison.OrdinalIgnoreCase) && 
+                    u.Password == password);
                 
-                // Simple plain text password check
-                var userEntity = await context.Users
-                    .FirstOrDefaultAsync(u => u.Username == username && u.PasswordHash == password);
-                
-                if (userEntity == null || !userEntity.IsActive)
+                if (user == null || !user.IsActive)
                 {
                     return false;
                 }
                 
                 CurrentUser = new UserModel
                 {
-                    UserId = userEntity.UserId,
-                    Username = userEntity.Username,
-                    FullName = GetFullNameForUser(userEntity.Username, userEntity.Role),
-                    Role = userEntity.Role,
-                    IsActive = userEntity.IsActive,
+                    UserId = user.UserId,
+                    Username = user.Username,
+                    FullName = user.FullName,
+                    Role = user.Role,
+                    IsActive = user.IsActive,
                     LastLogin = DateTime.Now
                 };
                 
@@ -82,74 +83,6 @@ namespace VRK_WPF.MVVM.Services
             {
                 System.Diagnostics.Debug.WriteLine($"Login error: {ex.Message}");
                 return false;
-            }
-        }
-        
-        private static string GetFullNameForUser(string username, UserRole role)
-        {
-            return username switch
-            {
-                "admin" => "Администратор системы",
-                "specialist" => "Иванов Иван Иванович",
-                "user" => "Петров Петр Петрович",
-                "inactive" => "Неактивный пользователь",
-                _ => username
-            };
-        }
-        
-        private static async Task EnsureDefaultUsersExist(NodeDbContext context)
-        {
-            var hasAnyUsers = await context.Users.AnyAsync();
-            
-            if (!hasAnyUsers)
-            {
-                System.Diagnostics.Debug.WriteLine("Creating default users...");
-                
-                // Create preset users
-                var defaultUsers = new List<UserEntity>
-                {
-                    new UserEntity
-                    {
-                        Username = "admin",
-                        PasswordHash = "admin123", // Plain text password
-                        Role = UserRole.Administrator,
-                        IsActive = true,
-                        CreationTime = DateTime.UtcNow
-                    },
-                    new UserEntity
-                    {
-                        Username = "specialist",
-                        PasswordHash = "pass123", // Plain text password
-                        Role = UserRole.ITSpecialist,
-                        IsActive = true,
-                        CreationTime = DateTime.UtcNow
-                    },
-                    new UserEntity
-                    {
-                        Username = "user",
-                        PasswordHash = "user123", // Plain text password
-                        Role = UserRole.ITSpecialist,
-                        IsActive = true,
-                        CreationTime = DateTime.UtcNow
-                    },
-                    new UserEntity
-                    {
-                        Username = "inactive",
-                        PasswordHash = "inactive123", // Plain text password
-                        Role = UserRole.ITSpecialist,
-                        IsActive = false,
-                        CreationTime = DateTime.UtcNow
-                    }
-                };
-                
-                context.Users.AddRange(defaultUsers);
-                await context.SaveChangesAsync();
-                
-                System.Diagnostics.Debug.WriteLine("Default users created:");
-                System.Diagnostics.Debug.WriteLine("  admin / admin123 (Administrator)");
-                System.Diagnostics.Debug.WriteLine("  specialist / pass123 (IT Specialist)");
-                System.Diagnostics.Debug.WriteLine("  user / user123 (IT Specialist)");
-                System.Diagnostics.Debug.WriteLine("  inactive / inactive123 (Inactive IT Specialist)");
             }
         }
         
@@ -188,6 +121,26 @@ namespace VRK_WPF.MVVM.Services
                 "Logs" => CurrentUser.Role == UserRole.Administrator || CurrentUser.Role == UserRole.ITSpecialist,
                 _ => false 
             };
+        }
+        
+        public static IReadOnlyList<HardcodedUser> GetAvailableUsers()
+        {
+            return _users.AsReadOnly();
+        }
+    }
+    
+    public class HardcodedUser
+    {
+        public int UserId { get; set; }
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public UserRole Role { get; set; }
+        public bool IsActive { get; set; } = true;
+        
+        public override string ToString()
+        {
+            return $"{Username} ({Role}) - {(IsActive ? "Активен" : "Неактивен")}";
         }
     }
 }

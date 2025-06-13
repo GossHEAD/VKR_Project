@@ -212,36 +212,70 @@ namespace VRK_WPF.MVVM.ViewModel
 
         private void Logout()
         {
-            _currentChannel?.Dispose();
-            _currentChannel = null;
-            _storageClient = null;
-
-            AuthService.Logout();
-
-            foreach (Window window in Application.Current.Windows)
+            try
             {
-                if (window is AdminWindow)
+                if (_currentChannel != null)
                 {
-                    window.Close();
-
-                    var loginWindow = new LoginWindow();
-                    loginWindow.Show();
-
-                    if (loginWindow.DialogResult != true)
+                    try
                     {
-                        Application.Current.Shutdown();
+                        _currentChannel.ShutdownAsync().Wait(TimeSpan.FromSeconds(2));
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        var mainWindow = new MainWindow();
-                        mainWindow.Show();
+                        System.Diagnostics.Debug.WriteLine($"gRPC shutdown error: {ex.Message}");
                     }
-
-                    break;
+                    finally
+                    {
+                        _currentChannel.Dispose();
+                        _currentChannel = null;
+                    }
                 }
+                _storageClient = null;
+
+                AuthService.Logout();
+
+                var adminWindow = Application.Current.Windows.OfType<AdminWindow>().FirstOrDefault();
+                if (adminWindow != null)
+                {
+                    adminWindow.Hide();
+            
+                    ShowLoginWindowFromAdmin();
+            
+                    adminWindow.Close();
+                }
+                else
+                {
+                    Application.Current.Shutdown();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error during logout: {ex.Message}", "Logout Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                Application.Current.Shutdown();
             }
         }
         
+        private void ShowLoginWindowFromAdmin()
+        {
+            var loginWindow = new LoginWindow();
+    
+            loginWindow.LoginSucceeded += (s, e) =>
+            {
+                loginWindow.Close();
+            };
+    
+            loginWindow.Closed += (s, e) =>
+            {
+                if (AuthService.CurrentUser == null)
+                {
+                    Application.Current.Shutdown();
+                }
+            };
+    
+            loginWindow.Show();
+        }
+
         public void Dispose()
         {
             Dispose(true);
