@@ -23,11 +23,6 @@ namespace VRK_WPF.MVVM.Services
             Debug.WriteLine("LogManager: Initialized");
         }
         
-        public void SetCurrentNodeId(string nodeId)
-        {
-            _currentNodeId = nodeId;
-        }
-        
         public async Task StartMonitoringAsync()
         {
             Debug.WriteLine("LogManager: StartMonitoringAsync called");

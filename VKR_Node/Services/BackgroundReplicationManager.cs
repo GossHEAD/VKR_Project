@@ -6,9 +6,9 @@ using VKR_Core.Services;
 using VKR_Node.Configuration;
 using VKR_Node.Services.Utilities;
 using VKR.Protos;
-using Google.Protobuf;
 using System.Diagnostics;
 using AutoMapper;
+using Grpc.Core;
 
 namespace VKR_Node.Services
 {
@@ -681,6 +681,14 @@ namespace VKR_Node.Services
             
             try
             {
+                _logger.LogInformation("Replicating Chunk {ChunkId} to Node {NodeId} ({Address}), Size: {Size} bytes", 
+                    chunkInfo.ChunkId, targetNode.NodeId, targetNode.Address, chunkData.Length);
+                
+                if (chunkData.Length > 100 * 1024 * 1024) // 100MB
+                {
+                    _logger.LogWarning("Chunk {ChunkId} size ({Size} bytes) exceeds typical gRPC limits", 
+                        chunkInfo.ChunkId, chunkData.Length);
+                }
                 
                 var metadata = new ReplicateChunkMetadata
                 {
@@ -712,6 +720,12 @@ namespace VKR_Node.Services
                 _logger.LogInformation("Successfully replicated Chunk {ChunkId} to Node {NodeId}", 
                     chunkInfo.ChunkId, targetNode.NodeId);
                 return true;
+            }
+            catch (RpcException ex)
+            {
+                _logger.LogError(ex, "gRPC error replicating Chunk {ChunkId} to Node {NodeId}. Status: {Status}, Detail: {Detail}", 
+                    chunkInfo.ChunkId, targetNode.NodeId, ex.StatusCode, ex.Status.Detail);
+                return false;
             }
             catch (OperationCanceledException)
             {

@@ -2,6 +2,7 @@
 using Google.Protobuf;
 using Grpc.Core;
 using Grpc.Net.Client;
+using Grpc.Net.Client.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VKR_Core.Models;
@@ -80,7 +81,6 @@ namespace VKR_Node.Services
                 }
                 catch (OperationCanceledException)
                 {
-                    // Expected during shutdown
                 }
                 catch (Exception ex)
                 {
@@ -139,6 +139,49 @@ namespace VKR_Node.Services
             }
         }
         
+        private GrpcChannel CreateChannel(string address)
+        {
+            var handler = new SocketsHttpHandler
+            {
+                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+                KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+                KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
+                EnableMultipleHttp2Connections = true,
+                
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                ConnectTimeout = TimeSpan.FromSeconds(30),
+                ResponseDrainTimeout = TimeSpan.FromSeconds(5)
+            };
+    
+            var options = new GrpcChannelOptions
+            {
+                MaxReceiveMessageSize = 100 * 1024 * 1024,
+                MaxSendMessageSize = 100 * 1024 * 1024,   
+                HttpHandler = handler,
+        
+                ServiceConfig = new ServiceConfig
+                {
+                    MethodConfigs =
+                    {
+                        new MethodConfig
+                        {
+                            Names = { MethodName.Default },
+                            RetryPolicy = new RetryPolicy
+                            {
+                                MaxAttempts = 3,
+                                InitialBackoff = TimeSpan.FromSeconds(1),
+                                MaxBackoff = TimeSpan.FromSeconds(5),
+                                BackoffMultiplier = 2,
+                                RetryableStatusCodes = { StatusCode.Unavailable, StatusCode.Unknown }
+                            }
+                        }
+                    }
+                }
+            };
+    
+            return GrpcChannel.ForAddress(address, options);
+        }
+        
         private GrpcChannel GetOrCreateChannel(string targetNodeAddress)
         {
             string formattedAddress = NormalizeAddress(targetNodeAddress);
@@ -148,33 +191,15 @@ namespace VKR_Node.Services
             {
                 _logger.LogWarning("Circuit breaker open for {Address} until {Time}", 
                     formattedAddress, breakUntil.ToString("HH:mm:ss"));
-            
-                return GrpcChannel.ForAddress(formattedAddress, new GrpcChannelOptions
-                {
-                    HttpHandler = new SocketsHttpHandler
-                    {
-                        ConnectTimeout = TimeSpan.FromSeconds(5),
-                        EnableMultipleHttp2Connections = true
-                    }
-                });
+                
+                return CreateChannel(formattedAddress);
             }
 
             var channel = _channels.GetOrAdd(formattedAddress, addr => {
                 _logger.LogDebug("Creating gRPC channel for address: {Address}", addr);
-                var options = new GrpcChannelOptions
-                {
-                    MaxReceiveMessageSize = 100 * 1024 * 1024, 
-                    MaxSendMessageSize = 100 * 1024 * 1024,    
-                    HttpHandler = new SocketsHttpHandler
-                    {
-                        ConnectTimeout = TimeSpan.FromSeconds(30),
-                        EnableMultipleHttp2Connections = true
-                    }
-                };
-        
-                return GrpcChannel.ForAddress(addr, options);
+                return CreateChannel(addr);
             });
-            
+    
             _channelLastUsed[formattedAddress] = DateTime.UtcNow;
 
             return channel;
@@ -312,8 +337,8 @@ namespace VKR_Node.Services
             Stream dataStream,
             CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Sending streaming ReplicateChunk request for Chunk {ChunkId} to Node {TargetAddress}", 
-                metadata.ChunkId, targetNodeAddress);
+            _logger.LogInformation("Sending streaming ReplicateChunk request for Chunk {ChunkId} (Size: {Size} bytes) to Node {TargetAddress}", 
+                metadata.ChunkId, metadata.Size, targetNodeAddress);
 
             return await ExecuteWithErrorHandlingAsync(
                 "ReplicateChunkStreaming",
@@ -322,27 +347,55 @@ namespace VKR_Node.Services
                     var channel = GetOrCreateChannel(targetNodeAddress);
                     var client = new NodeInternalService.NodeInternalServiceClient(channel);
             
-                    using var call = client.ReplicateChunkStreaming(cancellationToken: cancellationToken);
+                    var deadline = metadata.Size > 10 * 1024 * 1024 
+                        ? DateTime.UtcNow.AddMinutes(5)  
+                        : DateTime.UtcNow.AddMinutes(2);
+                        
+                    var callOptions = new CallOptions(
+                        deadline: deadline,
+                        cancellationToken: cancellationToken);
+            
+                    using var call = client.ReplicateChunkStreaming(callOptions);
                     
                     await call.RequestStream.WriteAsync(new ReplicateChunkStreamingRequest { 
                         Metadata = metadata 
                     });
                     
-                    byte[] buffer = new byte[64 * 1024]; 
+                    const int streamBufferSize = 256 * 1024; 
+                    byte[] buffer = new byte[streamBufferSize];
                     int bytesRead;
+                    long totalBytesSent = 0;
+                    
                     while ((bytesRead = await dataStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
                     {
                         await call.RequestStream.WriteAsync(new ReplicateChunkStreamingRequest {
                             DataChunk = ByteString.CopyFrom(buffer, 0, bytesRead)
                         });
+                        
+                        totalBytesSent += bytesRead;
+                        
+                        if (metadata.Size > 10 * 1024 * 1024 && totalBytesSent % (1024 * 1024) == 0)
+                        {
+                            _logger.LogDebug("Replication progress for Chunk {ChunkId}: {Sent}/{Total} bytes ({Percent:F1}%)",
+                                metadata.ChunkId, totalBytesSent, metadata.Size, 
+                                (double)totalBytesSent / metadata.Size * 100);
+                        }
                     }
             
                     await call.RequestStream.CompleteAsync();
-                    return await call.ResponseAsync;
+                    var response = await call.ResponseAsync;
+                    
+                    if (response.Success)
+                    {
+                        _logger.LogInformation("Successfully replicated Chunk {ChunkId} ({Size} bytes) to Node {TargetAddress}",
+                            metadata.ChunkId, totalBytesSent, targetNodeAddress);
+                    }
+                    
+                    return response;
                 },
                 cancellationToken) ?? new ReplicateChunkReply { 
                 Success = false, 
-                Message = "Подключение к узлу не удалось" 
+                Message = "Connection to target node failed" 
             };
         }
         
@@ -400,34 +453,6 @@ namespace VKR_Node.Services
                 };
         }
         
-        public Task<NodeModel?> FindSuccessorOnNodeAsync(
-            NodeModel targetNode, 
-            string keyId, 
-            CancellationToken cancellationToken = default)
-        {
-            _logger.LogWarning("FindSuccessorOnNodeAsync is not implemented");
-            // TODO: Implement when DHT functionality is required
-            return Task.FromResult<NodeModel?>(null);
-        }
-        
-        public Task<NodeModel?> GetPredecessorFromNodeAsync(
-            NodeModel targetNode, 
-            CancellationToken cancellationToken = default)
-        {
-            _logger.LogWarning("GetPredecessorFromNodeAsync is not implemented");
-            // TODO: Implement when DHT functionality is required
-            return Task.FromResult<NodeModel?>(null);
-        }
-        
-        public Task<bool> NotifyNodeAsync(
-            NodeModel targetNode, 
-            NodeModel selfInfo, 
-            CancellationToken cancellationToken = default)
-        {
-            _logger.LogWarning("NotifyNodeAsync is not implemented");
-            return Task.FromResult(false);
-        }
-
         public async Task<AsyncServerStreamingCall<RequestChunkReply>?> RequestChunkFromNodeAsync(
             string targetNodeAddress, 
             RequestChunkRequest request, 
@@ -549,7 +574,6 @@ namespace VKR_Node.Services
             }
             catch (OperationCanceledException)
             {
-                // Expected during shutdown
             }
             catch (Exception ex)
             {

@@ -10,14 +10,6 @@ namespace VKR_Node.Configuration
         
         public string? DisplayName { get; set; }
         
-        /// <summary>
-        /// Validate this configuration section.
-        /// </summary>
-        // public void Validate()
-        // {
-        //     var context = new ValidationContext(this);
-        //     Validator.ValidateObject(this, context, true);
-        // }
         public void Validate()
         {
             var context = new ValidationContext(this);

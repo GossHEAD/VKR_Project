@@ -11,7 +11,6 @@ using System.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Serilog;
-using Serilog.Events;
 using VKR_Core.Services;
 using VKR_Node.Configuration;
 using VKR_Node.Mapping;
@@ -21,8 +20,6 @@ using VKR_Node.Services.FileService;
 using VKR_Node.Services.FileService.FileInterface;
 using VKR_Node.Services.NodeServices;
 using VKR_Node.Services.NodeServices.NodeInterfaces;
-using VKR_Node.Services.Utilities;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace VKR_Node
 {
@@ -30,277 +27,26 @@ namespace VKR_Node
     {
         public static async Task Main(string[] args)
         {
-            ConfigureSerilog(args);
-            Console.WriteLine($"[Main] Application started with args: {string.Join(" ", args)}");
+            // Log.Logger = new LoggerConfiguration()
+            //     .MinimumLevel.Debug()
+            //     .WriteTo.Console()
+            //     .CreateBootstrapLogger();
 
             try
             {
-                
                 var host = CreateHostBuilder(args).Build();
-                UpdateNodeIdBasedOnConfiguration(host.Services, args);
-        
-                await RunWithConfigurationValidation(host, args);
+                await InitializeAndValidateAsync(host.Services);
+                Log.Information("Starting application host...");
+                await host.RunAsync();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Main] Fatal error during application startup: {ex.Message}");
-                Console.WriteLine(ex.ToString());
-                Log.Fatal(ex, "Fatal error during application startup");
+                Log.Fatal(ex, "Application terminated unexpectedly.");
                 Environment.ExitCode = 1;
             }
             finally
             {
                 Log.CloseAndFlush();
-            }
-        }
-        
-        private static void UpdateLoggerNodeId(string nodeId)
-        {
-            try
-            {
-                string logsDirectory = Path.Combine(AppContext.BaseDirectory, "Logs");
-                string logFilePath = Path.Combine(logsDirectory, $"{nodeId}-log-.txt");
-        
-                Log.CloseAndFlush();
-        
-                Log.Logger = new LoggerConfiguration()
-                    .MinimumLevel.Debug()
-                    .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
-                    .Enrich.FromLogContext()
-                    .Enrich.WithProperty("NodeId", nodeId)
-                    .WriteTo.Console()
-                    .WriteTo.File(
-                        logFilePath,
-                        rollingInterval: RollingInterval.Infinite, 
-                        retainedFileCountLimit: 31,
-                        fileSizeLimitBytes: 10 * 1024 * 1024, 
-                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-                    .CreateLogger();
-        
-                Log.Information("Log file updated for Node ID: {NodeId}, Log file: {LogFile}", 
-                    nodeId, Path.GetFileName(logFilePath));
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error updating logger Node ID: {ex.Message}");
-            }
-        }
-        
-        
-        
-        private static void UpdateNodeIdBasedOnConfiguration(IServiceProvider services, string[] args)
-        {
-            try
-            {
-                using var scope = services.CreateScope();
-                var nodeOptions = scope.ServiceProvider.GetService<IOptions<NodeIdentityOptions>>();
-        
-                if (nodeOptions?.Value?.NodeId != null)
-                {
-                    LoggingConfiguration.UpdateNodeIdInLogger(nodeOptions.Value.NodeId);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Failed to update NodeId in logger from configuration");
-            }
-        }
-        
-        private static void ConfigureSerilog(string[] args)
-        {
-            string nodeId = "Node1"; 
-            
-            
-            for (int i = 0; i < args.Length - 1; i++)
-            {
-                if (args[i].Equals("--NodeId", StringComparison.OrdinalIgnoreCase) || 
-                    args[i].Equals("--Identity:NodeId", StringComparison.OrdinalIgnoreCase) ||
-                    args[i].Equals("--DistributedStorage:Identity:NodeId", StringComparison.OrdinalIgnoreCase))
-                {
-                    nodeId = args[i + 1];
-                    break;
-                }
-                
-                if (args[i].StartsWith("--NodeId=", StringComparison.OrdinalIgnoreCase) ||
-                    args[i].StartsWith("--Identity:NodeId=", StringComparison.OrdinalIgnoreCase) ||
-                    args[i].StartsWith("--DistributedStorage:Identity:NodeId=", StringComparison.OrdinalIgnoreCase))
-                {
-                    var parts = args[i].Split('=', 2);
-                    if (parts.Length == 2 && !string.IsNullOrEmpty(parts[1]))
-                    {
-                        nodeId = parts[1];
-                        break;
-                    }
-                }
-            }
-
-            
-            string logsDirectory = Path.Combine(AppContext.BaseDirectory, "Logs");
-            Directory.CreateDirectory(logsDirectory);
-            
-            string logFilePath = Path.Combine(logsDirectory, $"{nodeId}-log-.txt");
-            
-            Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
-                .Enrich.FromLogContext()
-                .Enrich.WithProperty("NodeId", nodeId)
-                .WriteTo.Console()
-                .WriteTo.File(
-                    logFilePath,
-                    rollingInterval: RollingInterval.Infinite, 
-                    retainedFileCountLimit: 31,
-                    fileSizeLimitBytes: 10 * 1024 * 1024, 
-                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-                .CreateLogger();
-            
-            Log.Information("Logging initialized. Node ID: {NodeId}, Log files will be saved to: {LogDirectory}/{LogFile}", 
-                nodeId, logsDirectory, Path.GetFileName(logFilePath));
-        }
-
-
-        private static async Task RunWithConfigurationValidation(IHost host, string[] args)
-        {
-            using (var scope = host.Services.CreateScope())
-            {
-                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-                logger.LogInformation("Starting application with configuration validation...");
-
-                try
-                {
-                    var nodeOptions = scope.ServiceProvider.GetRequiredService<IOptions<NodeIdentityOptions>>().Value;
-                    string nodeId = nodeOptions.NodeId ?? "Unknown";
-            
-                    UpdateLoggerNodeId(nodeId);
-            
-                    await LogConfigurationDetails(scope.ServiceProvider, logger);
-                    await InitializeDatabaseAndServices(scope.ServiceProvider, logger);
-            
-                    logger.LogInformation("Starting application host...");
-                    await host.RunAsync();
-                    logger.LogInformation("Application host stopped.");
-                }
-                catch (Exception ex)
-                {
-                    logger.LogCritical(ex, "Fatal error during application initialization.");
-                    throw; 
-                }
-            }
-        }
-
-        private static async Task LogConfigurationDetails(IServiceProvider services, ILogger logger)
-        {
-            logger.LogInformation("--- Verifying Loaded Configuration ---");
-
-            try
-            {
-                var nodeOptions = services.GetRequiredService<IOptions<NodeIdentityOptions>>().Value;
-                var networkOptions = services.GetRequiredService<IOptions<NetworkOptions>>().Value;
-                var dbOptions = services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
-                var storageOptions = services.GetRequiredService<IOptions<StorageOptions>>().Value;
-                var dhtOptions = services.GetRequiredService<IOptions<DhtOptions>>().Value;
-
-                logger.LogInformation("[Config] Node ID: {NodeId}", nodeOptions.NodeId ?? "NULL");
-                logger.LogInformation("[Config] Display Name: {DisplayName}", 
-                    nodeOptions.DisplayName ?? "Not specified");
-
-                logger.LogInformation("[Config] Network Address: {Address}:{Port}", 
-                    networkOptions.ListenAddress ?? "NULL", networkOptions.ListenPort);
-                logger.LogInformation("[Config] Max Connections: {MaxConn}", 
-                    networkOptions.MaxConnections);
-
-                if (networkOptions.KnownNodes != null && networkOptions.KnownNodes.Any())
-                {
-                    logger.LogInformation("--- Known Nodes ({Count}) ---", 
-                        networkOptions.KnownNodes.Count);
-                    
-                    foreach (var node in networkOptions.KnownNodes)
-                    {
-                        logger.LogInformation("  - {NodeId}: {Address} (Empty: {IsEmpty})", 
-                            node.NodeId, node.Address, string.IsNullOrEmpty(node.Address));
-                    }
-                }
-                else
-                {
-                    logger.LogWarning("[Config] No known nodes configured!");
-                }
-
-                logger.LogInformation("[Config] Database Path: {Path}", 
-                    dbOptions.DatabasePath ?? "NULL");
-                logger.LogInformation("[Config] Has Explicit Connection String: {HasConnStr}", 
-                    dbOptions.HasExplicitConnectionString);
-                logger.LogInformation("[Config] Auto Migrate: {AutoMigrate}", 
-                    dbOptions.AutoMigrate);
-
-                logger.LogInformation("[Config] Storage Base Path: {Path}", 
-                    storageOptions.BasePath ?? "NULL");
-                logger.LogInformation("[Config] Chunk Size: {Size} bytes", 
-                    storageOptions.ChunkSize);
-                logger.LogInformation("[Config] Max Storage Size: {Size} bytes", 
-                    storageOptions.MaxSizeBytes);
-
-                logger.LogInformation("[Config] DHT Replication Factor: {Factor}", 
-                    dhtOptions.ReplicationFactor);
-                logger.LogInformation("[Config] DHT Bootstrap Node: {Node}", 
-                    dhtOptions.BootstrapNodeAddress ?? "None");
-
-                var effectiveConnString = dbOptions.GetEffectiveConnectionString(nodeOptions.NodeId);
-                logger.LogInformation("[Config] Effective DB Connection String: {ConnStr}", 
-                    effectiveConnString);
-
-                var actualBasePath = storageOptions.BasePath?.Replace("{nodeId}", nodeOptions.NodeId);
-                logger.LogInformation("[Config] Actual Storage Base Path: {Path}", 
-                    actualBasePath ?? "NULL");
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error validating configuration.");
-                throw new InvalidOperationException("Configuration validation failed. See the logs for details.", ex);
-            }
-
-            logger.LogInformation("--- Configuration Verification Complete ---");
-        }
-
-        private static async Task InitializeDatabaseAndServices(IServiceProvider services, ILogger logger)
-        {
-            logger.LogInformation("Initializing database and services...");
-
-            try
-            {
-                logger.LogInformation("Applying database migrations...");
-                var dbContextFactory = services.GetRequiredService<IDbContextFactory<NodeDbContext>>();
-                await using (var dbContext = await dbContextFactory.CreateDbContextAsync())
-                {
-                    await dbContext.Database.MigrateAsync();
-                }
-                logger.LogInformation("Database migrations applied successfully.");
-
-                var initializables = services.GetServices<IAsyncInitializable>();
-                if (initializables != null && initializables.Any())
-                {
-                    logger.LogInformation("Initializing {Count} services implementing IAsyncInitializable.",
-                        initializables.Count());
-                        
-                    foreach (var initializable in initializables)
-                    {
-                        logger.LogDebug("Initializing service: {ServiceType}", 
-                            initializable.GetType().Name);
-                        await initializable.InitializeAsync();
-                        logger.LogDebug("Finished initializing service: {ServiceType}", 
-                            initializable.GetType().Name);
-                    }
-                    
-                    logger.LogInformation("All IAsyncInitializable services initialized.");
-                }
-                else
-                {
-                    logger.LogInformation("No services implementing IAsyncInitializable found.");
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogCritical(ex, "Failed to initialize database or services.");
-                throw; 
             }
         }
 
@@ -309,57 +55,88 @@ namespace VKR_Node
                 .ConfigureAppConfiguration((hostingContext, config) =>
                 {
                     var env = hostingContext.HostingEnvironment;
-                    Console.WriteLine($"[ConfigureAppConfiguration] Base Path: {env.ContentRootPath}");
-                    Console.WriteLine($"[ConfigureAppConfiguration] Environment: {env.EnvironmentName}");
+                    Log.Information("[Config] Base Path: {ContentRootPath}, Environment: {EnvironmentName}", env.ContentRootPath, env.EnvironmentName);
 
+                    // Стандартные источники конфигурации
                     config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
                     config.AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
-
-                    var configFile = GetConfigFilePath(args);
-                    if (!string.IsNullOrEmpty(configFile))
-                    {
-                        Console.WriteLine($"[Config] Using node-specific config: {configFile}");
-                        config.AddJsonFile(configFile, optional: false, reloadOnChange: true);
-                    }
-
                     config.AddEnvironmentVariables();
                     config.AddCommandLine(args);
+
+                    // 3. Получаем путь к кастомному конфигу из уже собранной конфигурации.
+                    // Больше не нужен ручной парсинг аргументов.
+                    // Запускать с --config="path/to/your/node.json"
+                    var builtConfig = config.Build();
+                    var configFile = builtConfig.GetValue<string>("config") ?? builtConfig.GetValue<string>("ConfigPath");
+                    if (!string.IsNullOrEmpty(configFile))
+                    {
+                        string fullPath = Path.GetFullPath(configFile);
+                        if (File.Exists(fullPath))
+                        {
+                             Log.Information("[Config] Using node-specific config from command line: {ConfigFile}", fullPath);
+                             config.AddJsonFile(fullPath, optional: false, reloadOnChange: true);
+                        }
+                        else
+                        {
+                            Log.Warning("[Config] WARNING: Config file specified by command line not found at {ConfigFile}", fullPath);
+                        }
+                    }
                 })
-                .UseSerilog()
+                .UseSerilog((context, services, loggerConfiguration) =>
+                {
+                    // 2. Настраиваем Serilog один раз, когда вся конфигурация уже доступна.
+                    var nodeOptions = context.Configuration.GetSection("DistributedStorage:Identity").Get<NodeIdentityOptions>();
+                    var nodeId = nodeOptions?.NodeId ?? "bootstrap-node";
+
+                    string logsDirectory = Path.Combine(AppContext.BaseDirectory, "Logs");
+                    Directory.CreateDirectory(logsDirectory);
+                    string logFilePath = Path.Combine(logsDirectory, $"{nodeId}-log.txt");
+
+                    loggerConfiguration
+                        .ReadFrom.Configuration(context.Configuration) // Позволяет настраивать уровни в appsettings.json
+                        .MinimumLevel.Debug()
+                        .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Information)
+                        .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
+                        .Enrich.FromLogContext()
+                        .Enrich.WithProperty("NodeId", nodeId) // Обогащаем все логи nodeId
+                        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{NodeId}] {Message:lj}{NewLine}{Exception}")
+                        .WriteTo.File(
+                            logFilePath,
+                            rollingInterval: RollingInterval.Day,
+                            retainedFileCountLimit: 31,
+                            fileSizeLimitBytes: 10 * 1024 * 1024,
+                            outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] [{NodeId}] {Message:lj}{NewLine}{Exception}");
+                })
                 .ConfigureServices((hostContext, services) =>
                 {
                     services.AddAutoMapper(typeof(MappingProfile));
                     RegisterConfigurationOptions(hostContext, services);
                     RegisterCoreServices(services);
-                    RegisterBackgroundServices(services);                    
+                    RegisterBackgroundServices(services);
                     ConfigureHealthChecks(services);
-                    
-                    services.AddDbContextFactory<NodeDbContext>(options =>
+
+                    services.AddDbContextFactory<NodeDbContext>((provider, options) =>
                     {
-                        var dbOptions = services.BuildServiceProvider().GetRequiredService<IOptions<DatabaseOptions>>().Value;
-    
-                        var connectionString = dbOptions.HasExplicitConnectionString
-                            ? dbOptions.ConnectionString
-                            : $"Data Source={dbOptions.DatabasePath}";
-        
+                        var dbOptions = provider.GetRequiredService<IOptions<DatabaseOptions>>().Value;
+                        var nodeOptions = provider.GetRequiredService<IOptions<NodeIdentityOptions>>().Value;
+                        var connectionString = dbOptions.GetEffectiveConnectionString(nodeOptions.NodeId);
+
                         var optionsBuilder = options.UseSqlite(connectionString);
-    
+
                         if (dbOptions.EnableSqlLogging)
                         {
                             optionsBuilder.EnableSensitiveDataLogging()
                                 .LogTo(Console.WriteLine, LogLevel.Information);
                         }
-    
-                        if (dbOptions.CommandTimeoutSeconds > 0)
-                        {
-                            var timeout = TimeSpan.FromSeconds(dbOptions.CommandTimeoutSeconds);
-                            optionsBuilder.ConfigureLoggingCacheTime(timeout);
-                        }
                     });
-                    
+
                     RegisterStorageServices(services);
-                    
-                    services.AddGrpc();
+
+                    services.AddGrpc(options =>
+                    {
+                        options.MaxReceiveMessageSize = 100 * 1024 * 1024; // 100 MB
+                        options.MaxSendMessageSize = 100 * 1024 * 1024;    // 100 MB
+                    });
                 })
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
@@ -372,6 +149,8 @@ namespace VKR_Node
                             {
                                 endpoints.MapGrpcService<StorageServiceImpl>();
                                 endpoints.MapGrpcService<NodeInternalServiceImpl>();
+                                // Добавлен Health Check эндпоинт
+                                endpoints.MapHealthChecks("/health");
                                 endpoints.MapGet("/", async context =>
                                 {
                                     var nodeOpts = context.RequestServices
@@ -382,88 +161,98 @@ namespace VKR_Node
                             });
                         });
                 });
-
-        private static string GetConfigFilePath(string[] args)
+        
+        /// <summary>
+        /// Выполняет инициализацию и валидацию сервисов после построения хоста.
+        /// </summary>
+        private static async Task InitializeAndValidateAsync(IServiceProvider services)
         {
-            string configFile = null;
+            using var scope = services.CreateScope();
+            var provider = scope.ServiceProvider;
+            var logger = provider.GetRequiredService<ILogger<Program>>();
+
+            logger.LogInformation("--- Application Initialization and Validation ---");
             
-            for (int i = 0; i < args.Length; i++)
+            try
             {
-                string currentArg = args[i];
-                string argValue = null;
+                await LogConfigurationDetails(provider, logger);
+                await InitializeDatabaseAndServices(provider, logger);
+                logger.LogInformation("--- Initialization and Validation Complete ---");
+            }
+            catch (Exception ex)
+            {
+                logger.LogCritical(ex, "Fatal error during application initialization phase.");
+                throw;
+            }
+        }
+        
+        private static Task LogConfigurationDetails(IServiceProvider services, ILogger<Program> logger)
+        {
+            logger.LogInformation("--- Verifying Loaded Configuration ---");
+            try
+            {
+                var nodeOptions = services.GetRequiredService<IOptions<NodeIdentityOptions>>().Value;
+                var networkOptions = services.GetRequiredService<IOptions<NetworkOptions>>().Value;
 
-                if (currentArg.StartsWith("--config=", StringComparison.OrdinalIgnoreCase))
-                {
-                    argValue = currentArg.Substring("--config=".Length);
-                }
-                else if (currentArg.StartsWith("--ConfigPath=", StringComparison.OrdinalIgnoreCase))
-                {
-                    argValue = currentArg.Substring("--ConfigPath=".Length);
-                }
-                else if ((currentArg.Equals("--config", StringComparison.OrdinalIgnoreCase) || 
-                          currentArg.Equals("--ConfigPath", StringComparison.OrdinalIgnoreCase)) && 
-                         i + 1 < args.Length && !args[i+1].StartsWith("--"))
-                {
-                    argValue = args[i + 1];
-                    i++; 
-                }
+                logger.LogInformation("[Config] Node ID: {NodeId}, Display Name: {DisplayName}", nodeOptions.NodeId, nodeOptions.DisplayName);
+                logger.LogInformation("[Config] Network Address: {Address}:{Port}", networkOptions.ListenAddress, networkOptions.ListenPort);
+            }
+            catch (OptionsValidationException ex)
+            {
+                 logger.LogCritical(ex, "Configuration validation failed. See validation errors.");
+                 throw;
+            }
+            logger.LogInformation("--- Configuration Verification Complete ---");
+            return Task.CompletedTask;
+        }
 
-                if (argValue != null)
+        private static async Task InitializeDatabaseAndServices(IServiceProvider services, ILogger<Program> logger)
+        {
+            logger.LogInformation("Initializing database and async services...");
+            try
+            {
+                var dbOptions = services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
+                if (dbOptions.AutoMigrate)
                 {
-                    configFile = argValue;
-                    break;
+                    logger.LogInformation("Applying database migrations...");
+                    var dbContextFactory = services.GetRequiredService<IDbContextFactory<NodeDbContext>>();
+                    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+                    await dbContext.Database.MigrateAsync();
+                    logger.LogInformation("Database migrations applied successfully.");
+                }
+                
+                var initializables = services.GetServices<IAsyncInitializable>();
+                if (initializables.Any())
+                {
+                    logger.LogInformation("Initializing {Count} services implementing IAsyncInitializable.", initializables.Count());
+                    foreach (var initializable in initializables)
+                    {
+                        logger.LogDebug("Initializing service: {ServiceType}", initializable.GetType().Name);
+                        await initializable.InitializeAsync();
+                    }
                 }
             }
-
-            if (string.IsNullOrEmpty(configFile))
+            catch (Exception ex)
             {
-                return null;
+                logger.LogCritical(ex, "Failed to initialize database or services.");
+                throw;
             }
-
-            string fullPath = Path.GetFullPath(configFile);
-            
-            if (!File.Exists(fullPath))
-            {
-                Console.WriteLine($"[Config] WARNING: Config file not found at {fullPath}");
-                return null;
-            }
-            
-            return fullPath;
         }
 
         private static void RegisterConfigurationOptions(HostBuilderContext hostContext, IServiceCollection services)
         {
-            var loggerFactory = LoggerFactory.Create(builder =>
-            {
-                builder.AddConsole();
-                builder.AddDebug();
-            });
+            var loggerFactory = services.BuildServiceProvider().GetRequiredService<ILoggerFactory>();
             var logger = loggerFactory.CreateLogger<Program>();
             var configuration = hostContext.Configuration;
+
+            services.Configure<DistributedStorageConfiguration>(configuration.GetSection("DistributedStorage"));
             
-            services.Configure<DistributedStorageConfiguration>(
-                hostContext.Configuration.GetSection("DistributedStorage"));
+            services.AddValidatedOptions<NodeIdentityOptions>(configuration, "DistributedStorage:Identity", logger);
+            services.AddValidatedOptions<NetworkOptions>(configuration, "DistributedStorage:Network", logger);
+            services.AddValidatedOptions<StorageOptions>(configuration, "DistributedStorage:Storage", logger);
+            services.AddValidatedOptions<DatabaseOptions>(configuration, "DistributedStorage:Database", logger);
             
-            services.AddValidatedOptions<NodeIdentityOptions>(
-                configuration, "DistributedStorage:Identity", logger);
-                    
-            services.AddValidatedOptions<NetworkOptions>(
-                configuration, "DistributedStorage:Network", logger);
-                    
-            services.AddValidatedOptions<StorageOptions>(
-                configuration, "DistributedStorage:Storage", logger);
-                    
-            services.AddValidatedOptions<DatabaseOptions>(
-                configuration, "DistributedStorage:Database", logger);
-                    
-            services.AddValidatedOptions<DhtOptions>(
-                configuration, "DistributedStorage:Dht", logger);
-                
             services.AddCrossValidatedConfiguration(configuration, logger);
-            
-            services.AddSingleton(provider => 
-                provider.GetRequiredService<IOptions<DhtOptions>>().Value);
-                
         }
 
         private static void RegisterCoreServices(IServiceCollection services)
@@ -471,25 +260,22 @@ namespace VKR_Node
             services.AddSingleton<INodeClient, GrpcNodeClient>();
             services.AddSingleton<INodeStatusService, NodeStatusService>();
             services.AddSingleton<INodeConfigService, NodeConfigService>();
-            
-            services.AddSingleton<IDataManager, FileSystemDataManager>();
-            services.AddSingleton<IMetadataManager, SqliteMetadataManager>();
+
+            // 5. Более гибкая и правильная регистрация зависимостей
+            services.AddSingleton<FileSystemDataManager>();
+            services.AddSingleton<IDataManager>(sp => sp.GetRequiredService<FileSystemDataManager>());
+            services.AddSingleton<IAsyncInitializable>(sp => sp.GetRequiredService<FileSystemDataManager>());
+
+            services.AddSingleton<SqliteMetadataManager>();
+            services.AddSingleton<IMetadataManager>(sp => sp.GetRequiredService<SqliteMetadataManager>());
+            services.AddSingleton<IAsyncInitializable>(sp => sp.GetRequiredService<SqliteMetadataManager>());
+
             services.AddSingleton<IReplicationManager, BackgroundReplicationManager>();
-            
-            services.AddSingleton<IAsyncInitializable>(sp => 
-                sp.GetRequiredService<IDataManager>() as FileSystemDataManager ?? 
-                throw new InvalidOperationException("IDataManager is not FileSystemDataManager"));
-                
-            services.AddSingleton<IAsyncInitializable>(sp => 
-                sp.GetRequiredService<IMetadataManager>() as SqliteMetadataManager ?? 
-                throw new InvalidOperationException("IMetadataManager is not SqliteMetadataManager"));
         }
 
         private static void RegisterStorageServices(IServiceCollection services)
         {
             services.AddSingleton<IFileStorageService, FileStorageService>();
-            services.AddSingleton<ChunkStreamingHelper>();
-            
             services.AddSingleton<StorageServiceImpl>();
             services.AddSingleton<NodeInternalServiceImpl>();
         }
@@ -498,91 +284,91 @@ namespace VKR_Node
         {
             services.AddHostedService<PeerDiscoveryService>();
             services.AddHostedService<ReplicationHealthService>();
-            
             services.AddSingleton<NodeStatusUpdaterService>();
-            services.AddSingleton<IHostedService>(provider => 
-                provider.GetRequiredService<NodeStatusUpdaterService>());
+            services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<NodeStatusUpdaterService>());
         }
 
         private static void ConfigureHealthChecks(IServiceCollection services)
         {
-            services.AddHealthChecks()
-                .AddCheck("NodeStatus", () =>
-                {
-                    IServiceProvider provider = services.BuildServiceProvider();
-                    var statusService = provider.GetRequiredService<NodeStatusUpdaterService>();
-                    var (isHealthy, status, lastUpdate) = statusService.GetHealthStatus();
-
-                    if (!isHealthy)
-                    {
-                        return HealthCheckResult.Unhealthy(status);
-                    }
-
-                    if (DateTime.UtcNow - lastUpdate > TimeSpan.FromMinutes(5))
-                    {
-                        return HealthCheckResult.Degraded($"No status update since {lastUpdate}");
-                    }
-
-                    return HealthCheckResult.Healthy();
-                });
+            // 6. Регистрируем HealthCheck как типизированный класс, чтобы избежать Service Locator.
+            services.AddHealthChecks().AddCheck<NodeStatusHealthCheck>("NodeStatus");
+            services.AddSingleton<NodeStatusHealthCheck>(); // Регистрируем сам класс проверки
         }
 
         private static void ConfigureKestrelServer(WebHostBuilderContext context, KestrelServerOptions options)
         {
-            try
+            var logger = options.ApplicationServices.GetRequiredService<ILogger<Program>>();
+            var networkOptions = context.Configuration.GetSection("DistributedStorage:Network").Get<NetworkOptions>() 
+                                 ?? new NetworkOptions();
+
+            options.Limits.MaxRequestBodySize = 1024 * 1024 * 1024; // 1 GB
+            
+            logger.LogInformation("[Kestrel] Configuring endpoint. Address from config: {Address}:{Port}", networkOptions.ListenAddress, networkOptions.ListenPort);
+
+            if (!IPAddress.TryParse(networkOptions.ListenAddress, out var ipAddress))
             {
-                var logger = options.ApplicationServices.GetRequiredService<ILogger<Program>>();
-                
-                var networkOptions = context.Configuration
-                    .GetSection("DistributedStorage:Network")
-                    .Get<NetworkOptions>();
-                    
-                if (networkOptions == null || string.IsNullOrEmpty(networkOptions.ListenAddress))
+                // Попытка разрешить хост, если это не IP (например, "localhost")
+                try
                 {
-                    logger.LogWarning("Network configuration missing or invalid. Using default localhost:5000");
-                    options.ListenLocalhost(5000, o => o.Protocols = HttpProtocols.Http2);
-                    return;
+                    var addresses = Dns.GetHostAddresses(networkOptions.ListenAddress);
+                    ipAddress = addresses.FirstOrDefault(addr => addr.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) ?? addresses.FirstOrDefault();
                 }
-                
-                IPAddress ipAddress;
-                string host = networkOptions.ListenAddress;
-                int port = networkOptions.ListenPort;
-                
-                logger.LogInformation("[Kestrel] Configuring endpoint. Address from config: {Address}:{Port}", 
-                    host, port);
-                
-                if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+                catch (Exception ex)
                 {
-                    ipAddress = IPAddress.Loopback;
-                }
-                else if (host.Equals("0.0.0.0") || host.Equals("*"))
-                {
+                    logger.LogWarning(ex, "[Kestrel] Could not resolve '{Host}'. Defaulting to IPAddress.Any.", networkOptions.ListenAddress);
                     ipAddress = IPAddress.Any;
                 }
-                else if (host.Equals("[::]"))
-                {
-                    ipAddress = IPAddress.IPv6Any;
-                }
-                else if (!IPAddress.TryParse(host, out ipAddress))
-                {
-                    logger.LogWarning("[Kestrel] Could not parse '{Host}' as IP address. Using Any.", host);
-                    ipAddress = IPAddress.Any;
-                }
-                
-                logger.LogInformation("[Kestrel] Configuring endpoint to listen on: {IpAddress}:{Port} (HTTP/2)",
-                    ipAddress, port);
-                    
-                options.Listen(ipAddress, port, listenOptions =>
+            }
+
+            if (ipAddress != null)
+            {
+                logger.LogInformation("[Kestrel] Configuring endpoint to listen on: {IpAddress}:{Port} (HTTP/2)", ipAddress, networkOptions.ListenPort);
+                options.Listen(ipAddress, networkOptions.ListenPort, listenOptions =>
                 {
                     listenOptions.Protocols = HttpProtocols.Http2;
                 });
             }
-            catch (Exception ex)
+            else
             {
-                var logger = options.ApplicationServices.GetRequiredService<ILogger<Program>>();
-                logger.LogError(ex, "[Kestrel] Error configuring server. Using default configuration.");
-                options.ListenLocalhost(5000, o => o.Protocols = HttpProtocols.Http2);
+                logger.LogCritical("[Kestrel] Failed to determine IP address to listen on. Kestrel not configured.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Класс для проверки состояния узла, зарегистрированный в системе Health Checks.
+    /// Избегает анти-паттерна Service Locator.
+    /// </summary>
+    public class NodeStatusHealthCheck : IHealthCheck
+    {
+        private readonly NodeStatusUpdaterService _statusService;
+
+        public NodeStatusHealthCheck(NodeStatusUpdaterService statusService)
+        {
+            _statusService = statusService;
+        }
+
+        public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+        {
+            var (isHealthy, status, lastUpdate) = _statusService.GetHealthStatus();
+
+            var data = new Dictionary<string, object>
+            {
+                { "status", status },
+                { "lastUpdateUtc", lastUpdate.ToString("O") }
+            };
+
+            if (!isHealthy)
+            {
+                return Task.FromResult(HealthCheckResult.Unhealthy(status, data: data));
+            }
+
+            if (DateTime.UtcNow - lastUpdate > TimeSpan.FromMinutes(5))
+            {
+                return Task.FromResult(HealthCheckResult.Degraded($"No status update since {lastUpdate:O}", data: data));
+            }
+
+            return Task.FromResult(HealthCheckResult.Healthy(status, data));
         }
     }
 }

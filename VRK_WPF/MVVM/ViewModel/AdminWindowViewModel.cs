@@ -51,7 +51,6 @@ namespace VRK_WPF.MVVM.ViewModel
         [ObservableProperty]
         private string _diskSpace = "Н/Д";
 
-
         public StorageService.StorageServiceClient? StorageClient => _storageClient;
 
         public AdminWindowViewModel(ILogger<AdminWindowViewModel>? logger = null)

@@ -9,7 +9,6 @@ using VKR_Core.Models;
 using VKR_Core.Services;
 using VKR_Node.Configuration;
 using VKR_Node.Services.FileService.FileInterface;
-using VKR_Node.Services.Utilities;
 using VKR.Protos;
 
 namespace VKR_Node.Services.FileService
@@ -26,7 +25,6 @@ namespace VKR_Node.Services.FileService
         private readonly NetworkOptions _networkOptions;
         private readonly StorageOptions _storageOptions;
         private readonly DhtOptions _dhtOptions;
-        private readonly ChunkStreamingHelper _streamingHelper;
         private readonly IMapper _mapper;
 
         public FileStorageService(
@@ -54,14 +52,11 @@ namespace VKR_Node.Services.FileService
                               throw new ArgumentNullException(nameof(nodeIdentityOptions));
             _localNodeId = _nodeIdentityOptions.NodeId ?? 
                            throw new InvalidOperationException("NodeId не настроено");
-            _streamingHelper = new ChunkStreamingHelper(logger, dataManager, nodeClient, _localNodeId);
             _mapper = mapper;
         }
 
         public async Task<ListFilesReply> ListFiles(ListFilesRequest request, ServerCallContext context)
         {
-            _logger.LogInformation("ListFiles request received from {Peer}. Aggregating from self and peers...",
-                context.Peer);
             var aggregatedFiles = new ConcurrentDictionary<string, FileMetadata>();
             var reply = new ListFilesReply();
 
@@ -80,10 +75,7 @@ namespace VKR_Node.Services.FileService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while processing ListFiles request");
-                
-                
             }
-
             return reply;
         }
 
@@ -215,21 +207,21 @@ namespace VKR_Node.Services.FileService
                     return fileModTime > existingModTime ? file : existing;
                 });
         }
-
-
-        public async Task<UploadFileReply> UploadFile(IAsyncStreamReader<UploadFileRequest> requestStream,
-            ServerCallContext context)
+        
+        public async Task<UploadFileReply> UploadFile(IAsyncStreamReader<UploadFileRequest> requestStream, ServerCallContext context)
         {
             FileMetadata? fileMetadataProto = null;
             FileModel? partialFileModel = null;
             long totalBytesReceived = 0;
             int chunkCount = 0;
-            string fileId = string.Empty; 
+            string fileId = string.Empty;
             int actualChunkSize = _storageOptions.ChunkSize > 0 ? _storageOptions.ChunkSize : 1048576;
             long expectedFileSize = 0;
-            bool metadataReceived = false;  
+            bool metadataReceived = false;
             int expectedChunkIndex = 0;
-
+            
+            var replicationTasks = new List<Task>();
+            
             try
             {
                 await foreach (var request in requestStream.ReadAllAsync(context.CancellationToken))
@@ -242,31 +234,34 @@ namespace VKR_Node.Services.FileService
                             continue;
                         }
 
-                        metadataReceived = true;  
+                        metadataReceived = true;
                         fileMetadataProto = request.Metadata;
                         fileId = Guid.NewGuid().ToString();
                         fileMetadataProto.FileId = fileId;
                         expectedFileSize = fileMetadataProto.ExpectedFileSize > 0 ? fileMetadataProto.ExpectedFileSize : 0;
-         
-                        if (expectedFileSize > 1024 * 1024 * 1024) 
+                        
+                        if (fileMetadataProto.ChunkSize > 0)
                         {
-                            actualChunkSize = 64 * 1024 * 1024; 
-                            _logger.LogInformation("Large file detected ({Size}). Using 64MB chunks", 
-                                FormatBytes(expectedFileSize));
+                            actualChunkSize = fileMetadataProto.ChunkSize;
+                            _logger.LogInformation("Using client-specified chunk size: {ChunkSize}", actualChunkSize);
                         }
-                        else if (expectedFileSize > 100 * 1024 * 1024) 
+                        else
                         {
-                            actualChunkSize = 16 * 1024 * 1024; 
-                            _logger.LogInformation("Medium-large file detected ({Size}). Using 16MB chunks", 
-                                FormatBytes(expectedFileSize));
+                            if (expectedFileSize > 1024 * 1024 * 1024) 
+                            {
+                                actualChunkSize = 16 * 1024 * 1024; 
+                            }
+                            else if (expectedFileSize > 100 * 1024 * 1024) 
+                            {
+                                actualChunkSize = 4 * 1024 * 1024; 
+                            }
                         }
                         
                         fileMetadataProto.ChunkSize = actualChunkSize;
 
                         _logger.LogInformation(
-                            "Received metadata for file: {FileName}, Gen FileId: {FileId}, ChunkSize: {ChunkSize}, ExpectedSize: {ExpectedSize}",
-                            fileMetadataProto.FileName, fileId, actualChunkSize,
-                            expectedFileSize > 0 ? expectedFileSize.ToString() : "N/A");
+                            "Received metadata for file: {FileName}, FileId: {FileId}, ChunkSize: {ChunkSize}, ExpectedSize: {ExpectedSize}",
+                            fileMetadataProto.FileName, fileId, actualChunkSize, FormatBytes(expectedFileSize));
 
                         partialFileModel = new FileModel
                         {
@@ -280,14 +275,14 @@ namespace VKR_Node.Services.FileService
                             TotalChunks = -1,
                             State = FileStateCore.Uploading
                         };
+                        
+                        await _metadataManager.SaveFileMetadataAsync(partialFileModel, context.CancellationToken);
                     }
                     else if (request.PayloadCase == UploadFileRequest.PayloadOneofCase.Chunk)
                     {
-                        if (!metadataReceived || fileMetadataProto == null || string.IsNullOrEmpty(fileId) ||
-                            partialFileModel == null)
+                        if (!metadataReceived || fileMetadataProto == null || string.IsNullOrEmpty(fileId) || partialFileModel == null)
                         {
-                            throw new RpcException(new Status(StatusCode.InvalidArgument,
-                                "Chunk received before valid metadata."));
+                            throw new RpcException(new Status(StatusCode.InvalidArgument, "Chunk received before valid metadata."));
                         }
 
                         var chunkProto = request.Chunk;
@@ -298,8 +293,8 @@ namespace VKR_Node.Services.FileService
                                 $"Unexpected chunk index. Expected {expectedChunkIndex}, received {chunkProto.ChunkIndex}"));
                         }
 
-                        _logger.LogDebug("Received Chunk Index: {Index}, Size: {Size} bytes.", chunkProto.ChunkIndex,
-                            chunkProto.Data.Length);
+                        _logger.LogDebug("Received Chunk Index: {Index}, Size: {Size} bytes, ChunkId: {ChunkId}", 
+                            chunkProto.ChunkIndex, chunkProto.Data.Length, chunkProto.ChunkId);
 
                         var chunkInfo = new ChunkModel
                         {
@@ -337,8 +332,7 @@ namespace VKR_Node.Services.FileService
                             }
                             catch (Exception cleanupEx)
                             {
-                                _logger.LogError(cleanupEx,
-                                    "Failed to clean up chunk data after metadata error for Chunk {ChunkId}", chunkInfo.ChunkId);
+                                _logger.LogError(cleanupEx, "Failed to cleanup chunk data after metadata error for Chunk {ChunkId}", chunkInfo.ChunkId);
                             }
 
                             throw new RpcException(new Status(
@@ -346,28 +340,38 @@ namespace VKR_Node.Services.FileService
                                 $"Failed to save metadata for chunk {chunkInfo.ChunkIndex}."));
                         }
 
-                        _ = Task.Run(async () => 
+                        var replicationTask = Task.Run(async () => 
                         {
                             try 
                             {
-                                byte[] chunkData = chunkProto.Data.ToByteArray();
+                                await Task.Delay(100);
                                 
-                                Func<Task<Stream>> streamFactory = () => Task.FromResult<Stream>(new MemoryStream(chunkData));
+                                Func<Task<Stream>> streamFactory = async () => 
+                                {
+                                    var stream = await _dataManager.RetrieveChunkAsync(chunkInfo, CancellationToken.None);
+                                    if (stream == null)
+                                    {
+                                        throw new InvalidOperationException($"Could not retrieve chunk {chunkInfo.ChunkId} for replication");
+                                    }
+                                    return stream;
+                                };
                                 
                                 await _replicationManager.ReplicateChunkAsync(
                                     chunkInfo,
                                     streamFactory,
                                     _dhtOptions.ReplicationFactor,
-                                    CancellationToken.None); 
+                                    CancellationToken.None);
                                     
-                                _logger.LogInformation("Successfully queued Chunk {ChunkId} (index {Index}) for background replication", 
+                                _logger.LogInformation("Successfully replicated Chunk {ChunkId} (index {Index})", 
                                     chunkInfo.ChunkId, chunkInfo.ChunkIndex);
                             }
                             catch (Exception ex)
                             {
-                                _logger.LogError(ex, "Background replication queuing failed for chunk {ChunkId}", chunkInfo.ChunkId);
+                                _logger.LogError(ex, "Background replication failed for chunk {ChunkId}", chunkInfo.ChunkId);
                             }
                         });
+                        
+                        replicationTasks.Add(replicationTask);
 
                         totalBytesReceived += chunkInfo.Size;
                         chunkCount++;
@@ -408,39 +412,44 @@ namespace VKR_Node.Services.FileService
 
                 await _metadataManager.SaveFileMetadataAsync(finalMetadataCore, context.CancellationToken);
 
-                _logger.LogInformation("File {Name} (ID: {Id}) uploaded successfully. Final Size: {Size}, Chunks: {Count}",
-                    finalMetadataCore.FileName, fileId, totalBytesReceived, chunkCount);
+                _logger.LogInformation("File {Name} (ID: {Id}) uploaded successfully. Size: {Size}, Chunks: {Count}",
+                    finalMetadataCore.FileName, fileId, FormatBytes(totalBytesReceived), chunkCount);
+
+                if (replicationTasks.Any())
+                {
+                    _logger.LogInformation("Waiting for {Count} replication tasks to complete...", replicationTasks.Count);
+                    var allTasks = Task.WhenAll(replicationTasks);
+                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30));
+                    
+                    var completedTask = await Task.WhenAny(allTasks, timeoutTask);
+                    if (completedTask == timeoutTask)
+                    {
+                        _logger.LogWarning("Some replication tasks did not complete within timeout. They will continue in background.");
+                    }
+                }
 
                 return new UploadFileReply { Success = true, Message = "File uploaded successfully.", FileId = fileId };
             }
-            catch (RpcException ex)
+            catch (RpcException)
             {
-                _logger.LogError(ex, "gRPC error during file upload (FileId: {Id}): {Code} - {Detail}",
-                    fileId ?? "N/A", ex.StatusCode, ex.Status.Detail);
-
+                _logger.LogError("gRPC error during file upload (FileId: {Id})", fileId ?? "N/A");
                 await HandleUploadErrorAsync(fileId, context.CancellationToken);
-                
-                // Ensure we always return a valid fileId (even if it's just an empty string)
-                return new UploadFileReply
-                    { Success = false, Message = $"Upload failed: {ex.Status.Detail}", FileId = string.IsNullOrEmpty(fileId) ? "error" : fileId };
+                throw;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Generic error during file upload (FileId: {Id})", fileId ?? "N/A");
                 
-                // Only try to update the state if we have a valid fileId
                 if (!string.IsNullOrEmpty(fileId))
                 {
                     await HandleUploadErrorAsync(fileId, context.CancellationToken);
                 }
                 
-                // Ensure we always return a valid fileId (even if it's just an empty string)
-                return new UploadFileReply
-                    { Success = false, Message = $"Upload failed: {ex.Message}", FileId = string.IsNullOrEmpty(fileId) ? "error" : fileId };
+                throw new RpcException(new Status(StatusCode.Internal, $"Upload failed: {ex.Message}"));
             }
             finally
             {
-                _logger.LogDebug("Exiting UploadFile method.");
+                _logger.LogDebug("Exiting UploadFile method. Replication tasks: {Count}", replicationTasks.Count);
             }
         }
 
@@ -458,31 +467,6 @@ namespace VKR_Node.Services.FileService
             
             return $"{len:0.##} {sizes[order]}";
         }
-        
-        private async Task QueueChunkForBackgroundReplicationAsync(
-            ChunkModel chunkInfo, 
-            byte[] chunkData,
-            FileModel? partialFileModel,
-            CancellationToken cancellationToken)
-        {
-            try
-            {
-                Func<Task<Stream>> streamFactory = () => Task.FromResult<Stream>(new MemoryStream(chunkData));
-        
-                await _replicationManager.ReplicateChunkAsync(
-                    chunkInfo,
-                    streamFactory,
-                    _dhtOptions.ReplicationFactor,
-                    cancellationToken);
-            
-                _logger.LogInformation("Successfully queued chunk {ChunkId} (index {Index}) for background replication", 
-                    chunkInfo.ChunkId, chunkInfo.ChunkIndex);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error queuing chunk {ChunkId} for background replication", chunkInfo.ChunkId);
-            }
-        }
 
         private async Task HandleUploadErrorAsync(string? fileId, CancellationToken cancellationToken)
         {
@@ -497,90 +481,6 @@ namespace VKR_Node.Services.FileService
                     _logger.LogError(ex, "Failed to update file state to Error for {FileId}", fileId);
                 }
             }
-        }
-
-        private int DetermineOptimalChunkSize(long expectedFileSize)
-        {
-            const long KB = 1024, MB = 1024 * KB, GB = 1024 * MB;
-            int defaultChunkSize = _storageOptions.ChunkSize > 0 ? _storageOptions.ChunkSize : (int)(1 * MB);
-
-            if (expectedFileSize <= 0)
-            {
-                return defaultChunkSize;
-            }
-            else if (expectedFileSize <= 100 * MB)
-            {
-                return (int)(1 * MB);
-            }
-            else if (expectedFileSize <= 1 * GB)
-            {
-                return (int)(4 * MB);
-            }
-            else if (expectedFileSize <= 10 * GB)
-            {
-                return (int)(16 * MB);
-            }
-            else
-            {
-                return (int)(64 * MB);
-            }
-        }
-
-        private async Task<List<KnownNodeOptions>> FindOnlinePeersAsync(
-            List<KnownNodeOptions> peers,
-            CancellationToken cancellationToken)
-        {
-            var onlinePeers = new ConcurrentBag<KnownNodeOptions>();
-            var pingTasks = new List<Task>();
-            var semaphore = new SemaphoreSlim(10);
-
-            foreach (var peer in peers)
-            {
-                await semaphore.WaitAsync(cancellationToken);
-                pingTasks.Add(Task.Run(async () =>
-                {
-                    try
-                    {
-                        _logger.LogTrace("Pinging peer {Id} ({Addr}) for replication suitability.",
-                            peer.NodeId, peer.Address);
-
-                        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                        cts.CancelAfter(TimeSpan.FromSeconds(3));
-
-                        var reply = await _nodeClient.PingNodeAsync(
-                            peer.Address,
-                            new PingRequest { SenderNodeId = _localNodeId },
-                            cts.Token);
-
-                        if (reply.Success)
-                        {
-                            onlinePeers.Add(peer);
-                            _logger.LogTrace("Peer {Id} is online.", peer.NodeId);
-                        }
-                        else
-                        {
-                            _logger.LogTrace("Peer {Id} is offline/ping failed: {Reason}",
-                                peer.NodeId, reply.ResponderNodeId);
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        _logger.LogTrace("Ping timed out for peer {Id}.", peer.NodeId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Error pinging peer {Id} ({Addr}).",
-                            peer.NodeId, peer.Address);
-                    }
-                    finally
-                    {
-                        semaphore.Release();
-                    }
-                }, cancellationToken));
-            }
-
-            await Task.WhenAll(pingTasks);
-            return onlinePeers.ToList();
         }
 
         public async Task DownloadFile(
@@ -756,9 +656,7 @@ namespace VKR_Node.Services.FileService
                 _logger.LogWarning("Failed local stream for Chunk {Id}. Trying remote.", chunkInfo.ChunkId);
                 storageNodes.Remove(_localNodeId);
             }
-
             
-            //var remoteNodeIds = storageNodes.Where(id => id != _localNodeId).ToList();
             var remoteNodeIds = storageNodes.ToList();
             if (!remoteNodeIds.Any())
             {

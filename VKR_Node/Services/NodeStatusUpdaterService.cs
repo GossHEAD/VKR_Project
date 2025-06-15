@@ -1,6 +1,4 @@
 ﻿using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -13,10 +11,6 @@ using VKR_Node.Configuration;
 
 namespace VKR_Node.Services
 {
-    /// <summary>
-    /// Background service that periodically updates the local node's status in the metadata database.
-    /// Collects information like disk space, chunk count, and node state.
-    /// </summary>
     public class NodeStatusUpdaterService : BackgroundService
     {
         private readonly ILogger<NodeStatusUpdaterService> _logger;
@@ -60,7 +54,7 @@ namespace VKR_Node.Services
             _currentInterval = _standardInterval;
             
             _logger.LogInformation("NodeStatusUpdaterService initialized for Node {NodeId}. Update interval: {Interval}",
-                _nodeOptions.NodeId ?? "Unknown", _updateInterval);
+                _nodeOptions.NodeId, _updateInterval);
         }
 
         public (bool IsHealthy, string Status, DateTime LastSuccessfulUpdate) GetHealthStatus()

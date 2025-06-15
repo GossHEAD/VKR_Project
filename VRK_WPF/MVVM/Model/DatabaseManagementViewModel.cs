@@ -45,7 +45,6 @@ namespace VRK_WPF.MVVM.Model
         {
             try
             {
-                // Try to find the database file and create a connection to it
                 string dbPath = FindDatabaseFile();
                 if (!string.IsNullOrEmpty(dbPath))
                 {
@@ -62,21 +61,17 @@ namespace VRK_WPF.MVVM.Model
                 StatusMessage = $"Error initializing database service: {ex.Message}";
             }
             
-            // Initialize available tables
             AvailableTables.Add(new TableViewModel { TableName = "Files", DisplayName = "Files Metadata", CanEdit = true });
             AvailableTables.Add(new TableViewModel { TableName = "Chunks", DisplayName = "Chunks Metadata", CanEdit = false });
             AvailableTables.Add(new TableViewModel { TableName = "ChunkLocations", DisplayName = "Chunk Locations", CanEdit = false });
             AvailableTables.Add(new TableViewModel { TableName = "Nodes", DisplayName = "Node States", CanEdit = true });
             AvailableTables.Add(new TableViewModel { TableName = "Users", DisplayName = "Users", CanEdit = true });
             
-            // Set default selected table
             SelectedTable = AvailableTables.FirstOrDefault();
             
-            // Initialize view
             TableDataView = CollectionViewSource.GetDefaultView(TableData);
             TableDataView.Filter = FilterTableData;
             
-            // Initialize commands
             RefreshDataCommand = new RelayCommand(async () => await RefreshTableDataAsync(), CanRefreshData);
             SaveChangesCommand = new RelayCommand(async () => await SaveChangesAsync(), CanSaveChanges);
             DeleteRowCommand = new RelayCommand(async () => await DeleteRowAsync(), CanDeleteRow);
@@ -201,7 +196,6 @@ namespace VRK_WPF.MVVM.Model
             
             try
             {
-                // Find modified rows
                 var modifiedRows = TableData.OfType<IModifiableRow>()
                     .Where(r => r.IsModified)
                     .Cast<object>()
@@ -220,7 +214,6 @@ namespace VRK_WPF.MVVM.Model
                 {
                     StatusMessage = $"Successfully saved {modifiedRows.Count} changes to {SelectedTable.DisplayName}.";
                     
-                    // Reset modified flags
                     foreach (var item in TableData.OfType<IModifiableRow>())
                     {
                         item.IsModified = false;
@@ -251,7 +244,6 @@ namespace VRK_WPF.MVVM.Model
             if (SelectedRow == null || SelectedTable == null || _databaseService == null)
                 return;
                 
-            // Confirm deletion
             var result = MessageBox.Show($"Are you sure you want to delete this {SelectedTable.TableName} record?", 
                 "Confirm Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 
@@ -269,7 +261,6 @@ namespace VRK_WPF.MVVM.Model
                 {
                     StatusMessage = $"Successfully deleted record from {SelectedTable.DisplayName}.";
                     
-                    // Remove from local collection
                     TableData.Remove(SelectedRow);
                 }
                 else
@@ -295,7 +286,6 @@ namespace VRK_WPF.MVVM.Model
             if (SelectedTable == null)
                 return;
                 
-            // Create new row based on table type
             object newRow;
             
             switch (SelectedTable.TableName)
@@ -341,7 +331,6 @@ namespace VRK_WPF.MVVM.Model
                     return;
             }
             
-            // Add to collection
             TableData.Add(newRow);
             SelectedRow = newRow;
             IsEditing = true;

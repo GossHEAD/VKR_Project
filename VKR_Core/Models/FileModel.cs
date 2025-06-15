@@ -1,9 +1,6 @@
 ﻿using VKR_Core.Enums;
-using VKR_Core.Models.Interfaces;
-
 namespace VKR_Core.Models;
-
-public record class FileModel : IFile
+public record FileModel 
 {
     public required string FileId { get; set; }
     public required string FileName { get; init; }

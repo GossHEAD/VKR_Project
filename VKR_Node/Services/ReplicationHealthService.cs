@@ -7,10 +7,6 @@ using VKR_Node.Configuration;
 
 namespace VKR_Node.Services
 {
-    /// <summary>
-    /// Background service that periodically checks and ensures proper replication
-    /// levels for all locally stored chunks
-    /// </summary>
     public class ReplicationHealthService : BackgroundService
     {
         private readonly ILogger<ReplicationHealthService> _logger;
@@ -78,10 +74,7 @@ namespace VKR_Node.Services
             
             _logger.LogInformation("ReplicationHealthService execution stopped");
         }
-
-        /// <summary>
-        /// Performs a comprehensive health check on all locally stored chunks
-        /// </summary>
+        
         private async Task PerformHealthCheckAsync(CancellationToken cancellationToken)
         {
             using var scope = _serviceProvider.CreateScope();

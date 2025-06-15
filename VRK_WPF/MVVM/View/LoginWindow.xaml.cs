@@ -31,15 +31,12 @@ namespace VRK_WPF.MVVM.View
         {
             if (AuthService.CurrentUser != null)
             {
-                // Show appropriate window based on user role
                 ShowWindowBasedOnRole();
                 
-                // Fire event for any listeners
                 LoginSucceeded?.Invoke(this, new LoginEventArgs(
                     AuthService.CurrentUser.Username,
                     AuthService.CurrentUser.Role));
                 
-                // Close login window
                 DialogResult = true;
             }
         }
@@ -52,7 +49,6 @@ namespace VRK_WPF.MVVM.View
             {
                 Window targetWindow = null;
                 
-                // Determine which window to show based on role
                 switch (AuthService.CurrentUser.Role)
                 {
                     case UserRole.Administrator:
@@ -67,10 +63,8 @@ namespace VRK_WPF.MVVM.View
                 
                 if (targetWindow != null)
                 {
-                    // Show the appropriate window
                     targetWindow.Show();
                     
-                    // Show welcome message
                     string roleName = AuthService.CurrentUser.Role.ToString();
                     string windowType = targetWindow is AdminWindow ? "административную панель" : "главное окно";
                     
@@ -91,7 +85,6 @@ namespace VRK_WPF.MVVM.View
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
                     
-                // Fallback to main window
                 var mainWindow = new MainWindow();
                 mainWindow.Show();
             }
@@ -107,17 +100,13 @@ namespace VRK_WPF.MVVM.View
                     var username = parts[0];
                     var password = parts[1];
                     
-                    // Fill the form
                     UsernameTextBox.Text = username;
                     PasswordBox.Password = password;
                     
-                    // Update the view model
                     _viewModel.Username = username;
                     
-                    // Show which window will open
                     string windowType = username == "admin" ? "административную панель" : "главное окно";
                     
-                    // Optionally auto-login
                     var result = MessageBox.Show(
                         $"Автоматически войти как '{username}'?\n" +
                         $"Откроется {windowType}.", 

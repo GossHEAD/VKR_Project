@@ -4,7 +4,6 @@ using System.Windows.Media;
 using VRK_WPF.MVVM.View.UserPages;
 using VRK_WPF.MVVM.Services;
 using VRK_WPF.MVVM.ViewModel;
-using Microsoft.Extensions.Logging;
 using VKR_Core.Enums;
 
 namespace VRK_WPF.MVVM.View
@@ -37,8 +36,7 @@ namespace VRK_WPF.MVVM.View
 
                 ConfigureUIBasedOnUserRole();
 
-                ILogger<MainWindowViewModel>? logger = null;
-                DataContext = new MainWindowViewModel(logger)
+                DataContext = new MainWindowViewModel()
                 {
                     CurrentUserName = AuthService.CurrentUser.FullName,
                     CurrentUserRole = AuthService.CurrentUser.Role.ToString()
@@ -135,8 +133,6 @@ namespace VRK_WPF.MVVM.View
         {
             try
             {
-                var userRole = AuthService.CurrentUser?.Role ?? UserRole.ITSpecialist;
-
                 SimulationButton.Visibility = AuthService.CanAccessModule("Simulation")
                     ? Visibility.Visible : Visibility.Collapsed;
 

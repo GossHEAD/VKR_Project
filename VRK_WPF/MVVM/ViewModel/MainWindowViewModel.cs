@@ -2,7 +2,6 @@
 using CommunityToolkit.Mvvm.Input;
 using Grpc.Core;
 using Grpc.Net.Client;
-using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -14,14 +13,12 @@ using System.Windows.Media;
 using VKR.Protos;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
-using Microsoft.Extensions.Logging.Abstractions;
 using VRK_WPF.MVVM.View;
 
 namespace VRK_WPF.MVVM.ViewModel
 {
     public partial class MainWindowViewModel : ObservableObject, IDisposable
     {
-        private readonly ILogger<MainWindowViewModel> _logger;
         private StorageService.StorageServiceClient? _storageClient;
         private GrpcChannel? _currentChannel;
         private CancellationTokenSource? _uploadCts;
@@ -45,7 +42,7 @@ namespace VRK_WPF.MVVM.ViewModel
 
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
-        private string _targetNodeAddress = "http://localhost:5005";
+        private string _targetNodeAddress = "http://localhost:5004";
 
         [ObservableProperty]
         private string _connectionStatus = "Отключено";
@@ -129,7 +126,7 @@ namespace VRK_WPF.MVVM.ViewModel
                 {
                     DownloadFileCommand.NotifyCanExecuteChanged();
                     DeleteFileCommand.NotifyCanExecuteChanged();
-                    OnPropertyChanged(nameof(Debug_IsUploadPossible));
+                    OnPropertyChanged(nameof(CanExecuteUpload));
                 }
             }
         }
@@ -188,10 +185,8 @@ namespace VRK_WPF.MVVM.ViewModel
 
         #endregion
 
-        public MainWindowViewModel(ILogger<MainWindowViewModel>? logger = null)
+        public MainWindowViewModel()
         {
-            _logger = logger ?? NullLogger<MainWindowViewModel>.Instance;
-
             FilesView = CollectionViewSource.GetDefaultView(Files);
             FilesView.SortDescriptions.Add(new SortDescription(nameof(FileViewModel.FileName), ListSortDirection.Ascending));
 
@@ -200,15 +195,6 @@ namespace VRK_WPF.MVVM.ViewModel
 
             UpdateConnectionStatus("Отключено", Brushes.OrangeRed);
             UpdateStatusBar("Готов. Введите адрес узла и подключайтесь.");
-
-            if (DesignerProperties.GetIsInDesignMode(new DependencyObject()))
-            {
-                TargetNodeAddress = "http://design-time:5000";
-                ConnectionStatus = "Режим дизайна";
-                ConnectionStatusColor = Brushes.Gray;
-                Files.Add(new FileViewModel { FileId = "design-1", FileName = "DesignFile1.txt", FileSize = 1024, CreationTime = DateTime.Now, State = "Доступен" });
-                Nodes.Add(new NodeViewModel { NodeId = "Узел1-Дизайн", Address = "localhost:5001", Status = "Онлайн", StatusDetails = "Режим дизайна" });
-            }
             
             _progressUpdateTimer = new System.Timers.Timer(100); 
             _progressUpdateTimer.Elapsed += (s, e) =>
@@ -241,18 +227,6 @@ namespace VRK_WPF.MVVM.ViewModel
             }
         }
 
-        public MainWindowViewModel()
-        {
-            FilesView = CollectionViewSource.GetDefaultView(Files);
-            FilesView.SortDescriptions.Add(new SortDescription(nameof(FileViewModel.FileName), ListSortDirection.Ascending));
-
-            NodesView = CollectionViewSource.GetDefaultView(Nodes);
-            NodesView.SortDescriptions.Add(new SortDescription(nameof(NodeViewModel.NodeId), ListSortDirection.Ascending));
-
-            UpdateConnectionStatus("Отключено", Brushes.OrangeRed);
-            UpdateStatusBar("Готов. Введите адрес узла и подключайтесь.");
-        }
-
         private void UpdateConnectionStatus(string status, Brush color)
         {
             ConnectionStatus = status;
@@ -270,7 +244,7 @@ namespace VRK_WPF.MVVM.ViewModel
         {
             UpdateSelectionStatus();
         }
-
+        
         private bool ConnectToNode()
         {
             _currentChannel?.Dispose();
@@ -280,39 +254,49 @@ namespace VRK_WPF.MVVM.ViewModel
 
             try
             {
-                 if (string.IsNullOrWhiteSpace(TargetNodeAddress) || !Uri.TryCreate(TargetNodeAddress, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-                 {
-                     _logger.LogError("Неправильный формат адреса gRPC сервера: {Address}", TargetNodeAddress);
-                     UpdateConnectionStatus($"Ошибка: Неправильный формат адреса gRPC сервера", Brushes.Red);
-                     MessageBox.Show($"Неправильный формат адреса сервера: {TargetNodeAddress}\nПожалуйста, используйте http://host:port или https://host:port", "Ошибка подключения", MessageBoxButton.OK, MessageBoxImage.Error);
-                     return false;
-                 }
+                if (string.IsNullOrWhiteSpace(TargetNodeAddress) || !Uri.TryCreate(TargetNodeAddress, UriKind.Absolute, out var uri) || 
+                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                {
+                    UpdateConnectionStatus($"Ошибка: Неправильный формат адреса gRPC сервера", Brushes.Red);
+                    MessageBox.Show($"Неправильный формат адреса сервера: {TargetNodeAddress}\nПожалуйста, используйте http://host:port или https://host:port", 
+                        "Ошибка подключения", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return false;
+                }
 
-                 var channelOptions = new GrpcChannelOptions();
+                var channelOptions = new GrpcChannelOptions
+                {
+                    MaxReceiveMessageSize = 100 * 1024 * 1024, // 100 MB
+                    MaxSendMessageSize = 100 * 1024 * 1024,    // 100 MB
+                    HttpHandler = new System.Net.Http.SocketsHttpHandler
+                    {
+                        EnableMultipleHttp2Connections = true,
+                        KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+                        KeepAlivePingTimeout = TimeSpan.FromSeconds(30)
+                    }
+                };
 
                 _currentChannel = GrpcChannel.ForAddress(TargetNodeAddress, channelOptions);
                 _storageClient = new StorageService.StorageServiceClient(_currentChannel);
-                OnPropertyChanged(nameof(Debug_IsUploadPossible));
+                
+                OnPropertyChanged(nameof(CanExecuteUpload));
                 RefreshSettingsCommand.NotifyCanExecuteChanged();
-                _logger.LogInformation("gRPC клиент инициализирован по адресу: {Address}", TargetNodeAddress);
+                
                 UpdateConnectionStatus($"Подключено к {TargetNodeAddress}", Brushes.Green);
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка инициализации клиента gRPC сервера по адресу: {Address}", TargetNodeAddress);
                 UpdateConnectionStatus($"Ошибка подключения к {TargetNodeAddress}", Brushes.Red);
-                MessageBox.Show($"Ошибка подключения по адресу {TargetNodeAddress}.\nУбедитесь, что сервер запущен\n\nError: {ex.Message}", "Ошибка подключения gRPC", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Ошибка подключения по адресу {TargetNodeAddress}.\nУбедитесь, что сервер запущен\n\nError: {ex.Message}", 
+                    "Ошибка подключения gRPC", MessageBoxButton.OK, MessageBoxImage.Error);
                 _storageClient = null;
                 _currentChannel = null;
                 return false;
             }
         }
 
-        private void UpdateStatusBar(string message) { StatusBarText = message; _logger.LogInformation("Статус: {Message}", message); }
+        private void UpdateStatusBar(string message) { StatusBarText = message;}
         private bool CanExecuteUpload() => !string.IsNullOrEmpty(SelectedFilePath) && File.Exists(SelectedFilePath) && !IsUploading && !IsDownloading && _storageClient != null;
-
-        public bool Debug_IsUploadPossible => !string.IsNullOrEmpty(SelectedFilePath) && File.Exists(SelectedFilePath) && !IsUploading && !IsDownloading && _storageClient != null;
         private bool CanExecuteDownload() => SelectedFile != null && !IsDownloading && !IsUploading &&_storageClient != null;
         private bool CanExecuteDelete() => SelectedFile != null && !IsUploading && !IsDownloading && _storageClient != null;
         private bool CanExecuteRefreshNodeStatus() => !IsNodeStatusRefreshing && _storageClient != null;
@@ -322,7 +306,6 @@ namespace VRK_WPF.MVVM.ViewModel
         [RelayCommand(CanExecute = nameof(CanExecuteConnect))]
         private async Task ConnectAsync()
         {
-            _logger.LogInformation("Попытка подключения: {Address}", TargetNodeAddress);
             Files.Clear();
             Nodes.Clear();
             
@@ -352,9 +335,7 @@ namespace VRK_WPF.MVVM.ViewModel
                 CanRestoreNodes = false;
             }
         }
-
-
-
+        
         private async Task UpdateFileAndChunkStatusAsync()
         {
             SimulationFileStatuses.Clear();
@@ -393,7 +374,6 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex.Message);
             }
         }
 
@@ -410,10 +390,8 @@ namespace VRK_WPF.MVVM.ViewModel
             {
                 SelectedFilePath = openFileDialog.FileName;
                 SelectedFileName = Path.GetFileName(SelectedFilePath);
-                 _logger.LogInformation("Файл выбран для загрузки: {FilePath}", SelectedFilePath);
             }
         }
-
         [RelayCommand(CanExecute = nameof(CanExecuteUpload))]
         private async Task UploadFileAsync()
         {
@@ -423,18 +401,11 @@ namespace VRK_WPF.MVVM.ViewModel
                 return;
             }
 
-            var configRequest = new GetNodeConfigurationRequest();
-            var configReply = await _storageClient.GetNodeConfigurationAsync(configRequest);
-            int preferredChunkSize = configReply.DefaultChunkSize;
-
-
-
             IsUploading = true;
             UploadProgress = 0;
             UploadStatus = "Начало загрузки...";
             _uploadCts = new CancellationTokenSource();
             UpdateStatusBar($"Загрузка {SelectedFileName}...");
-            _logger.LogInformation("Загрузка началась для файла: {FilePath}", SelectedFilePath);
 
             AsyncClientStreamingCall<UploadFileRequest, UploadFileReply>? call = null;
 
@@ -443,93 +414,89 @@ namespace VRK_WPF.MVVM.ViewModel
                 var fileInfo = new FileInfo(SelectedFilePath);
                 long fileSize = fileInfo.Length;
 
+                int preferredChunkSize = 1 * 1024 * 1024; 
+                try
+                {
+                    var configRequest = new GetNodeConfigurationRequest();
+                    var configReply = await _storageClient.GetNodeConfigurationAsync(configRequest);
+                    if (configReply.DefaultChunkSize > 0)
+                    {
+                        preferredChunkSize = configReply.DefaultChunkSize;
+                    }
+                }
+                catch (Exception ex)
+                {
+                }
+
+                int chunkSize = DetermineOptimalChunkSize(preferredChunkSize);
+                
+                const int MAX_SAFE_CHUNK_SIZE = 4 * 1024 * 1024;
+                if (chunkSize > MAX_SAFE_CHUNK_SIZE)
+                {
+                    chunkSize = MAX_SAFE_CHUNK_SIZE;
+                }
+                
+
                 var metadata = new FileMetadata
                 {
                     FileName = fileInfo.Name,
                     ExpectedFileSize = fileSize,
                     ContentType = MimeMapping.MimeUtility.GetMimeMapping(fileInfo.Name),
-                    CreationTime = Timestamp.FromDateTime(DateTime.UtcNow)
+                    CreationTime = Timestamp.FromDateTime(DateTime.UtcNow),
+                    ChunkSize = chunkSize 
                 };
-                _logger.LogInformation("Подготовлены метаданные. Ожидаемый размер: {FileSize}", fileSize);
 
                 call = _storageClient.UploadFile(cancellationToken: _uploadCts.Token);
-
+                
                 await call.RequestStream.WriteAsync(new UploadFileRequest { Metadata = metadata });
-                 _logger.LogDebug("Отправлены метаданные.");
-
+                
                 long totalBytesSent = 0;
                 int chunkIndex = 0;
-                int totalChunks = 0;
-
-                if (preferredChunkSize <= 0)
-                {
-                    preferredChunkSize = 1 * 1024 * 1024; // 1 MB
-                }
-
-                if (fileSize > 100 * 1024 * 1024) // > 100 MB
-                {
-                    preferredChunkSize = 4 * 1024 * 1024; // 4 MB
-                }
-                if (fileSize > 1 * 1024 * 1024 * 1024) // > 1 GB
-                {
-                    preferredChunkSize = 32 * 1024 * 1024; // 16 MB
-                }
-
-                int bufferSize = preferredChunkSize;
-                
-                if (fileSize > 0 && bufferSize > 0)
-                {
-                    totalChunks = (int)Math.Ceiling((double)fileSize / bufferSize);
-                }
+                int totalChunks = (int)Math.Ceiling((double)fileSize / chunkSize);
 
                 await using (var fileStream = File.OpenRead(SelectedFilePath))
                 {
-                    byte[] buffer = new byte[bufferSize];
+                    byte[] buffer = new byte[chunkSize];
                     int bytesRead;
-                    await Task.Run(async () =>
+                    
+                    while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length, _uploadCts.Token)) > 0)
                     {
-                        while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length, _uploadCts.Token)) > 0)
+                        _uploadCts.Token.ThrowIfCancellationRequested();
+
+                        var chunkId = $"chunk_{Guid.NewGuid():N}_{chunkIndex}";
+                        var chunk = new FileChunk
                         {
-                            _uploadCts.Token.ThrowIfCancellationRequested();
+                            ChunkId = chunkId,
+                            ChunkIndex = chunkIndex,
+                            Data = ByteString.CopyFrom(buffer, 0, bytesRead),
+                            Size = bytesRead
+                        };
 
-                            var chunkData = ByteString.CopyFrom(buffer, 0, bytesRead);
-
-                            var chunkId = $"chunk_{Guid.NewGuid()}_{chunkIndex}";
-                            var chunk = new FileChunk
-                            {
-                                ChunkId = chunkId,
-                                ChunkIndex = chunkIndex,
-                                Data = chunkData,
-                                Size = bytesRead
-                            };
-
-                            _logger.LogTrace("Отправка фрагмента: {Index}, размер: {Size}", chunkIndex, bytesRead);
-                        
+                        try
+                        {
                             await call.RequestStream.WriteAsync(new UploadFileRequest { Chunk = chunk });
-
-                            totalBytesSent += bytesRead;
-                            chunkIndex++;
-
-                            if (fileSize > 0)
-                            {
-                                UploadProgress = (double)totalBytesSent / fileSize * 100;
-                                await Application.Current.Dispatcher.InvokeAsync(() =>
-                                {
-                                    UploadProgress = (double)totalBytesSent / fileSize * 100;
-                                    UploadStatus = $"Загрузка фрагмента {chunkIndex}/{totalChunks}... ({UploadProgress:F1}%)";
-                                });
-                            } else {
-                                UploadProgress = 100;
-                                UploadStatus = $"Загрузка пустого файла...";
-                            }
                         }
-                    });
-                   
+                        catch (RpcException rpcEx)
+                        {                            
+                            if (rpcEx.StatusCode == StatusCode.ResourceExhausted)
+                            {
+                                throw new InvalidOperationException(
+                                    $"Chunk size ({chunkSize} bytes) exceeds server limits. " +
+                                    "Try reducing chunk size or check server configuration.", rpcEx);
+                            }
+                            throw;
+                        }
+
+                        totalBytesSent += bytesRead;
+                        chunkIndex++;
+
+                        double progress = (double)totalBytesSent / fileSize * 100;
+                        UploadProgress = progress;
+                        UploadStatus = $"Загрузка фрагмента {chunkIndex}/{totalChunks}... ({progress:F1}%)";
+                    }
                 }
-                _logger.LogInformation("Завершение отправки {ChunkCount} фрагментов. Отправлено байт: {TotalBytes}", chunkIndex, totalBytesSent);
 
                 await call.RequestStream.CompleteAsync();
-
                 UploadStatus = "Ожидание ответа сервера...";
 
                 var response = await call.ResponseAsync;
@@ -544,28 +511,41 @@ namespace VRK_WPF.MVVM.ViewModel
                 {
                     UploadStatus = $"Загрузка прервана: {response.Message}";
                     UpdateStatusBar($"Загрузка файла прервана {SelectedFileName}");
-                    MessageBox.Show($"Сервер сообщил об ошибке при распределении:\n{response.Message}", "Ошибка загрузки", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show($"Сервер сообщил об ошибке при распределении:\n{response.Message}", 
+                        "Ошибка загрузки", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
             catch (RpcException ex)
             {
-                _logger.LogError(ex, "Ошибка gRPC во время загрузки: Статус={StatusCode}, Детали={Detail}", ex.StatusCode, ex.Status.Detail);
                 UploadStatus = $"Ошибка gRPC: {ex.StatusCode}";
                 UpdateStatusBar($"Не удалось загрузить {SelectedFileName} (Ошибка gRPC)");
-                MessageBox.Show($"Произошла ошибка во время загрузки:\nСтатус: {ex.StatusCode}\nДетали: {ex.Status.Detail}", "Ошибка загрузки", MessageBoxButton.OK, MessageBoxImage.Error);
+                
+                string errorMessage = ex.Status.Detail;
+                if (string.IsNullOrEmpty(errorMessage))
+                {
+                    errorMessage = ex.StatusCode switch
+                    {
+                        StatusCode.ResourceExhausted => "Превышен лимит размера сообщения. Файл слишком большой для текущих настроек.",
+                        StatusCode.Unavailable => "Сервер недоступен. Проверьте подключение.",
+                        StatusCode.DeadlineExceeded => "Превышено время ожидания. Сервер не отвечает.",
+                        _ => $"Неизвестная ошибка gRPC: {ex.StatusCode}"
+                    };
+                }
+                
+                MessageBox.Show($"Произошла ошибка во время загрузки:\nСтатус: {ex.StatusCode}\nДетали: {errorMessage}", 
+                    "Ошибка загрузки", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("Загрузка отменена пользователем.");
                 UploadStatus = "Загрузка отменена.";
                 UpdateStatusBar($"Загрузка {SelectedFileName} отменена");
             }
             catch (Exception ex)
             {
-                 _logger.LogError(ex, "Неожиданная ошибка во время загрузки.");
                 UploadStatus = $"Ошибка: {ex.Message}";
                 UpdateStatusBar($"Не удалось загрузить {SelectedFileName} (Ошибка)");
-                MessageBox.Show($"Произошла неожиданная ошибка во время загрузки:\n{ex.Message}", "Ошибка загрузки", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Произошла неожиданная ошибка во время загрузки:\n{ex.Message}", 
+                    "Ошибка загрузки", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
@@ -573,19 +553,17 @@ namespace VRK_WPF.MVVM.ViewModel
                 UploadProgress = 0;
                 _uploadCts?.Dispose();
                 _uploadCts = null;
-                _logger.LogInformation("Операция загрузки завершена.");
+                call?.Dispose();
             }
         }
         
-        private void UpdateUploadProgress(double progress, string status)
+        private int DetermineOptimalChunkSize(int defaultChunkSize)
         {
-            _pendingUploadProgress = progress;
-            _pendingUploadStatus = status;
+            const int MAX_SAFE_CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB
     
-            if (!_progressUpdateTimer.Enabled)
-            {
-                _progressUpdateTimer.Start();
-            }
+            int preferredSize = (defaultChunkSize > 0) ? defaultChunkSize : 1 * 1024 * 1024;
+
+            return Math.Min(preferredSize, MAX_SAFE_CHUNK_SIZE);
         }
 
         [RelayCommand]
@@ -593,7 +571,6 @@ namespace VRK_WPF.MVVM.ViewModel
         {
             if (IsUploading && _uploadCts != null && !_uploadCts.IsCancellationRequested)
             {
-                _logger.LogInformation("Попытка отменить загрузку.");
                 _uploadCts.Cancel();
                 UploadStatus = "Отмена загрузки...";
             }
@@ -716,14 +693,12 @@ namespace VRK_WPF.MVVM.ViewModel
                 _downloadCts = null;
             }
         }
-
-
+        
         [RelayCommand]
         private void CancelDownload()
         {
             if (IsDownloading && _downloadCts != null && !_downloadCts.IsCancellationRequested)
             {
-                _logger.LogInformation("Попытка отменить скачивание.");
                 _downloadCts.Cancel();
                 DownloadStatus = "Отмена скачивания...";
             }
@@ -744,9 +719,7 @@ namespace VRK_WPF.MVVM.ViewModel
 
             if (result != MessageBoxResult.Yes) return;
 
-             UpdateStatusBar($"Удаление {fileToDelete.FileName}...");
-             _logger.LogInformation("Инициирование запроса на удаление файла с ID: {FileId}", fileToDelete.FileId);
-
+            UpdateStatusBar($"Удаление {fileToDelete.FileName}...");
             try
             {
                 var request = new DeleteFileRequest { FileId = fileToDelete.FileId };
@@ -776,8 +749,7 @@ namespace VRK_WPF.MVVM.ViewModel
                 MessageBox.Show($"Произошла неожиданная ошибка во время удаления:\n{ex.Message}", "Ошибка удаления", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
-
+        
         [RelayCommand(CanExecute = nameof(CanExecuteRefreshFilesList))]
         private async Task RefreshFilesListAsync()
         {
@@ -790,7 +762,6 @@ namespace VRK_WPF.MVVM.ViewModel
             }
 
             UpdateStatusBar("Обновление списка файлов...");
-             _logger.LogInformation("Обновление списка файлов...");
 
             try
             {
@@ -817,14 +788,12 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             catch (RpcException ex)
             {
-                _logger.LogError(ex, "Ошибка gRPC при обновлении списка файлов");
                 UpdateStatusBar("Ошибка обновления списка файлов (Ошибка gRPC)");
                 MessageBox.Show($"Не удалось обновить список файлов:\nСтатус: {ex.StatusCode}\nДетали: {ex.Status.Detail}", "Ошибка обновления", MessageBoxButton.OK, MessageBoxImage.Error);
                 Files.Clear();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Неожиданная ошибка при обновлении списка файлов");
                 UpdateStatusBar("Ошибка обновления списка файлов");
                 MessageBox.Show($"Произошла неожиданная ошибка при обновлении списка файлов:\n{ex.Message}", "Ошибка обновления", MessageBoxButton.OK, MessageBoxImage.Error);
                 Files.Clear();
@@ -844,7 +813,6 @@ namespace VRK_WPF.MVVM.ViewModel
             IsNodeStatusRefreshing = true;
 
             UpdateStatusBar("Обновление статусов узлов...");
-            _logger.LogInformation("Обновление статусов узлов...");
 
             Nodes.Clear();
             Nodes.Add(new NodeViewModel { NodeId = "Обновление...", Status = "Занят"});
@@ -872,7 +840,6 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             catch (RpcException ex)
             {
-                 _logger.LogError(ex, "Ошибка gRPC при обновлении статусов узлов");
                  Nodes.Clear();
                  Nodes.Add(new NodeViewModel { NodeId = "Ошибка", Status = "Сбой", StatusDetails = $"gRPC: {ex.StatusCode}"});
                 UpdateStatusBar("Ошибка обновления статусов узлов (Ошибка gRPC)");
@@ -880,7 +847,6 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             catch (Exception ex)
             {
-                 _logger.LogError(ex, "Неожиданная ошибка при обновлении статусов узлов");
                  Nodes.Clear();
                  Nodes.Add(new NodeViewModel { NodeId = "Ошибка", Status = "Сбой", StatusDetails = $"Ошибка: {ex.Message}"});
                 UpdateStatusBar("Ошибка обновления статусов узлов");
@@ -924,7 +890,6 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка обновления узлов симуляции");
                 SimulationNodes.Clear();
                 CanSimulateNodeFailure = false;
                 CanRestoreNodes = false;
@@ -939,7 +904,6 @@ namespace VRK_WPF.MVVM.ViewModel
         {
             if (_storageClient == null)
             {
-                _logger.LogWarning("Невозможно загрузить настройки: StorageServiceClient равен null (нет соединения).");
                 SettingNodeId = "Н/Д";
                 SettingListenAddress = "Н/Д";
                 SettingStorageBasePath = "Н/Д";
@@ -956,7 +920,6 @@ namespace VRK_WPF.MVVM.ViewModel
             HasSettingsError = false;
             SettingsErrorMessage = string.Empty;
             UpdateStatusBar("Загрузка настроек узла...");
-            _logger.LogInformation("Попытка загрузить настройки узла...");
             RefreshSettingsCommand.NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(IsSettingsInteractionEnabled));
 
@@ -968,7 +931,6 @@ namespace VRK_WPF.MVVM.ViewModel
 
                 if (reply.Success)
                 {
-                    _logger.LogInformation("Настройки узла успешно загружены.");
                     SettingNodeId = reply.NodeId;
                     SettingListenAddress = reply.ListenAddress;
                     SettingStorageBasePath = reply.StorageBasePath;
@@ -1002,14 +964,12 @@ namespace VRK_WPF.MVVM.ViewModel
             {
                 SettingsErrorMessage = $"Ошибка gRPC при загрузке настроек: {rpcex.StatusCode}";
                 HasSettingsError = true;
-                _logger.LogError(rpcex, "Ошибка gRPC при загрузке настроек узла: {StatusCode}", rpcex.StatusCode);
                 UpdateStatusBar($"Ошибка загрузки настроек (gRPC: {rpcex.StatusCode})");
             }
             catch (Exception ex)
             {
                 SettingsErrorMessage = $"Ошибка загрузки настроек: {ex.Message}";
                 HasSettingsError = true;
-                _logger.LogError(ex, "Неожиданная ошибка при загрузке настроек узла.");
                 UpdateStatusBar("Ошибка загрузки настроек.");
             }
             finally
@@ -1129,7 +1089,6 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Ошибка во время симуляции отказа узла");
                 SimulationStatus = $"Ошибка: {ex.Message}";
                 SimulationStatusColor = Brushes.Red;
                 AppendToSimulationLog($"Ошибка симуляции: {ex.Message}");
@@ -1177,7 +1136,6 @@ namespace VRK_WPF.MVVM.ViewModel
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Ошибка во время восстановления узлов");
                 SimulationStatus = $"Ошибка: {ex.Message}";
                 SimulationStatusColor = Brushes.Red;
                 AppendToSimulationLog($"Ошибка восстановления: {ex.Message}");
@@ -1211,19 +1169,7 @@ namespace VRK_WPF.MVVM.ViewModel
 
                 if (_currentChannel != null)
                 {
-                    try
-                    {
-                        _currentChannel.ShutdownAsync().Wait(TimeSpan.FromSeconds(2));
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogWarning(ex, "Error during gRPC channel shutdown");
-                    }
-                    finally
-                    {
-                        _currentChannel.Dispose();
-                        _currentChannel = null;
-                    }
+                    _currentChannel.Dispose();
                 }
         
                 _storageClient = null;
@@ -1234,12 +1180,9 @@ namespace VRK_WPF.MVVM.ViewModel
                 SimulationFileStatuses?.Clear();
                 SimulationChunkDistribution?.Clear();
 
-                _logger?.LogInformation("MainWindowViewModel disposed successfully.");
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error during MainWindowViewModel disposal");
-                System.Diagnostics.Debug.WriteLine($"Disposal error: {ex.Message}");
             }
         }
 

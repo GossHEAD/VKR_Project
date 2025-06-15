@@ -18,6 +18,5 @@ public partial class DatabaseManagementPage : Page
         
     private void DatabaseManagementPage_Unloaded(object sender, System.Windows.RoutedEventArgs e)
     {
-        //_viewModel.Dispose();
     }
 }

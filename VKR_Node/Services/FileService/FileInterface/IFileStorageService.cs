@@ -3,9 +3,6 @@ using VKR.Protos;
 
 namespace VKR_Node.Services.FileService.FileInterface;
 
-/// <summary>
-/// Service for handling file downloads from the distributed storage system.
-/// </summary>
 public interface IFileStorageService
 {
     Task<ListFilesReply> ListFiles(ListFilesRequest request, ServerCallContext context);

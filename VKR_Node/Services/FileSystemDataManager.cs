@@ -119,8 +119,6 @@ namespace VKR_Node.Services
                 {
                     await Task.Run(() => PerformIntegrityCheck(cancellationToken), cancellationToken);
                 }
-                
-                return;
             }
             catch (OperationCanceledException)
             {
@@ -585,26 +583,6 @@ namespace VKR_Node.Services
             return Path.Combine(directoryPath, fileName);
         }
         
-        private string GetHashBasedPath(string fileId, string chunkId)
-        {
-            
-            string hash = chunkId.Length >= 6 ? chunkId.Substring(0, 6) : chunkId.PadLeft(6, '0');
-            
-            string path = _baseStoragePath;
-            int depth = Math.Min(_storageOptions.HashDirectoryDepth, 3);
-            
-            
-            for (int i = 0; i < depth; i++)
-            {
-                if (i < hash.Length)
-                {
-                    path = Path.Combine(path, hash[i].ToString());
-                }
-            }
-            path = Path.Combine(path, fileId);
-            return Path.Combine(path, $"{chunkId}.chunk");
-        }
-
         private string GetTemporaryPath(string identifier)
         {
             

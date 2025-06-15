@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using AutoMapper;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
@@ -24,7 +23,6 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
     private readonly IMapper _mapper;
     private readonly IReplicationManager _replicationManager;
 
-    private readonly ConcurrentDictionary<string, (long Count, long TotalMs)> _methodMetrics = new();
     public NodeInternalServiceImpl(
         ILogger<NodeInternalServiceImpl> logger,
         IMetadataManager metadataManager,
@@ -43,31 +41,6 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         _mapper = mapper;
         _replicationManager = replicationManager;
     }
-   
-    private void RecordMetric(string methodName, long elapsedMs)
-    {
-        _methodMetrics.AddOrUpdate(
-            methodName,
-            (1, elapsedMs),
-            (_, current) => (current.Count + 1, current.TotalMs + elapsedMs)
-        );
-    }
-
-    private void LogMetrics()
-    {
-        foreach (var kvp in _methodMetrics.ToArray())
-        {
-            string method = kvp.Key;
-            var (count, totalMs) = kvp.Value;
-        
-            if (count > 0)
-            {
-                _logger.LogInformation(
-                    "Method: {Method}, Calls: {Count}, AvgTime: {AvgTime:F2}ms", 
-                    method, count, (double)totalMs / count);
-            }
-        }
-    }
 
     public override async Task<ReplicateChunkReply> ReplicateChunk(ReplicateChunkRequest request,
         ServerCallContext context)
@@ -85,7 +58,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
             return new ReplicateChunkReply { Success = false, Message = "Missing required fields" };
         }
 
-        string localNodeId = _nodeOptions.NodeId ?? "Unknown";
+        string localNodeId = _nodeOptions.NodeId;
 
         var chunkInfo = new ChunkModel
         {
@@ -546,84 +519,6 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         }
     }
 
-    private async Task<(bool Success, string Message)> DeleteLocalChunkAsync(
-        string fileId, string chunkId, CancellationToken cancellationToken)
-    {
-        var chunkInfo = new ChunkModel
-        {
-            FileId = fileId,
-            ChunkId = chunkId,
-            StoredNodeId = _nodeOptions.NodeId
-        };
-
-        bool metadataRemoved;
-        bool dataRemoved;
-
-        
-        try
-        {
-            metadataRemoved = await _metadataManager.RemoveChunkStorageNodeAsync(
-                fileId, chunkId, _nodeOptions.NodeId, cancellationToken);
-
-            if (!metadataRemoved)
-            {
-                _logger.LogWarning("Failed to remove metadata location for Chunk {ChunkId} (or it was already gone)",
-                    chunkId);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error removing chunk metadata for Chunk {ChunkId}", chunkId);
-            return (false, $"Metadata deletion failed: {ex.Message}");
-        }
-
-        
-        if (metadataRemoved || true) 
-        {
-            try
-            {
-                dataRemoved = await _dataManager.DeleteChunkAsync(chunkInfo, cancellationToken);
-
-                if (!dataRemoved)
-                {
-                    _logger.LogWarning("Failed to delete chunk data file for Chunk {ChunkId} (or it was already gone)",
-                        chunkId);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error deleting chunk data for Chunk {ChunkId}", chunkId);
-                
-                if (metadataRemoved)
-                {
-                    return (true, "Chunk metadata removed but data deletion failed");
-                }
-                return (false, $"Data deletion failed: {ex.Message}");
-            }
-        }
-
-        
-        if (metadataRemoved && dataRemoved)
-            return (true, "Chunk metadata and data successfully deleted");
-        if (metadataRemoved)
-            return (true, "Chunk metadata removed but data deletion failed");
-        if (dataRemoved)
-            return (true, "Chunk data deleted but metadata removal failed");
-        
-        return (false, "Failed to delete chunk metadata or data (may not exist)");
-    }
-
-    private string GetDeleteResultMessage(bool metadataRemoved, bool dataRemoved)
-    {
-        if (metadataRemoved && dataRemoved)
-            return "Chunk metadata and data successfully deleted";
-        if (metadataRemoved)
-            return "Chunk metadata removed but data deletion failed";
-        if (dataRemoved)
-            return "Chunk data deleted but metadata removal failed";
-        return "Failed to delete chunk metadata or data (may not exist)";
-    }
-
     public override Task<PingReply> Ping(PingRequest request, ServerCallContext context)
     {
         var sw = Stopwatch.StartNew();
@@ -774,45 +669,10 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         }
     }
 
-    private async Task StreamChunkDataAsync(
-        Stream dataStream,
-        IServerStreamWriter<RequestChunkReply> responseStream,
-        CancellationToken cancellationToken)
-    {
-        _logger.LogDebug("Streaming chunk data, total size: {Size} bytes", dataStream.Length);
-
-        const int bufferSize = 65536; 
-        byte[] buffer = new byte[bufferSize];
-        int bytesRead;
-
-        while ((bytesRead = await dataStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
-        {
-            await responseStream.WriteAsync(new RequestChunkReply
-            {
-                Data = ByteString.CopyFrom(buffer, 0, bytesRead)
-            }, cancellationToken);
-        }
-    }
-
-    public override Task<FindSuccessorReply> FindSuccessor(FindSuccessorRequest request, ServerCallContext context)
-    {
-        throw new RpcException(Status.DefaultCancelled);
-    }
-
-    public override Task<GetPredecessorReply> GetPredecessor(GetPredecessorRequest request, ServerCallContext context)
-    {
-        throw new RpcException(Status.DefaultCancelled);
-    }
-
-    public override Task<NotifyReply> Notify(NotifyRequest request, ServerCallContext context)
-    {
-        throw new RpcException(Status.DefaultCancelled);
-    }
-
     public override async Task<GetNodeFileListReply> GetNodeFileList(
         GetNodeFileListRequest request, ServerCallContext context)
     {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var sw = Stopwatch.StartNew();
         _logger.LogInformation("Node {NodeId} received GetNodeFileList request from peer {Peer}",
             _nodeOptions.NodeId, context.Peer);
         
@@ -884,7 +744,7 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
             return new Empty();
         }
 
-        string localNodeId = _nodeOptions.NodeId ?? "Unknown";
+        string localNodeId = _nodeOptions.NodeId;
 
         _logger.LogInformation("Node {LocalNodeId} received AcknowledgeReplica for Chunk {ChunkId} (File {FileId}) " +
                                "successfully stored on Node {ReplicaNodeId}",
@@ -911,22 +771,5 @@ public class NodeInternalServiceImpl : NodeInternalService.NodeInternalServiceBa
         }
 
         return new Empty();
-    }
-    
-    private T HandleGrpcException<T>(string operation, Exception ex, T errorResult) where T : class
-    {
-        if (ex is OperationCanceledException)
-        {
-            _logger.LogInformation("{Operation} was cancelled", operation);
-            throw new RpcException(new Status(StatusCode.Cancelled, "Operation was cancelled"));
-        }
-    
-        if (ex is RpcException rpcEx)
-        {
-            throw rpcEx;
-        }
-    
-        _logger.LogError(ex, "Error during {Operation}", operation);
-        return errorResult;
     }
 }

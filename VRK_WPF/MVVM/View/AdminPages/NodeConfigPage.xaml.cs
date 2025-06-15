@@ -17,6 +17,5 @@ public partial class NodeConfigPage : Page
         
     public void SetClient(StorageService.StorageServiceClient client)
     {
-        //_viewModel.SetClient(client);
     }
 }

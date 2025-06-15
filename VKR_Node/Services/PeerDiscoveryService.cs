@@ -12,10 +12,6 @@ using VKR.Protos;
 
 namespace VKR_Node.Services
 {
-    /// <summary>
-    /// Background service that discovers and monitors peer nodes in the network.
-    /// Periodically pings known nodes and updates their status in the metadata system.
-    /// </summary>
     public class PeerDiscoveryService : BackgroundService
     {
         private readonly ILogger<PeerDiscoveryService> _logger;
@@ -128,7 +124,6 @@ namespace VKR_Node.Services
             {
                 if (string.IsNullOrEmpty(node.Address) || string.IsNullOrEmpty(node.NodeId))
                 {
-                    _logger.LogWarning("Skipping node with missing ID or address: {NodeId}", node.NodeId ?? "Unknown");
                     continue;
                 }
 
@@ -200,8 +195,14 @@ namespace VKR_Node.Services
 
                 bool success = reply?.Success == true;
                 
-                _logger.LogInformation("Node {NodeId} ({Address}) - {Status}",
-                    node.NodeId, node.Address, success ? "ONLINE" : "OFFLINE");
+                if (!success)
+                {
+                    _logger.LogWarning("Node {NodeId} ({Address}) is OFFLINE", node.NodeId, node.Address);
+                }
+                else if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug("Node {NodeId} ({Address}) is ONLINE", node.NodeId, node.Address);
+                }
 
                 return (success, reply?.ResponderNodeId);
             }

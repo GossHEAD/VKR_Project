@@ -1,8 +1,7 @@
-﻿using VKR_Core.Models.Interfaces;
+﻿namespace VKR_Core.Models;
 
-namespace VKR_Core.Models;
+public record ChunkModel
 
-public record class ChunkModel : IChunk
 {
     public required string ChunkId { get; init; }
     public required string FileId { get; init; }

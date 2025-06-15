@@ -1,19 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
-using VKR_Core.Models;
 using VKR_Node.Configuration;
-using System.Collections.Concurrent;
-using System.Threading;
-using System.Threading.Tasks;
 using VKR.Protos;
-using Google.Protobuf.WellKnownTypes;
-using VKR_Core.Enums;
 using VKR_Core.Services;
 
 namespace VKR_Node.Services.Utilities
 {
-    /// <summary>
-    /// Utility class containing common replication functions shared across services
-    /// </summary>
     public static class ReplicationUtility
     {
         public static List<KnownNodeOptions> SelectReplicaTargets(

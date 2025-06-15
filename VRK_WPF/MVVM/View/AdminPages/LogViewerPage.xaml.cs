@@ -4,7 +4,7 @@ using VRK_WPF.MVVM.ViewModel.AdminViewModels;
 
 namespace VRK_WPF.MVVM.View.AdminPages;
 
-public partial class LogViewerPage : System.Windows.Controls.Page
+public partial class LogViewerPage
 {
     private readonly LogViewerViewModel _viewModel;
         
@@ -17,6 +17,5 @@ public partial class LogViewerPage : System.Windows.Controls.Page
         
     public void SetClient(StorageService.StorageServiceClient client)
     {
-        //_viewModel.SetClient(client);
     }
 }

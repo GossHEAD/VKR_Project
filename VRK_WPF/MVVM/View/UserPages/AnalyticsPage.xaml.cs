@@ -15,8 +15,7 @@ namespace VRK_WPF.MVVM.View.UserPages
     {
         private readonly LogManager _logManager;
         private readonly Random _random = new Random();
-        private List<LogEntry> _logs = new List<LogEntry>();
-        private DispatcherTimer _resizeTimer;
+        private List<LogEntry> _logs = new();
         private bool _disposed = false;
         private string _currentLogFilePath = string.Empty;
         
@@ -37,21 +36,13 @@ namespace VRK_WPF.MVVM.View.UserPages
         
         private void AnalyticsPage_Loaded(object sender, RoutedEventArgs e)
         {
-            // Start with sample data
             GenerateSampleLogData();
             DrawCharts();
         }
         
         private void AnalyticsPage_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            _resizeTimer?.Stop();
-            _resizeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
-            _resizeTimer.Tick += (s, args) =>
-            {
-                _resizeTimer.Stop();
-                DrawCharts();
-            };
-            _resizeTimer.Start();
+            DrawCharts();
         }
         
         private void GenerateSampleLogData()
@@ -83,7 +74,6 @@ namespace VRK_WPF.MVVM.View.UserPages
                 });
             }
             
-            // Sort by timestamp
             _logs = _logs.OrderBy(l => l.Timestamp).ToList();
         }
         
@@ -116,7 +106,6 @@ namespace VRK_WPF.MVVM.View.UserPages
             {
                 await _logManager.SwitchLogFileAsync(filePath);
                 
-                // If SwitchLogFileAsync didn't work, try manual load
                 if (_logManager.Logs.Count == 0)
                 {
                     await _logManager.LoadLogsManuallyAsync(filePath);
@@ -124,39 +113,23 @@ namespace VRK_WPF.MVVM.View.UserPages
                 
                 _logs = _logManager.Logs.ToList();
                 
-                // Update the charts with the new data
                 DrawCharts();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка загрузки файла журнала: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                 
-                // Fall back to sample data if loading fails
                 GenerateSampleLogData();
                 DrawCharts();
             }
         }
         
-        public class LogFileInfo
-        {
-            public string FilePath { get; set; } = string.Empty;
-            public string FileName { get; set; } = string.Empty;
-            public DateTime LastModified { get; set; }
-            
-            public override string ToString()
-            {
-                return FilePath;
-            }
-        }
-        
         private void DrawCharts()
         {
-            // Clear all charts first
             LogEventChart.Children.Clear();
             EventTypeChart.Children.Clear();
             NodeActivityChart.Children.Clear();
             
-            // Draw each chart
             DrawLogEventChart();
             DrawEventTypeChart();
             DrawNodeActivityChart();
@@ -169,19 +142,16 @@ namespace VRK_WPF.MVVM.View.UserPages
             if (_logs.Count == 0)
                 return;
             
-            // Group logs by day
             var groupedLogs = _logs
                 .GroupBy(l => l.Timestamp.Date)
                 .OrderBy(g => g.Key)
                 .Select(g => new { Date = g.Key, Count = g.Count() })
                 .ToList();
             
-            // Define chart dimensions
             double width = LogEventChart.ActualWidth > 0 ? LogEventChart.ActualWidth : 300;
             double height = LogEventChart.ActualHeight > 0 ? LogEventChart.ActualHeight : 200;
             double padding = 30;
             
-            // Find max count for scaling
             int maxCount = groupedLogs.Max(g => g.Count);
             
             // Draw axes
@@ -208,7 +178,6 @@ namespace VRK_WPF.MVVM.View.UserPages
             LogEventChart.Children.Add(xAxis);
             LogEventChart.Children.Add(yAxis);
             
-            // Add axes labels
             TextBlock yLabel = new TextBlock
             {
                 Text = "Event Count",
@@ -228,7 +197,6 @@ namespace VRK_WPF.MVVM.View.UserPages
             Canvas.SetTop(xLabel, height - 15);
             LogEventChart.Children.Add(xLabel);
             
-            // Draw data points and connecting lines
             Polyline polyline = new Polyline
             {
                 Stroke = Brushes.Blue,
@@ -237,7 +205,6 @@ namespace VRK_WPF.MVVM.View.UserPages
             
             var points = new PointCollection();
             
-            // Calculate the spacing between points
             double xInterval = (width - 2 * padding) / (groupedLogs.Count - 1 > 0 ? groupedLogs.Count - 1 : 1);
             
             for (int i = 0; i < groupedLogs.Count; i++)
@@ -247,7 +214,6 @@ namespace VRK_WPF.MVVM.View.UserPages
                 
                 points.Add(new Point(x, y));
                 
-                // Add data point
                 Ellipse dataPoint = new Ellipse
                 {
                     Width = 6,
@@ -258,7 +224,6 @@ namespace VRK_WPF.MVVM.View.UserPages
                 Canvas.SetTop(dataPoint, y - 3);
                 LogEventChart.Children.Add(dataPoint);
                 
-                // Add date label for some points
                 if (i % 3 == 0 || i == groupedLogs.Count - 1)
                 {
                     TextBlock dateLabel = new TextBlock
@@ -283,22 +248,18 @@ namespace VRK_WPF.MVVM.View.UserPages
             if (_logs.Count == 0)
                 return;
             
-            // Group logs by level
             var groupedLogs = _logs
                 .GroupBy(l => l.Level)
                 .Select(g => new { Level = g.Key, Count = g.Count() })
                 .OrderByDescending(g => g.Count)
                 .ToList();
             
-            // Define chart dimensions
             double width = EventTypeChart.ActualWidth > 0 ? EventTypeChart.ActualWidth : 300;
             double height = EventTypeChart.ActualHeight > 0 ? EventTypeChart.ActualHeight : 200;
             double padding = 30;
             
-            // Find total count for percentage calculation
             int totalCount = _logs.Count;
             
-            // Define colors for each level
             Dictionary<string, Brush> levelColors = new Dictionary<string, Brush>
             {
                 { "INFO", Brushes.Green },
@@ -308,14 +269,14 @@ namespace VRK_WPF.MVVM.View.UserPages
                 { "TRACE", Brushes.Gray }
             };
             
-            // Draw pie chart
+            
             double centerX = width / 2;
             double centerY = height / 2;
             double radius = Math.Min(width, height) / 2 - padding;
             
             double startAngle = 0;
             
-            // Add title
+            
             TextBlock title = new TextBlock
             {
                 Text = "Event Type Distribution",
@@ -388,7 +349,7 @@ namespace VRK_WPF.MVVM.View.UserPages
                 Canvas.SetTop(label, labelY - 7);
                 EventTypeChart.Children.Add(label);
                 
-                // Add percentage label outside the pie
+                
                 double percLabelX = centerX + Math.Cos(middleRad) * (radius + 15);
                 double percLabelY = centerY + Math.Sin(middleRad) * (radius + 15);
                 
@@ -413,22 +374,22 @@ namespace VRK_WPF.MVVM.View.UserPages
             if (_logs.Count == 0)
                 return;
             
-            // Group logs by node
+            
             var groupedLogs = _logs
                 .GroupBy(l => l.NodeId)
                 .Select(g => new { NodeId = g.Key, Count = g.Count() })
                 .OrderByDescending(g => g.Count)
                 .ToList();
             
-            // Define chart dimensions
+            
             double width = NodeActivityChart.ActualWidth > 0 ? NodeActivityChart.ActualWidth : 300;
             double height = NodeActivityChart.ActualHeight > 0 ? NodeActivityChart.ActualHeight : 200;
             double padding = 40;
             
-            // Find max count for scaling
+            
             int maxCount = groupedLogs.Max(g => g.Count);
             
-            // Draw axes
+            
             Line xAxis = new Line
             {
                 X1 = padding,
@@ -452,7 +413,7 @@ namespace VRK_WPF.MVVM.View.UserPages
             NodeActivityChart.Children.Add(xAxis);
             NodeActivityChart.Children.Add(yAxis);
             
-            // Add axes labels
+            
             TextBlock yLabel = new TextBlock
             {
                 Text = "Event Count",
@@ -472,22 +433,22 @@ namespace VRK_WPF.MVVM.View.UserPages
             Canvas.SetTop(xLabel, height - 15);
             NodeActivityChart.Children.Add(xLabel);
             
-            // Calculate bar width and spacing
+            
             int numBars = groupedLogs.Count;
             double totalBarWidth = width - 2 * padding;
-            double barWidth = totalBarWidth / (numBars * 2); // Allow space between bars
+            double barWidth = totalBarWidth / (numBars * 2); 
             
-            // Draw bars
+            
             for (int i = 0; i < numBars; i++)
             {
                 var item = groupedLogs[i];
                 double barHeight = (item.Count * (height - 2 * padding) / maxCount);
                 
-                // Calculate position
+                
                 double x = padding + i * (barWidth * 2) + barWidth / 2;
                 double y = height - padding - barHeight;
                 
-                // Draw bar
+                
                 Rectangle bar = new Rectangle
                 {
                     Width = barWidth,
@@ -498,7 +459,7 @@ namespace VRK_WPF.MVVM.View.UserPages
                 Canvas.SetTop(bar, y);
                 NodeActivityChart.Children.Add(bar);
                 
-                // Add node label
+                
                 TextBlock nodeLabel = new TextBlock
                 {
                     Text = item.NodeId,
@@ -510,7 +471,7 @@ namespace VRK_WPF.MVVM.View.UserPages
                 Canvas.SetTop(nodeLabel, height - padding + 5);
                 NodeActivityChart.Children.Add(nodeLabel);
                 
-                // Add count label
+                
                 TextBlock countLabel = new TextBlock
                 {
                     Text = item.Count.ToString(),
@@ -536,13 +497,10 @@ namespace VRK_WPF.MVVM.View.UserPages
             {
                 if (disposing)
                 {
-                    _resizeTimer?.Stop();
-                    _resizeTimer = null;
+                    _logManager.StopMonitoring();
+                    _logManager.Dispose();
                 
-                    _logManager?.StopMonitoring();
-                    _logManager?.Dispose();
-                
-                    _logs?.Clear();
+                    _logs.Clear();
                     _logs = null;
                 
                     LogEventChart?.Children.Clear();

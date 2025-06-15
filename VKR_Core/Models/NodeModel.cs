@@ -1,9 +1,8 @@
 ﻿using VKR_Core.Enums;
-using VKR_Core.Models.Interfaces;
 
 namespace VKR_Core.Models;
 
-public record class NodeModel : INode
+public record NodeModel
 {
     public required string Id { get; init; }
     public required string Address { get; init; }

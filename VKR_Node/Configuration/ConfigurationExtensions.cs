@@ -4,7 +4,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
-using Serilog.Sinks.File;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace VKR_Node.Configuration
@@ -22,7 +21,6 @@ namespace VKR_Node.Configuration
             var options = configuration.GetSection(sectionName).Get<T>();
             if (options == null)
             {
-                logger.LogWarning("Configuration section {Section} is missing or empty", sectionName);
                 return services;
             }
             
@@ -82,12 +80,6 @@ namespace VKR_Node.Configuration
                             "Database path cannot navigate outside of storage path when using relative paths");
                     }
                 }
-                
-                if (rootConfig.Dht.AutoJoinNetwork && string.IsNullOrEmpty(rootConfig.Dht.BootstrapNodeAddress))
-                {
-                    throw new ValidationException("Bootstrap node address is required when AutoJoinNetwork is enabled");
-                }
-                
                 if (string.IsNullOrEmpty(rootConfig.Identity.NodeId))
                 {
                     throw new ValidationException("NodeId is required");
@@ -120,30 +112,65 @@ namespace VKR_Node.Configuration
             string dateLogFilePath = Path.Combine(logsDirectory, $"{nodeId}-log-{currentDate}.txt");
             
             var loggerConfig = new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+                .MinimumLevel.Information() 
+                .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+                .MinimumLevel.Override("System", LogEventLevel.Warning)
+                .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning) 
+                .MinimumLevel.Override("Grpc", LogEventLevel.Warning) 
+                .MinimumLevel.Override("VRK_WPF.MVVM.Services.LogManager", LogEventLevel.Warning) 
                 .Enrich.FromLogContext()
                 .Enrich.WithProperty("NodeId", nodeId)
-                .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{NodeId}] {Message:lj}{NewLine}{Exception}")
+                .WriteTo.Console(
+                    outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{NodeId}] {Message:lj}{NewLine}{Exception}",
+                    restrictedToMinimumLevel: LogEventLevel.Information) 
                 .WriteTo.File(
                     logFilePath,
                     rollingInterval: RollingInterval.Infinite,  
                     retainedFileCountLimit: 1,  
                     fileSizeLimitBytes: 10 * 1024 * 1024,
                     rollOnFileSizeLimit: true,
-                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-                
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                    restrictedToMinimumLevel: LogEventLevel.Debug) 
                 .WriteTo.File(
                     dateLogFilePath,
                     rollingInterval: RollingInterval.Infinite,  
                     retainedFileCountLimit: 31,  
                     fileSizeLimitBytes: 10 * 1024 * 1024,
                     rollOnFileSizeLimit: true,
-                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}");
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                    restrictedToMinimumLevel: LogEventLevel.Information); 
+            
+            
+            loggerConfig = loggerConfig.Filter.ByExcluding(logEvent => 
+            {
+                
+                if (logEvent.MessageTemplate.Text.Contains("Ping request") ||
+                    logEvent.MessageTemplate.Text.Contains("Pinging node") ||
+                    logEvent.MessageTemplate.Text.Contains("Node {NodeId} ({Address}) - {Status}"))
+                {
+                    return logEvent.Level < LogEventLevel.Warning; 
+                }
+                
+                
+                if (logEvent.MessageTemplate.Text.Contains("Chunk {ChunkId}: Desired=") ||
+                    logEvent.MessageTemplate.Text.Contains("has sufficient online replicas"))
+                {
+                    return logEvent.Level < LogEventLevel.Information;
+                }
+                
+                
+                if (logEvent.Properties.ContainsKey("SourceContext") &&
+                    logEvent.Properties["SourceContext"].ToString().Contains("EntityFrameworkCore"))
+                {
+                    return logEvent.Level < LogEventLevel.Warning;
+                }
+                
+                return false;
+            });
                 
             Log.Logger = loggerConfig.CreateLogger();
             
-            Log.Information("Logging initialized for Node {NodeId}. Log files will be saved to: {LogDirectory}", 
+            Log.Information("Logging initialized for Node {NodeId}. Log files: {LogDirectory}", 
                 nodeId, logsDirectory);
         }
         

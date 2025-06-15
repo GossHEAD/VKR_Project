@@ -122,11 +122,6 @@ namespace VRK_WPF.MVVM.Services
                 _ => false 
             };
         }
-        
-        public static IReadOnlyList<HardcodedUser> GetAvailableUsers()
-        {
-            return _users.AsReadOnly();
-        }
     }
     
     public class HardcodedUser

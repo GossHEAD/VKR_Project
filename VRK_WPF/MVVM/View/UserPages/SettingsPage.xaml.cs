@@ -54,7 +54,6 @@ namespace VRK_WPF.MVVM.View.UserPages
             var configsCollection = new ObservableCollection<NodeConfig>(configs);
             cmbNodeConfigs.ItemsSource = configsCollection;
             
-            //var currentConfig = configs.Find(c => c.IsCurrentNode);
             var currentSelection = cmbNodeConfigs.SelectedItem as NodeConfig;
             
             if (currentSelection != null)
@@ -65,10 +64,6 @@ namespace VRK_WPF.MVVM.View.UserPages
                     cmbNodeConfigs.SelectedItem = matchingConfig;
                 }
             }
-            // if (currentConfig != null)
-            // {
-            //     cmbNodeConfigs.SelectedItem = currentConfig;
-            // }
         }
         
         private void CmbNodeConfigs_SelectionChanged(object sender, SelectionChangedEventArgs e)

@@ -8,7 +8,6 @@ using VKR_Node.Persistance.Entities;
 
 namespace VKR_Node.Persistance
 {
-
     public class NodeDbContext : DbContext
     {
         private readonly string? _dbPath;
@@ -51,8 +50,6 @@ namespace VKR_Node.Persistance
                 ?.GetService<IOptions<DatabaseOptions>>();
             
             bool enableLogging = dbOptions?.Value?.EnableSqlLogging ?? false;
-            // Configure the database provider (SQLite) and connection string (_dbPath)
-            // ONLY if it hasn't already been configured externally (e.g., by AddDbContextFactory).
             if (!optionsBuilder.IsConfigured)
             {
                 if (!string.IsNullOrEmpty(_dbPath))
@@ -63,22 +60,16 @@ namespace VKR_Node.Persistance
                          optionsBuilder.UseSqlite(connectionString)
                              .EnableSensitiveDataLogging()
                              .LogTo(Console.WriteLine, LogLevel.Information);
-                         Console.WriteLine($"[NodeDbContext - OnConfiguring] SQL logging is enabled");
                      }
                      else
                      {
                          optionsBuilder.UseSqlite(connectionString);
-                         Console.WriteLine($"[NodeDbContext - OnConfiguring] Configuring SQLite with path: {_dbPath}");
                      }
-                     Console.WriteLine($"[NodeDbContext - OnConfiguring] (Not externally configured) Configuring SQLite with path: {_dbPath}");
                 } else {
                      var fallbackPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Data/fallback_onconfiguring.db"));
                      _ensureDatabaseDirectoryExists(fallbackPath);
-                     Console.WriteLine($"[NodeDbContext - OnConfiguring] Warning: DB path not set and options not configured externally. Using fallback: {fallbackPath}");
                      optionsBuilder.UseSqlite($"Data Source={fallbackPath}");
                 }
-            } else {
-                 Console.WriteLine($"[NodeDbContext - OnConfiguring] Options already configured externally.");
             }
             base.OnConfiguring(optionsBuilder);
         }
@@ -125,8 +116,6 @@ namespace VKR_Node.Persistance
                 entity.HasKey(e => e.NodeId);
                 entity.Property(e => e.Address).IsRequired();
                 entity.Property(e => e.State).IsRequired();
-                
-                // No value conversion needed if State is already int in the entity
             });
 
             modelBuilder.Entity<UserEntity>(entity =>

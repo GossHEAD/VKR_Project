@@ -34,7 +34,7 @@ namespace VKR_Node.Services
         {
             _contextFactory = contextFactory;
             _logger = logger;
-            _localNodeId = nodeOptions.Value?.NodeId ?? throw new ArgumentException("NodeId is not configured", nameof(nodeOptions));
+            _localNodeId = nodeOptions.Value.NodeId ?? throw new ArgumentException("NodeId is not configured", nameof(nodeOptions));
             _databaseOptions = databaseOptions.Value;
             _mapper = mapper;
             
@@ -46,8 +46,6 @@ namespace VKR_Node.Services
         
         public async Task InitializeAsync(CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Initializing metadata database...");
-            
             try
             {
                 await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
@@ -101,9 +99,6 @@ namespace VKR_Node.Services
             }
         }
         
-        
-        
-        
         private void UpdateFileMetadataFields(FileEntity entity, FileModel metadata)
         {
             entity.FileName = metadata.FileName;
@@ -122,9 +117,6 @@ namespace VKR_Node.Services
                 entity.State = (int)metadata.State;
             }
         }
-
-        
-        
         
         private T? GetFromCache<T>(string key) where T : class
         {
@@ -134,9 +126,6 @@ namespace VKR_Node.Services
             }
             return null;
         }
-
-        
-        
         
         private void AddToCache<T>(string key, T value, TimeSpan? expiry = null) where T : class
         {
@@ -150,9 +139,6 @@ namespace VKR_Node.Services
                 CleanupExpiredCache();
             }
         }
-
-        
-        
         
         private void CleanupExpiredCache()
         {
@@ -166,13 +152,7 @@ namespace VKR_Node.Services
             {
                 _cacheItems.TryRemove(key, out _);
             }
-            
-            _logger.LogTrace("Cache cleanup: removed {Count} expired items, {Remaining} remaining", 
-                expiredKeys.Count, _cacheItems.Count);
         }
-
-        
-        
         
         private void InvalidateCache(string keyOrPrefix, bool isPrefix = false)
         {
@@ -196,9 +176,6 @@ namespace VKR_Node.Services
         #endregion
 
         #region File Metadata Operations
-
-        
-        
         
         public async Task SaveFileMetadataAsync(FileModel metadata, CancellationToken cancellationToken = default)
         {
@@ -214,13 +191,11 @@ namespace VKR_Node.Services
 
                     if (existingEntity != null)
                     {
-                        _logger.LogDebug("Updating existing metadata for File ID: {FileId}", metadata.FileId);
                         UpdateFileMetadataFields(existingEntity, metadata);
                         context.FilesMetadata.Update(existingEntity);
                     }
                     else
                     {
-                        _logger.LogDebug("Creating new metadata for File ID: {FileId}", metadata.FileId);
                         var newEntity = new FileEntity
                         {
                             FileId = metadata.FileId,
@@ -286,15 +261,11 @@ namespace VKR_Node.Services
                 throw;
             }
         }
-
-        
-        
         
         public async Task<FileModel?> GetFileMetadataAsync(string fileId, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(fileId))
             {
-                _logger.LogWarning("Invalid file ID provided for metadata retrieval");
                 return null;
             }
             
@@ -303,7 +274,6 @@ namespace VKR_Node.Services
             var cached = GetFromCache<FileModel>(cacheKey);
             if (cached != null)
             {
-                _logger.LogTrace("Retrieved file metadata from cache for ID: {FileId}", fileId);
                 return cached;
             }
             
@@ -338,9 +308,6 @@ namespace VKR_Node.Services
                 return null; 
             }
         }
-
-        
-        
         
         public async Task<IEnumerable<FileModel>> ListFilesAsync(CancellationToken cancellationToken = default)
         {
@@ -349,10 +316,8 @@ namespace VKR_Node.Services
             var cached = GetFromCache<List<FileModel>>(cacheKey);
             if (cached != null)
             {
-                _logger.LogTrace("Retrieved file list from cache ({Count} files)", cached.Count);
                 return cached;
             }
-            
             try
             {
                 await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
@@ -360,15 +325,13 @@ namespace VKR_Node.Services
                     .AsNoTracking()
                     .OrderBy(f => f.FileName)
                     .ToListAsync(cancellationToken);
-
-                
                 
                 var result = _mapper.Map<IEnumerable<FileModel>>(entities);
+
+                var listFilesAsync = result.ToList();
+                AddToCache(cacheKey, listFilesAsync, TimeSpan.FromSeconds(30));
                 
-                AddToCache(cacheKey, result, TimeSpan.FromSeconds(30));
-                
-                _logger.LogDebug("Retrieved {Count} files", result.Count());
-                return result;
+                return listFilesAsync;
             }
             catch (Exception ex)
             {
@@ -376,15 +339,11 @@ namespace VKR_Node.Services
                 return Enumerable.Empty<FileModel>();
             }
         }
-
-        
-        
         
         public async Task DeleteFileMetadataAsync(string fileId, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(fileId))
             {
-                _logger.LogWarning("Invalid fileId provided for deletion");
                 throw new ArgumentException("FileId cannot be empty", nameof(fileId));
             }
             
@@ -424,9 +383,6 @@ namespace VKR_Node.Services
                 throw;
             }
         }
-
-        
-        
         
         public async Task UpdateFileStateAsync(string fileId, FileStateCore newState, CancellationToken cancellationToken = default)
         {
@@ -472,10 +428,6 @@ namespace VKR_Node.Services
         #endregion
 
         #region Chunk Metadata Operations
-
-        
-        
-        
         public async Task SaveChunkMetadataAsync(
             ChunkModel chunkInfo, 
             IEnumerable<string> initialNodeIds, 
@@ -574,7 +526,7 @@ namespace VKR_Node.Services
                     }
 
                     
-                    foreach (var nodeId in initialNodeIds ?? Enumerable.Empty<string>())
+                    foreach (var nodeId in initialNodeIds)
                     {
                         bool locationExists = chunkEntity.Locations.Any(loc => loc.StoredNodeId == nodeId);
                         if (!locationExists)
@@ -689,7 +641,6 @@ namespace VKR_Node.Services
                 
                 AddToCache(cacheKey, result);
                 
-                _logger.LogDebug("Retrieved {Count} chunks for File ID: {FileId}", result.Count(), fileId);
                 return result;
             }
             catch (Exception ex)
@@ -857,9 +808,6 @@ namespace VKR_Node.Services
                 throw;
             }
         }
-
-        
-        
         
         public async Task<bool> RemoveChunkStorageNodeAsync(
             string fileId, string chunkId, string nodeId, CancellationToken cancellationToken = default)
@@ -917,9 +865,6 @@ namespace VKR_Node.Services
                 return false;
             }
         }
-
-        
-        
         
         public async Task<IEnumerable<string>> GetChunkStorageNodesAsync(
             string fileId, string chunkId, CancellationToken cancellationToken = default)
@@ -958,9 +903,6 @@ namespace VKR_Node.Services
                 return Enumerable.Empty<string>();
             }
         }
-
-        
-        
         
         public async Task UpdateChunkStorageNodesAsync(
             string fileId, string chunkId, IEnumerable<string> currentNodeIds, CancellationToken cancellationToken = default)
@@ -1038,9 +980,6 @@ namespace VKR_Node.Services
         #endregion
 
         #region Node State Operations
-
-        
-        
         
         public async Task SaveNodeStateAsync(
             NodeModel nodeStateInfo, CancellationToken cancellationToken = default)
@@ -1093,10 +1032,6 @@ namespace VKR_Node.Services
                 
                 InvalidateCache($"nodestate:{nodeStateInfo.Id}");
                 InvalidateCache("nodestates:all", isPrefix: true);
-                
-                _logger.LogTrace("Successfully saved node state for Node ID: {NodeId}", nodeStateInfo.Id);
-                
-                return;
             }
             catch (Exception ex)
             {
@@ -1104,9 +1039,6 @@ namespace VKR_Node.Services
                 throw;
             }
         }
-
-        
-        
         
         public async Task<IEnumerable<NodeModel>> GetNodeStatesAsync(
             IEnumerable<string> nodeIds, CancellationToken cancellationToken = default)
@@ -1154,7 +1086,6 @@ namespace VKR_Node.Services
                 _logger.LogTrace("Retrieved all node states from cache ({Count} nodes)", cached.Count);
                 return cached;
             }
-            
             try
             {
                 await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
@@ -1175,90 +1106,6 @@ namespace VKR_Node.Services
             {
                 _logger.LogError(ex, "Error retrieving all node states");
                 return Enumerable.Empty<NodeModel>();
-            }
-        }
-
-        #endregion
-
-        #region Backup Operation
-        
-        public async Task<bool> BackupDatabaseAsync(string backupFilePath, CancellationToken cancellationToken = default)
-        {
-            if (string.IsNullOrWhiteSpace(backupFilePath))
-            {
-                _logger.LogError("Invalid backup file path provided");
-                return false;
-            }
-
-            _logger.LogInformation("Starting database backup to '{BackupPath}'...", backupFilePath);
-            
-            string? backupDir = Path.GetDirectoryName(backupFilePath);
-            if (!string.IsNullOrEmpty(backupDir) && !Directory.Exists(backupDir))
-            {
-                try
-                {
-                    Directory.CreateDirectory(backupDir);
-                    _logger.LogDebug("Created backup directory: {BackupDir}", backupDir);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to create backup directory: {BackupDir}", backupDir);
-                    return false;
-                }
-            }
-            
-            await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
-            var sourceConnectionString = context.Database.GetConnectionString();
-            
-            if (string.IsNullOrEmpty(sourceConnectionString))
-            {
-                _logger.LogError("Cannot backup database: Source connection string is null or empty");
-                return false;
-            }
-
-            SqliteConnection? sourceConnection = null;
-            SqliteConnection? backupConnection = null;
-            
-            try
-            {
-                sourceConnection = new SqliteConnection(sourceConnectionString);
-                await sourceConnection.OpenAsync(cancellationToken);
-
-                backupConnection = new SqliteConnection($"Data Source={backupFilePath}");
-                await backupConnection.OpenAsync(cancellationToken);
-
-                sourceConnection.BackupDatabase(backupConnection);
-
-                _logger.LogInformation("Database backup completed successfully to '{BackupPath}'", backupFilePath);
-                return true;
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogInformation("Database backup cancelled");
-                try { if (File.Exists(backupFilePath)) File.Delete(backupFilePath); } 
-                catch { /* Ignore cleanup errors */ }
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Database backup failed. Target: '{BackupPath}'", backupFilePath);
-                try { if (File.Exists(backupFilePath)) File.Delete(backupFilePath); } 
-                catch { /* Ignore cleanup errors */ }
-                return false;
-            }
-            finally
-            {
-                if (sourceConnection != null)
-                {
-                    await sourceConnection.CloseAsync();
-                    await sourceConnection.DisposeAsync();
-                }
-                
-                if (backupConnection != null)
-                {
-                    await backupConnection.CloseAsync();
-                    await backupConnection.DisposeAsync();
-                }
             }
         }
 

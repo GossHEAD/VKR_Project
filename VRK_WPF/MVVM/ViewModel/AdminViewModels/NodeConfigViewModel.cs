@@ -1,5 +1,4 @@
-﻿using System.Collections.ObjectModel;
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -44,19 +43,13 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
         [ObservableProperty] private string _databasePath = "Data/node_storage.db";
         [ObservableProperty] private bool _autoMigrate = true;
         [ObservableProperty] private bool _backupBeforeMigration = true;
-        [ObservableProperty] private bool _enableSqlLogging = false;
+        [ObservableProperty] private bool _enableSqlLogging;
 
         
         [ObservableProperty] private bool _isLoading;
         [ObservableProperty] private string _loadingMessage = "Загрузка конфигурации..."; 
         [ObservableProperty] private string _statusMessage = "Готово"; 
         [ObservableProperty] private bool _hasChanges;
-        
-        public ObservableCollection<string> SizeUnits { get; } =
-            ["B", "KB", "MB", "GB", "TB"];
-
-        public ObservableCollection<int> HashDepthOptions { get; } = [1, 2, 3];
-
         
         public RelayCommand RefreshConfigCommand { get; }
         public RelayCommand ApplyConfigCommand { get; }
@@ -331,30 +324,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                             : 2;
                     }
                     
-                    if (dsElement.TryGetProperty("Dht", out JsonElement dht))
-                    {
-                        BootstrapNodeAddress = dht.TryGetProperty("BootstrapNodeAddress", out var bootstrap) 
-                            ? bootstrap.GetString() ?? string.Empty 
-                            : string.Empty;
-                        
-                        ReplicationFactor = dht.TryGetProperty("ReplicationFactor", out var repFactor) 
-                            ? repFactor.GetInt32() 
-                            : 3;
-                        
-                        StabilizationInterval = dht.TryGetProperty("StabilizationIntervalSeconds", out var stabInterval) 
-                            ? stabInterval.GetInt32() 
-                            : 30;
-                        
-                        ReplicationCheckInterval = dht.TryGetProperty("ReplicationCheckIntervalSeconds", out var repInterval) 
-                            ? repInterval.GetInt32() 
-                            : 60;
-                        
-                        ReplicationMaxParallelism = dht.TryGetProperty("ReplicationMaxParallelism", out var repParallel) 
-                            ? repParallel.GetInt32() 
-                            : 10;
-                    }
-                    
-                    
                     if (dsElement.TryGetProperty("Database", out JsonElement db))
                     {
                         DatabasePath = db.GetProperty("DatabasePath").GetString() ?? "Data/node_storage.db";
@@ -399,8 +368,6 @@ namespace VRK_WPF.MVVM.ViewModel.AdminViewModels
                         MaxSizeBytes = ConvertToBytes(MaxSizeValue, MaxSizeUnit),
                         ChunkSize = ConvertToBytes(ChunkSizeValue, ChunkSizeUnit),
                         DefaultReplicationFactor = ReplicationFactor,
-                        UseHashBasedDirectories = UseHashBasedDirectories,
-                        HashDirectoryDepth = HashDirectoryDepth,
                         PerformIntegrityCheckOnStartup = true
                     },
                     Database = new

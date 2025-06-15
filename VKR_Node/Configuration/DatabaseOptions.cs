@@ -19,10 +19,6 @@ namespace VKR_Node.Configuration
         }
 
         public bool AutoMigrate { get; set; } = true;
-        
-        public bool BackupBeforeMigration { get; set; } = true;
-        
-        [Range(30, 3600, ErrorMessage = "Command timeout must be between 30 and 3600 seconds")]
         public int CommandTimeoutSeconds { get; set; } = 60;
         public bool EnableSqlLogging { get; set; } = false;
         

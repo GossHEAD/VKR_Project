@@ -41,7 +41,7 @@ public class NodeStatusService : INodeStatusService
             reply.Nodes.Add(new NodeStatusInfo
             {
                 NodeId = _localNodeId,
-                Address = _networkOptions.ListenAddress ?? "Unknown",
+                Address = _networkOptions.ListenAddress,
                 Status = NodeState.Online,
                 Details = "Online (Self)"
             });
@@ -134,19 +134,5 @@ public class NodeStatusService : INodeStatusService
         }
         
         return statusInfo;
-    }
-    
-    public Task<PingReply> PingNode(PingRequest request, ServerCallContext context)
-    {
-        _logger.LogDebug("Node {NodeId} received Ping request from Node {SenderNodeId}.",
-            _localNodeId, request.SenderNodeId ?? "Unknown");
-            
-        var reply = new PingReply
-        {
-            ResponderNodeId = _localNodeId,
-            Success = true
-        };
-        
-        return Task.FromResult(reply);
     }
 }

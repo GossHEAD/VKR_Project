@@ -1,7 +1,5 @@
-﻿using System;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
-using Microsoft.Extensions.Logging;
 using VRK_WPF.MVVM.Services;
 using VRK_WPF.MVVM.View.AdminPages;
 using VRK_WPF.MVVM.ViewModel;

@@ -1,6 +1,5 @@
 ﻿using AutoMapper;
 using Google.Protobuf.WellKnownTypes;
-using System;
 using VKR_Core.Enums;
 using VKR_Core.Models;
 using VKR_Node.Persistance.Entities;
@@ -16,7 +15,7 @@ namespace VKR_Node.Mapping
                 .ForMember(dest => dest.File, opt => opt.Ignore())
                 .ForMember(dest => dest.Locations, opt => opt.Ignore())
                 .ReverseMap()
-                .ForMember(dest => dest.StoredNodeId, opt => opt.Ignore()); // StoredNodeId must be set manually
+                .ForMember(dest => dest.StoredNodeId, opt => opt.Ignore()); 
                 
             CreateMap<FileModel, FileEntity>()
                 .ForMember(dest => dest.State, opt => opt.MapFrom(src => (int)src.State))
@@ -33,44 +32,45 @@ namespace VKR_Node.Mapping
                 .ForMember(dest => dest.CpuUsagePercent, opt => opt.Ignore())
                 .ForMember(dest => dest.MemoryUsedBytes, opt => opt.Ignore())
                 .ForMember(dest => dest.MemoryTotalBytes, opt => opt.Ignore());
-
-            // Mapping for ChunkLocationEntity
-            CreateMap<ChunkLocationModel, ChunkLocationEntity>()
-                .ForMember(dest => dest.StoredNodeId, opt => opt.MapFrom(src => src.NodeId))
-                .ForMember(dest => dest.ChunkEntity, opt => opt.Ignore())
-                .ReverseMap()
-                .ForMember(dest => dest.NodeId, opt => opt.MapFrom(src => src.StoredNodeId));
+            
                 
             CreateMap<LogEntryModel, LogEntryEntity>()
                 .ForMember(dest => dest.Level, opt => opt.MapFrom(src => (int)src.LogLevel))
                 .ReverseMap()
                 .ForMember(dest => dest.LogLevel, opt => opt.MapFrom(src => (LogLevelEnum)src.Level));
                 
-            CreateMap<UserModel, UserEntity>()
-                .ReverseMap();
-                
             CreateMap<ChunkModel, FileChunk>()
-                .ForMember(dest => dest.Data, opt => opt.Ignore()) // Data must be set manually
+                .ForMember(dest => dest.Data, opt => opt.Ignore()) 
                 .ReverseMap()
                 .ForMember(dest => dest.StoredNodeId, opt => opt.Ignore())
                 .ForMember(dest => dest.ChunkHash, opt => opt.Ignore());
-                
-            CreateMap<FileModel, FileMetadata>()
-                .ForMember(dest => dest.CreationTime, opt => opt.MapFrom(src => 
-                    Timestamp.FromDateTime(src.CreationTime.ToUniversalTime())))
-                .ForMember(dest => dest.ModificationTime, opt => opt.MapFrom(src => 
-                    Timestamp.FromDateTime(src.ModificationTime.ToUniversalTime())))
-                .ForMember(dest => dest.State, opt => opt.MapFrom(src => (FileState)src.State))
-                .ForMember(dest => dest.TotalChunks, opt => opt.MapFrom(src => 
-                    src.TotalChunks < 0 ? 0 : src.TotalChunks))
-                .ForMember(dest => dest.ExpectedFileSize, opt => opt.MapFrom(src => src.FileSize))
-                .ReverseMap()
-                .ForMember(dest => dest.CreationTime, opt => opt.MapFrom(src => 
-                    src.CreationTime.ToDateTime().ToLocalTime()))
-                .ForMember(dest => dest.ModificationTime, opt => opt.MapFrom(src => 
-                    src.ModificationTime.ToDateTime().ToLocalTime()))
-                .ForMember(dest => dest.State, opt => opt.MapFrom(src => (FileStateCore)src.State));
-                
+            
+        CreateMap<FileModel, FileMetadata>()
+            .ForMember(dest => dest.FileId, opt => opt.MapFrom(src => src.FileId))
+            .ForMember(dest => dest.FileName, opt => opt.MapFrom(src => src.FileName))
+            .ForMember(dest => dest.FileSize, opt => opt.MapFrom(src => src.FileSize))
+            .ForMember(dest => dest.ContentType, opt => opt.MapFrom(src => src.ContentType ?? "application/octet-stream"))
+            .ForMember(dest => dest.CreationTime, opt => opt.MapFrom(src => Timestamp.FromDateTime(src.CreationTime.ToUniversalTime())))
+            .ForMember(dest => dest.ModificationTime, opt => opt.MapFrom(src => Timestamp.FromDateTime(src.ModificationTime.ToUniversalTime())))
+            .ForMember(dest => dest.ChunkSize, opt => opt.MapFrom(src => src.ChunkSize))
+            .ForMember(dest => dest.TotalChunks, opt => opt.MapFrom(src => src.TotalChunks))
+            .ForMember(dest => dest.State, opt => opt.MapFrom(src => (FileState)(int)src.State))
+            .ForMember(dest => dest.ExpectedFileSize, opt => opt.MapFrom(src => src.FileSize));
+
+        CreateMap<FileMetadata, FileModel>()
+            .ForMember(dest => dest.FileId, opt => opt.MapFrom(src => src.FileId))
+            .ForMember(dest => dest.FileName, opt => opt.MapFrom(src => src.FileName))
+            .ForMember(dest => dest.FileSize, opt => opt.MapFrom(src => src.FileSize))
+            .ForMember(dest => dest.ContentType, opt => opt.MapFrom(src => 
+                string.IsNullOrEmpty(src.ContentType) ? null : src.ContentType))
+            .ForMember(dest => dest.CreationTime, opt => opt.MapFrom(src => 
+                src.CreationTime.ToDateTime()))
+            .ForMember(dest => dest.ModificationTime, opt => opt.MapFrom(src => 
+                src.ModificationTime.ToDateTime()))
+            .ForMember(dest => dest.ChunkSize, opt => opt.MapFrom(src => src.ChunkSize))
+            .ForMember(dest => dest.TotalChunks, opt => opt.MapFrom(src => src.TotalChunks))
+            .ForMember(dest => dest.State, opt => opt.MapFrom(src => (FileStateCore)(int)src.State));
+        
             CreateMap<NodeModel, NodeInfo>()
                 .ForMember(dest => dest.NodeId, opt => opt.MapFrom(src => src.Id))
                 .ForMember(dest => dest.LastSeen, opt => opt.MapFrom(src => 
@@ -85,22 +85,6 @@ namespace VKR_Node.Mapping
                 .ForMember(dest => dest.CpuUsagePercent, opt => opt.Ignore())
                 .ForMember(dest => dest.MemoryUsedBytes, opt => opt.Ignore())
                 .ForMember(dest => dest.MemoryTotalBytes, opt => opt.Ignore());
-            
-            CreateMap<FileModel, FileMetadata>()
-                .ForMember(dest => dest.CreationTime, opt => opt.MapFrom(src => 
-                    Timestamp.FromDateTime(src.CreationTime.ToUniversalTime())))
-                .ForMember(dest => dest.ModificationTime, opt => opt.MapFrom(src => 
-                    Timestamp.FromDateTime(src.ModificationTime.ToUniversalTime())))
-                .ForMember(dest => dest.State, opt => opt.MapFrom(src => (FileState)(int)src.State))
-                .ForMember(dest => dest.TotalChunks, opt => opt.MapFrom(src => 
-                    src.TotalChunks < 0 ? 0 : src.TotalChunks))
-                .ForMember(dest => dest.ExpectedFileSize, opt => opt.MapFrom(src => src.FileSize))
-                .ReverseMap()
-                .ForMember(dest => dest.CreationTime, opt => opt.MapFrom(src => 
-                    src.CreationTime.ToDateTime().ToLocalTime()))
-                .ForMember(dest => dest.ModificationTime, opt => opt.MapFrom(src => 
-                    src.ModificationTime.ToDateTime().ToLocalTime()))
-                .ForMember(dest => dest.State, opt => opt.MapFrom(src => (FileStateCore)(int)src.State));
             
             CreateMap<NodeModel, NodeStatusInfo>()
                 .ForMember(dest => dest.NodeId, opt => opt.MapFrom(src => src.Id))
