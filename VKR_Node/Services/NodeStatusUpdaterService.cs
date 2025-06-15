@@ -43,13 +43,13 @@ namespace VKR_Node.Services
             _nodeNetworkOptionsOptions = networkOptions.Value;
             
             int intervalSeconds = dhtOptions.Value?.StabilizationIntervalSeconds > 0 
-                ? dhtOptions.Value.StabilizationIntervalSeconds 
+                ? Math.Max(dhtOptions.Value.StabilizationIntervalSeconds, 60) 
                 : 60; 
             
             _updateInterval = TimeSpan.FromSeconds(intervalSeconds);
-            _initialDelay = TimeSpan.FromSeconds(15); 
+            _initialDelay = TimeSpan.FromSeconds(30); 
             _standardInterval = TimeSpan.FromSeconds(intervalSeconds);
-            _minInterval = TimeSpan.FromSeconds(Math.Max(15, intervalSeconds / 4));
+            _minInterval = TimeSpan.FromSeconds(Math.Max(30, intervalSeconds / 2)); 
             _maxInterval = TimeSpan.FromSeconds(intervalSeconds * 2);
             _currentInterval = _standardInterval;
             

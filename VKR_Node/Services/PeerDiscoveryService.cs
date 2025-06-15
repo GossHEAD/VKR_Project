@@ -41,11 +41,12 @@ namespace VKR_Node.Services
             _networkOptions = networkOptions.Value;
 
             int pingIntervalSeconds = dhtOptions.Value?.StabilizationIntervalSeconds > 0 
-                ? dhtOptions.Value.StabilizationIntervalSeconds 
-                : 30;
+                ? Math.Max(dhtOptions.Value.StabilizationIntervalSeconds, 60) 
+                : 60;
+            
             _pingInterval = TimeSpan.FromSeconds(pingIntervalSeconds);
             _pingTimeout = TimeSpan.FromSeconds(10);
-            _initialDelay = TimeSpan.FromSeconds(5);
+            _initialDelay = TimeSpan.FromSeconds(15); 
             _maxConcurrentPings = dhtOptions.Value?.ReplicationMaxParallelism > 0 
                 ? dhtOptions.Value.ReplicationMaxParallelism 
                 : 10;
@@ -184,8 +185,6 @@ namespace VKR_Node.Services
 
         private async Task<(bool Success, string? ResponderId)> PingNodeAsync(KnownNodeOptions node, CancellationToken ct)
         {
-            _logger.LogTrace("Pinging node {NodeId} at {Address}", node.NodeId, node.Address);
-            
             try
             {
                 var reply = await _nodeClient.PingNodeAsync(
@@ -197,7 +196,11 @@ namespace VKR_Node.Services
                 
                 if (!success)
                 {
-                    _logger.LogWarning("Node {NodeId} ({Address}) is OFFLINE", node.NodeId, node.Address);
+                    if (_nodeStateCache.TryGetValue(node.NodeId, out var cachedState) && 
+                        cachedState.State == NodeStateCore.Online)
+                    {
+                        _logger.LogWarning("Node {NodeId} ({Address}) is now OFFLINE", node.NodeId, node.Address);
+                    }
                 }
                 else if (_logger.IsEnabled(LogLevel.Debug))
                 {
@@ -208,12 +211,16 @@ namespace VKR_Node.Services
             }
             catch (OperationCanceledException)
             {
-                _logger.LogWarning("Ping to {NodeId} timed out", node.NodeId);
                 return (false, "Timeout");
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Ping failed for {NodeId}", node.NodeId);
+                var key = $"error_{node.NodeId}";
+                if (!_nodeStateCache.ContainsKey(key))
+                {
+                    _logger.LogWarning(ex, "Ping failed for {NodeId}", node.NodeId);
+                    _nodeStateCache[key] = (NodeStateCore.Error, DateTime.UtcNow);
+                }
                 return (false, ex.GetType().Name);
             }
         }

@@ -27,11 +27,6 @@ namespace VKR_Node
     {
         public static async Task Main(string[] args)
         {
-            // Log.Logger = new LoggerConfiguration()
-            //     .MinimumLevel.Debug()
-            //     .WriteTo.Console()
-            //     .CreateBootstrapLogger();
-
             try
             {
                 var host = CreateHostBuilder(args).Build();
@@ -57,15 +52,11 @@ namespace VKR_Node
                     var env = hostingContext.HostingEnvironment;
                     Log.Information("[Config] Base Path: {ContentRootPath}, Environment: {EnvironmentName}", env.ContentRootPath, env.EnvironmentName);
 
-                    // Стандартные источники конфигурации
                     config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
                     config.AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
                     config.AddEnvironmentVariables();
                     config.AddCommandLine(args);
-
-                    // 3. Получаем путь к кастомному конфигу из уже собранной конфигурации.
-                    // Больше не нужен ручной парсинг аргументов.
-                    // Запускать с --config="path/to/your/node.json"
+                    
                     var builtConfig = config.Build();
                     var configFile = builtConfig.GetValue<string>("config") ?? builtConfig.GetValue<string>("ConfigPath");
                     if (!string.IsNullOrEmpty(configFile))
@@ -84,21 +75,23 @@ namespace VKR_Node
                 })
                 .UseSerilog((context, services, loggerConfiguration) =>
                 {
-                    // 2. Настраиваем Serilog один раз, когда вся конфигурация уже доступна.
                     var nodeOptions = context.Configuration.GetSection("DistributedStorage:Identity").Get<NodeIdentityOptions>();
-                    var nodeId = nodeOptions?.NodeId ?? "bootstrap-node";
+                    var nodeId = nodeOptions?.NodeId;
 
                     string logsDirectory = Path.Combine(AppContext.BaseDirectory, "Logs");
                     Directory.CreateDirectory(logsDirectory);
                     string logFilePath = Path.Combine(logsDirectory, $"{nodeId}-log.txt");
 
                     loggerConfiguration
-                        .ReadFrom.Configuration(context.Configuration) // Позволяет настраивать уровни в appsettings.json
+                        .ReadFrom.Configuration(context.Configuration) 
                         .MinimumLevel.Debug()
                         .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Information)
                         .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
+                        .MinimumLevel.Override("Microsoft.EntityFrameworkCore", Serilog.Events.LogEventLevel.Warning) 
+                        .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", Serilog.Events.LogEventLevel.Error) 
+                        .MinimumLevel.Override("Grpc", Serilog.Events.LogEventLevel.Warning)
                         .Enrich.FromLogContext()
-                        .Enrich.WithProperty("NodeId", nodeId) // Обогащаем все логи nodeId
+                        .Enrich.WithProperty("NodeId", nodeId) 
                         .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{NodeId}] {Message:lj}{NewLine}{Exception}")
                         .WriteTo.File(
                             logFilePath,
@@ -125,8 +118,10 @@ namespace VKR_Node
 
                         if (dbOptions.EnableSqlLogging)
                         {
-                            optionsBuilder.EnableSensitiveDataLogging()
-                                .LogTo(Console.WriteLine, LogLevel.Information);
+                            optionsBuilder.LogTo(
+                                message => { }, 
+                                new[] { DbLoggerCategory.Database.Command.Name },
+                                LogLevel.Warning); 
                         }
                     });
 
@@ -134,8 +129,8 @@ namespace VKR_Node
 
                     services.AddGrpc(options =>
                     {
-                        options.MaxReceiveMessageSize = 100 * 1024 * 1024; // 100 MB
-                        options.MaxSendMessageSize = 100 * 1024 * 1024;    // 100 MB
+                        options.MaxReceiveMessageSize = 100 * 1024 * 1024; 
+                        options.MaxSendMessageSize = 100 * 1024 * 1024;    
                     });
                 })
                 .ConfigureWebHostDefaults(webBuilder =>
@@ -149,7 +144,7 @@ namespace VKR_Node
                             {
                                 endpoints.MapGrpcService<StorageServiceImpl>();
                                 endpoints.MapGrpcService<NodeInternalServiceImpl>();
-                                // Добавлен Health Check эндпоинт
+                                
                                 endpoints.MapHealthChecks("/health");
                                 endpoints.MapGet("/", async context =>
                                 {
@@ -162,9 +157,9 @@ namespace VKR_Node
                         });
                 });
         
-        /// <summary>
-        /// Выполняет инициализацию и валидацию сервисов после построения хоста.
-        /// </summary>
+        
+        
+        
         private static async Task InitializeAndValidateAsync(IServiceProvider services)
         {
             using var scope = services.CreateScope();
@@ -261,7 +256,7 @@ namespace VKR_Node
             services.AddSingleton<INodeStatusService, NodeStatusService>();
             services.AddSingleton<INodeConfigService, NodeConfigService>();
 
-            // 5. Более гибкая и правильная регистрация зависимостей
+            
             services.AddSingleton<FileSystemDataManager>();
             services.AddSingleton<IDataManager>(sp => sp.GetRequiredService<FileSystemDataManager>());
             services.AddSingleton<IAsyncInitializable>(sp => sp.GetRequiredService<FileSystemDataManager>());
@@ -290,9 +285,9 @@ namespace VKR_Node
 
         private static void ConfigureHealthChecks(IServiceCollection services)
         {
-            // 6. Регистрируем HealthCheck как типизированный класс, чтобы избежать Service Locator.
+            
             services.AddHealthChecks().AddCheck<NodeStatusHealthCheck>("NodeStatus");
-            services.AddSingleton<NodeStatusHealthCheck>(); // Регистрируем сам класс проверки
+            services.AddSingleton<NodeStatusHealthCheck>(); 
         }
 
         private static void ConfigureKestrelServer(WebHostBuilderContext context, KestrelServerOptions options)
@@ -301,13 +296,13 @@ namespace VKR_Node
             var networkOptions = context.Configuration.GetSection("DistributedStorage:Network").Get<NetworkOptions>() 
                                  ?? new NetworkOptions();
 
-            options.Limits.MaxRequestBodySize = 1024 * 1024 * 1024; // 1 GB
+            options.Limits.MaxRequestBodySize = 1024 * 1024 * 1024; 
             
             logger.LogInformation("[Kestrel] Configuring endpoint. Address from config: {Address}:{Port}", networkOptions.ListenAddress, networkOptions.ListenPort);
 
             if (!IPAddress.TryParse(networkOptions.ListenAddress, out var ipAddress))
             {
-                // Попытка разрешить хост, если это не IP (например, "localhost")
+                
                 try
                 {
                     var addresses = Dns.GetHostAddresses(networkOptions.ListenAddress);
@@ -335,10 +330,10 @@ namespace VKR_Node
         }
     }
 
-    /// <summary>
-    /// Класс для проверки состояния узла, зарегистрированный в системе Health Checks.
-    /// Избегает анти-паттерна Service Locator.
-    /// </summary>
+    
+    
+    
+    
     public class NodeStatusHealthCheck : IHealthCheck
     {
         private readonly NodeStatusUpdaterService _statusService;

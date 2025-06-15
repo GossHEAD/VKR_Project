@@ -430,9 +430,6 @@ namespace VKR_Node.Services
             PingRequest request, 
             CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Sending Ping request from Node {CallingNodeId} to Node {TargetAddress}", 
-                _callingNodeId, targetNodeAddress);
-            
             request.SenderNodeId ??= _callingNodeId;
 
             return await ExecuteWithErrorHandlingAsync(
